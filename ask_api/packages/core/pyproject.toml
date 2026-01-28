@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nlweb-core"
+version = "0.5.6"
+description = "Core framework for NLWeb - Natural Language Web interface with config-driven provider architecture"
+
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Microsoft Corporation"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0.0",
+    "aiohttp>=3.8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0",
+    "mypy>=1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/microsoft/NLWeb_Core"
+Documentation = "https://github.com/microsoft/NLWeb_Core/blob/main/README.md"
+Repository = "https://github.com/microsoft/NLWeb_Core"
+Issues = "https://github.com/microsoft/NLWeb_Core/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["nlweb_core*"]
+exclude = ["nlweb_core.retrieval_providers*", "nlweb_core.embedding_providers*", "nlweb_core.llm_providers*"]

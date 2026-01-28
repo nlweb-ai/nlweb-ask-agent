@@ -1,0 +1,39 @@
+[project]
+name = "crawler"
+version = "0.1.0"
+description = "NLWeb Crawler - Web crawling and indexing service"
+requires-python = ">=3.12"
+dependencies = [
+    # Web framework
+    "flask>=2.3.3",
+    "flask-cors>=4.0.0",
+
+    # Database
+    "pymssql>=2.2.0",
+
+    # HTTP client
+    "requests>=2.31.0",
+
+    # Azure services
+    "azure-storage-blob>=12.19.0",
+    "azure-identity>=1.14.0",
+    "azure-search-documents>=11.4.0",
+    "azure-storage-queue>=12.8.0",
+    "azure-cosmos>=4.5.0",
+
+    # AI/ML
+    "openai>=1.0.0",
+
+    # RSS/Feed parsing
+    "feedparser>=6.0.0",
+
+    # Build compatibility
+    "Cython<3",
+
+    # Dev/test tools
+    "pytest>=7.0.0",
+    "ruff>=0.4.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["code"]

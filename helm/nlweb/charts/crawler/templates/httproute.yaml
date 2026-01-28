@@ -1,0 +1,26 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "crawler.fullname" . }}-route
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "crawler.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - name: {{ .Values.gateway.name }}
+      namespace: {{ .Values.gateway.namespace }}
+      sectionName: apis
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ .Values.routing.pathPrefix }}
+      backendRefs:
+        - name: {{ include "crawler.masterServiceName" . }}
+          port: {{ .Values.master.port }}
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: {{ .Values.routing.rewritePath }}

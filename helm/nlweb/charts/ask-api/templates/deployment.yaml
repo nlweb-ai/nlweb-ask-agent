@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ask-api.fullname" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "ask-api.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "ask-api.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ask-api.selectorLabels" . | nindent 8 }}
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: {{ include "ask-api.serviceAccountName" . }}
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: {{ include "ask-api.secretProviderClassName" . | quote }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: {{ include "ask-api.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.targetPort }}
+              name: http
+              protocol: TCP
+          volumeMounts:
+            - name: secrets-store
+              mountPath: "/mnt/secrets-store"
+              readOnly: true
+          env:
+            {{- range .Values.secrets }}
+            - name: {{ . | replace "-" "_" }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ask-api.secretName" $ }}
+                  key: {{ . }}
+            {{- end }}
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: PYTHONPATH
+              value: "/app"
+            - name: NLWEB_CONFIG_DIR
+              value: "/app"
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.liveness.path }}
+              port: {{ .Values.service.targetPort }}
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readiness.path }}
+              port: {{ .Values.service.targetPort }}
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}

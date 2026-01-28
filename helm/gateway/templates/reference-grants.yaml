@@ -1,0 +1,19 @@
+{{- range .Values.allowedNamespaces }}
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-{{ . }}-routes
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "gateway.labels" $ | nindent 4 }}
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: {{ . }}
+  to:
+    - group: ""
+      kind: Gateway
+      name: {{ $.Values.gatewayName }}
+{{- end }}

@@ -1,0 +1,35 @@
+name: Analyze
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  analyze:
+    concurrency: analyze-nlweb-action
+    runs-on: ubuntu-latest 
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+      - name: Set up Python
+        working-directory: ask_api
+        run: uv python install
+      - name: Install dependencies
+        working-directory: ask_api
+        run: |
+          uv sync
+      - run: echo "$PWD/ask_api/.venv/bin" >> $GITHUB_PATH
+      #- name: Run Pyright
+      #  working-directory: ask_api
+      #  run: pyright -p pyrightconfig_ci.json
+      - name: Test
+        if: ${{ success() || failure() }}
+        working-directory: ask_api
+        run: pytest
+      #- name: Lint with Ruff
+      #  if: ${{ success() || failure() }}
+      #  working-directory: ask_api
+      #  run: ruff check --output-format=github .

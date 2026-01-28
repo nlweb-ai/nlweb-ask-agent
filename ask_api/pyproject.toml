@@ -1,0 +1,63 @@
+[project]
+name = "ask-api"
+version = "0.1.0"
+description = "Ask API endpoint for NLWeb"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "nlweb-core",
+    "nlweb-network",
+    "nlweb-cosmos-object-db",
+    "nlweb-cosmos-site-config",
+    "nlweb-azure-models",
+    "nlweb-azure-vectordb",
+    "nlweb-pilabs-models",
+    "pandas>=2.0.0",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.14.10",
+    "pyright>=1.1.408",
+]
+
+[dependency-groups]
+dev = [
+    "matplotlib>=3.8.0",
+    "matplotlib-inline>=0.1.6",
+]
+
+[tool.uv.sources]
+"nlweb-azure-models" = { workspace = true }
+"nlweb-azure-vectordb" = { workspace = true }
+"nlweb-core" = { workspace = true }
+"nlweb-cosmos-object-db" = { workspace = true }
+"nlweb-cosmos-site-config" = { workspace = true }
+"nlweb-network" = { workspace = true }
+"nlweb-pilabs-models" = { workspace = true }
+
+[tool.uv.workspace]
+members = [
+    "packages/core",
+    "packages/network",
+    "packages/providers/azure/cosmos_object_db",
+    "packages/providers/azure/cosmos_site_config",
+    "packages/providers/azure/models",
+    "packages/providers/azure/vectordb",
+    "packages/providers/pilabs/models",
+]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+extraPaths = [
+    "packages/core",
+    "packages/network",
+    "packages/providers/azure/cosmos_object_db",
+    "packages/providers/azure/cosmos_site_config",
+    "packages/providers/azure/models",
+    "packages/providers/azure/vectordb",
+    "packages/providers/pilabs/models",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

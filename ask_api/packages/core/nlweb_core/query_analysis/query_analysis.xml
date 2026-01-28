@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+ <QueryAnalysisSettings>
+
+ <QueryAnalysis ref="DetectIrrelevantQueryPrompt" enabled="false" >
+    <method>defaultQueryAnalysisHandler</method>
+      <promptString>
+        The user is querying the site {request.site} which has information about {site.itemType}s.
+        Is the site utterly completely irrelevant to the user's query? 
+        The question is not whether this is the best site for answering the query, 
+        but if there is nothing on the site that is likely to be relevant for the query. 
+        If the site is irrelevant, add an explanation for why it is irrelevant. Otherwise, leave that field blank.
+        The user query is: '{request.query}'
+      </promptString>
+      <returnStruc>
+        {
+          "site_is_irrelevant_to_query": "True or False",
+          "explanation_for_irrelevance": "Explanation for why the site is irrelevant"
+        }
+      </returnStruc>
+    </QueryAnalysis>
+
+    <QueryAnalysis ref="PrevQueryDecontextualizer" enabled="true" >
+      <method>defaultQueryAnalysisHandler</method>
+      <promptString>
+        The user is querying the site {request.site}.
+        Rewrite the query, incorporating the context of the previous queries and answers.
+        Keep the decontextualized query short and do not reference the site. 
+
+        If the query very clearly does not reference earlier queries, 
+        don't change the query. Err on the side of incorporating the context of the 
+        previous queries. If you are not sure whether this is a brand new query, 
+        or follow up, it is likely a follow up. Try your best to incorporate the 
+        context from the previous queries.
+
+        The user's query is: {request.rawQuery}. 
+        Previous queries were: {request.previousQueries}.
+       <!-- Previous answers (title + url)provided were: {request.prevAnswers}. -->
+      </promptString>
+      <returnStruc>
+        {
+          "requires_decontextualization": "True or False",
+          "decontextualized_query": "The rewritten query, if decontextualization is required"
+        }
+      </returnStruc>
+    </QueryAnalysis>
+
+     <QueryAnalysis ref="ContextDecontextualizer" enabled="true" >
+      <method>defaultQueryAnalysisHandler</method>
+      <promptString>
+        The user is querying the site {request.site}.
+        Rewrite the query, incorporating the context .
+        Keep the decontextualized query short and do not reference the site. 
+
+        If the query very clearly does not reference earlier queries, 
+        don't change the query. Err on the side of incorporating the context. If you are not sure whether this is a brand new query, 
+        or follow up, it is likely a follow up. Try your best to incorporate the 
+        context from the previous queries.
+
+        The user's query is: {request.rawQuery}. 
+        Previous context is: request.context}.
+       <!-- Previous answers (title + url)provided were: {request.prevAnswers}. -->
+      </promptString>
+      <returnStruc>
+        {
+          "requires_decontextualization": "True or False",
+          "decontextualized_query": "The rewritten query, if decontextualization is required"
+        }
+      </returnStruc>
+    </QueryAnalysis>
+
+    <QueryAnalysis ref="FullContextDecontextualizer" enabled="true" >
+      <method>defaultQueryAnalysisHandler</method>
+      <promptString>
+        The user is querying the site {request.site}.
+        Rewrite the query, incorporating the context and previous queries.
+        Keep the decontextualized query short and do not reference the site. 
+
+        If the query very clearly does not reference earlier queries, 
+        don't change the query. Err on the side of incorporating the context. If you are not sure whether this is a brand new query, 
+        or follow up, it is likely a follow up. Try your best to incorporate the 
+        context from the previous queries.
+
+        The user's query is: {request.rawQuery}.
+        Previous queries were: {request.previousQueries}
+        Previous context is: request.context}.
+       <!-- Previous answers (title + url)provided were: {request.prevAnswers}. -->
+      </promptString>
+      <returnStruc>
+        {
+          "requires_decontextualization": "True or False",
+          "decontextualized_query": "The rewritten query, if decontextualization is required"
+        }
+      </returnStruc>
+    </QueryAnalysis>
+
+
+    <QueryAnalysis ref="DetectMemoryRequestPrompt" enabled="false">
+        <method>defaultQueryAnalysisHandler</method>
+      <promptString>
+        Analyze the following statement from the user. 
+        Is the user asking you to remember, that may be relevant to not just this query, but also future queries? 
+        If so, what is the user asking us to remember?
+        The user should be explicitly asking you to remember something for future queries, 
+        not just expressing a requirement for the current query.
+        Keep the memory_request field short and do not reference the user or site.
+        The user's query is: {request.rawQuery}.
+      </promptString>
+      <returnStruc>
+        {
+          "is_memory_request": "True or False",
+          "memory_request": "The memory request, if any"
+        }
+      </returnStruc>
+    </QueryAnalysis>
+
+    <QueryAnalysis ref="QueryRewrite" enabled="true">
+  <method>defaultQueryAnalysisHandler</method>
+      <promptString>
+        You are helping to rewrite a complex search query into simpler keyword queries for a traditional keyword-based search engine.
+        The search engine works best with short, focused queries containing important keywords.
+        
+        Take the following query and break it down into up to 5 simpler search queries.
+        Each query should:
+        - Contain no more than 3 words
+        - Focus on the most important keywords and concepts
+        - Be diverse to cover different aspects of the original query
+        - Use only essential nouns, adjectives, or product terms
+        - Avoid common words like "for", "the", "some", "are", "that", "would", "be"
+        
+        For example:
+        - "what are some options for plates that would be appropriate for serving vegetables" → ["vegetable plates", "serving plates", "dinner plates", "salad plates", "ceramic plates"]
+        - "looking for a tea pot that can brew green tea" → ["tea pot", "green tea", "teapot ceramic", "japanese teapot", "brewing pot"]
+        
+        The original query is: {request.query}
+      </promptString>
+      <returnStruc>
+        {
+          "rewritten_queries": ["query1", "query2", "query3", "query4", "query5"],
+          "query_count": "Number of queries generated (1-5)"
+        }
+      </returnStruc>
+    </QueryAnalysis>
+
+    <QueryAnalysis ref="DetectItemTypesQueryPrompt" enabled="false">
+      <method>defaultQueryAnalysisHandler</method>
+      <promptString>
+        Analyze the following query from the user.
+        What are the kinds of items the user is asking for. 
+        If the user is asking for multiple kinds of items, for each item, construct a query.
+        The user's query is: {request.query}.
+      </promptString>
+      <returnStruc>
+        {
+          "item_types": "List of item types being asked for, separated by commas",
+          "item_queries": "Separate queries for each of the kinds of items, separated by commas"
+        }
+      </returnStruc>
+    </QueryAnalysis>
+
+   
+    <QueryAnalysis ref="DetectItemDetailPrompt">
+      <method>defaultQueryAnalysisHandler</method>
+      <promptString>
+        Analyze the following query from the user. 
+        Is the user asking for a list of {site.itemType} that match a certain description or are they asking for the
+        details of a particular {site.itemType}?
+        If the user for the details of a particular {site.itemType}, what is the name of the {site.itemType} and what
+        details are they asking for? The user's query is: {request.query}.
+      </promptString>
+      <returnStruc>
+        {
+          "item_details_query": "True or False",
+          "item_title": "The title of the item type, if any",
+          "details_being_asked": "what details the user is asking for"
+        }
+      </returnStruc>
+    </QueryAnalysis>
+
+    </QueryAnalysisSettings>

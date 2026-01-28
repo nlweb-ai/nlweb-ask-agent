@@ -1,0 +1,77 @@
+# Ask API subchart default values
+namespace: ask-api
+
+# Service Account
+serviceAccount:
+  name: ""  # Override service account name (default: <release>-ask-api-sa)
+
+# Workload Identity
+workloadIdentity:
+  clientId: ""  # Required: Azure AD client ID
+
+# Container Image
+image:
+  repository: "ask-api"
+  tag: "latest"
+  pullPolicy: Always
+
+# Deployment
+replicaCount: 1
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "500m"
+  limits:
+    memory: "1Gi"
+    cpu: "1000m"
+
+# Service
+service:
+  port: 8000
+  targetPort: 8000
+
+# Routing
+routing:
+  pathPrefix: "/"
+  rewritePath: "/"
+
+# Health Checks
+probes:
+  liveness:
+    path: /health
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    path: /health
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# Secrets from Key Vault
+secrets:
+  - AZURE-OPENAI-ENDPOINT
+  - AZURE-OPENAI-KEY
+  - AZURE-SEARCH-ENDPOINT
+  - AZURE-SEARCH-KEY
+  - AZURE-SEARCH-INDEX-NAME
+  - COSMOS-DB-ENDPOINT
+  - COSMOS-DB-DATABASE-NAME
+  - COSMOS-DB-CONTAINER-NAME
+  - PI-LABS-ENDPOINT
+  - PI-LABS-KEY
+
+# Global values (provided by parent chart)
+global:
+  keyVault:
+    name: ""
+    tenantId: ""
+  containerRegistry:
+    server: ""
+
+# Gateway configuration (for HTTPRoute)
+gateway:
+  namespace: gateway
+  name: nlweb-gateway

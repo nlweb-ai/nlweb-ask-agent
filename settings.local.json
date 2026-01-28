@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod:*)",
+      "Bash(tree:*)",
+      "Bash(make test:*)",
+      "Bash(make validate:*)",
+      "Bash(helm template:*)",
+      "Bash(helm dependency:*)",
+      "Bash(helm lint:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "WebSearch",
+      "Bash(uv sync:*)",
+      "Bash(uv run pytest:*)",
+      "Bash(uv run python:*)",
+      "Bash(uv run pyright:*)",
+      "Bash(git -C /Users/zach/repos/nlweb-ask-agent show 9f8f5e0 --stat)",
+      "Bash(python3 -m py_compile:*)",
+      "Bash(bash:*)"
+    ]
+  }
+}

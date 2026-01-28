@@ -1,0 +1,45 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Values.gatewayName }}
+  namespace: {{ .Values.namespace }}
+  annotations:
+    alb.networking.azure.io/alb-name: {{ .Values.alb.name }}
+    alb.networking.azure.io/alb-namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "gateway.labels" . | nindent 4 }}
+spec:
+  gatewayClassName: {{ .Values.gatewayClassName }}
+  listeners:
+    # Main listener - clients attach here
+    - name: apis
+      {{- if .Values.tlsSecretName }}
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: {{ .Values.tlsSecretName }}
+      {{- else }}
+      protocol: HTTP
+      port: 80
+      {{- end }}
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              gateway-access: "true"
+    {{- if .Values.tlsSecretName }}
+    # HTTP listener - for ACME challenges AND redirect (when TLS enabled)
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              gateway-access: "true"
+    {{- end }}

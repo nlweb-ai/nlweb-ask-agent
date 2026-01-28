@@ -1,0 +1,10 @@
+apiVersion: alb.networking.azure.io/v1
+kind: ApplicationLoadBalancer
+metadata:
+  name: {{ .Values.alb.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "gateway.labels" . | nindent 4 }}
+spec:
+  associations:
+    - {{ required "alb.subnetResourceId is required" .Values.alb.subnetResourceId }}

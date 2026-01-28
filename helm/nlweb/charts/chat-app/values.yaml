@@ -1,0 +1,52 @@
+# Chat App subchart default values
+namespace: chat-app
+
+# Container Image
+image:
+  repository: "chat-app"
+  tag: "latest"
+  pullPolicy: Always
+
+# Deployment
+replicaCount: 1
+resources:
+  requests:
+    memory: "64Mi"
+    cpu: "50m"
+  limits:
+    memory: "128Mi"
+    cpu: "100m"
+
+# Service
+service:
+  port: 3000
+  targetPort: 3000
+
+# Routing
+routing:
+  pathPrefix: "/"
+
+# Health Checks
+probes:
+  liveness:
+    path: /
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readiness:
+    path: /
+    initialDelaySeconds: 3
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# Gateway configuration (for HTTPRoute)
+gateway:
+  namespace: gateway
+  name: nlweb-gateway
+
+# Global values (provided by parent chart)
+global:
+  containerRegistry:
+    server: ""

@@ -1,0 +1,42 @@
+[
+    {
+      "question": "Is the summary free from subjective remarks and unwarranted assumptions, presenting information impartially?",
+      "label": "Impartial Tone",
+      "weight": 1.0,
+      "parameters": null,
+      "tag": null,
+      "scoring_type": "PI_SCORER",
+      "python_code": null,
+      "custom_model_id": null
+    },
+    {
+      "question": "Is the summary’s content both correct and consistent with what is presented in the search results?",
+      "label": "Content Faithfulness",
+      "weight": 1.0,
+      "parameters": null,
+      "tag": null,
+      "scoring_type": "PI_SCORER",
+      "python_code": null,
+      "custom_model_id": null
+    },
+    {
+      "question": "Are the key points in the summary expressed with specificity instead of using generic terms?",
+      "label": "Summary Specificity",
+      "weight": 1.0,
+      "parameters": null,
+      "tag": null,
+      "scoring_type": "PI_SCORER",
+      "python_code": null,
+      "custom_model_id": null
+    },
+    {
+      "question": "Is the summary effective in showcasing the essential details that respond to the user's inquiry?",
+      "label": "Essential Information Coverage",
+      "weight": 1.0,
+      "parameters": null,
+      "tag": null,
+      "scoring_type": "PI_SCORER",
+      "python_code": null,
+      "custom_model_id": null
+    }
+]

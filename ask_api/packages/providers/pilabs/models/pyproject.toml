@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nlweb-pilabs-models"
+version = "0.1.0"
+description = "Pi Labs model providers for NLWeb"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "nlweb_core",
+    "httpx[http2]>=0.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["nlweb_pilabs_models*"]

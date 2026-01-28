@@ -1,0 +1,47 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Queue files
+queue/
+
+# Test output
+*.log
+
+# Kubernetes secrets
+k8s/secrets.yaml
+k8s/secrets.yml
+
+# Data files
+data/
+*.jsonl
+
+# Docker
+.dockerignore
+
+# Ensure test API key from create_test_user.py is not checked in accidentally
+.test_api_key

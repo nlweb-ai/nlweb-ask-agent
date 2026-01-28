@@ -1,0 +1,102 @@
+# Crawler subchart default values
+namespace: crawler
+
+# Service Account
+serviceAccount:
+  name: ""  # Override service account name (default: <release>-crawler-sa)
+
+# Workload Identity
+workloadIdentity:
+  clientId: ""      # Required: Azure AD client ID for service account
+  kedaIdentityId: ""  # Required: Identity ID for KEDA trigger auth
+
+# Container Image
+image:
+  repository: "crawler"
+  tag: "latest"
+  pullPolicy: Always
+
+# Master Deployment
+master:
+  replicaCount: 1
+  command:
+    - ".venv/bin/python"
+    - "code/core/api.py"
+  port: 5001
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+  probes:
+    liveness:
+      path: /health
+      initialDelaySeconds: 30
+      periodSeconds: 30
+    readiness:
+      path: /health
+      initialDelaySeconds: 10
+      periodSeconds: 10
+
+# Worker Deployment
+worker:
+  replicaCount: 5
+  command:
+    - ".venv/bin/python"
+    - "code/core/worker.py"
+  port: 8080
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# KEDA Autoscaling
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  pollingInterval: 30
+  cooldownPeriod: 300
+  queueName: "crawler-jobs"
+  queueLength: "5"
+  storageAccountName: ""  # Required: Azure Storage account name
+
+# Routing
+routing:
+  pathPrefix: "/crawler"
+  rewritePath: "/"
+
+# Secrets from Key Vault
+secrets:
+  - STORAGE-QUEUE-NAME
+  - SQL-SERVER-FQDN
+  - SQL-DATABASE
+  - SQL-USERNAME
+  - SQL-PASSWORD
+  - BLOB-STORAGE-ACCOUNT-NAME
+  - AZURE-OPENAI-ENDPOINT
+  - AZURE-OPENAI-KEY
+  - AZURE-SEARCH-ENDPOINT
+  - AZURE-SEARCH-KEY
+  - AZURE-SEARCH-INDEX-NAME
+  - COSMOS-DB-ENDPOINT
+  - COSMOS-DB-DATABASE-NAME
+  - COSMOS-DB-CONTAINER-NAME
+
+# Global values (provided by parent chart)
+global:
+  keyVault:
+    name: ""
+    tenantId: ""
+  containerRegistry:
+    server: ""
+
+# Gateway configuration (for HTTPRoute)
+gateway:
+  namespace: gateway
+  name: nlweb-gateway

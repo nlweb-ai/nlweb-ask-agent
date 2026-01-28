@@ -1,0 +1,59 @@
+{
+  "preferences": [
+    {
+      "index": 76,
+      "query": "Is there a recipe for cakey baked donuts with apple cider reduction and cinnamon sugar coating?",
+      "chosen_model": "phi",
+      "chosen_summary": "There is a recipe for cakey baked donuts with apple cider reduction and cinnamon sugar coating. The baked apple cider donuts incorporate an apple cider reduction to enhance their flavor and are coated in cinnamon sugar, along with apple pie spices, making them a delightful fall treat. Another variation, Baked Cinnamon Crunch Apple Cider Doughnuts, offers a similar flavor profile to celebrate the autumn season.",
+      "rejected_summary": "Yes, there are recipes for cakey baked donuts that use an apple cider reduction to enhance flavor and are coated in a cinnamon sugar mixture. These donuts are described as soft, moist, and baked (not fried), making them easy to prepare and perfect for fall. The recipes highlight the combination of apple cider, warming spices, and a sweet cinnamon sugar coating.",
+      "llm_input": "Summarize the following search results in 2-3 sentences, highlighting the key information that answers the user's question: Is there a recipe for cakey baked donuts with apple cider reduction and cinnamon sugar coating?\n\nResults:\n1. Baked Apple Cider Donuts: Baked, cakey, and delicious apple cider donuts are made with apple cider reduction to intensify its flavor. Warm and dipped in cinnamon sugar and apple pie spices, this fall treat will become your new favorite too.\n2. Baked Cinnamon Crunch Apple Cider Doughnuts: Like a classic cider doughnut but better - the perfect way to celebrate the autumn apple season!\n3. Apple Cider Donut Cake: Apple cider donut cake: all the fall flavor, none of the frying."
+    },
+    {
+      "index": 26,
+      "query": "Is there a job guarantee with Skillcrush\u2019s Break Into Tech Get Hired Track?",
+      "chosen_model": "gpt",
+      "chosen_summary": "Skillcrush\u2019s Break Into Tech Get Hired Track does not offer a formal job guarantee. Instead, Skillcrush provides career coaching and job search support to help students in their job hunt. While the program is designed to increase employment opportunities, securing a job is not guaranteed.",
+      "rejected_summary": "Skillcrush's Break Into Tech Get Hired Track does not specifically offer a job guarantee, but it includes the Get Hired Track designed to enhance job placement chances. Additionally, Skillcrush provides career coaching to support students throughout their journey. The program aims to assist students in breaking into the tech industry but does not guarantee employment.",
+      "llm_input": "Summarize the following search results in 2-3 sentences, highlighting the key information that answers the user's question: Is there a job guarantee with Skillcrush\u2019s Break Into Tech Get Hired Track?\n\nResults:\n1. Does Skillcrush Have a Job Guarantee?: Blog, Skillcrush Updates\n2. Get Hired Track Added to Skillcrush&#8217;s Break Into Tech Program: Blog, Skillcrush Updates\n3. We Offer Career Coaching for Our Students: Here&#8217;s How It Works: Blog, Skillcrush Updates"
+    },
+    {
+      "index": 52,
+      "query": "valuewalk how to buy crypto UK article",
+      "chosen_model": "gpt",
+      "chosen_summary": "The ValueWalk article on how to buy crypto in the UK outlines the steps for purchasing cryptocurrencies like Bitcoin and Ethereum, including choosing a reputable exchange, verifying your identity, and funding your account. It also mentions additional options such as buying with a credit card, sometimes with minimal or no verification, while highlighting the importance of considering fees and regulatory requirements. The guide provides updated information specific to UK residents for 2025.",
+      "rejected_summary": "To buy cryptocurrency in the UK as of December 2025, it is essential to follow updated guides that detail steps for purchasing popular cryptocurrencies such as Bitcoin and Ethereum. Users can buy Bitcoin with a credit card using methods that might bypass traditional verification processes, simplifying the buying experience. These resources are particularly helpful for those new to cryptocurrency looking for straightforward acquisition methods.",
+      "llm_input": "Summarize the following search results in 2-3 sentences, highlighting the key information that answers the user's question: valuewalk how to buy crypto UK article\n\nResults:\n1. How to Buy Crypto in UK (December2025) &#8211; Updated Guide to Purchase Bitcoin, Ethereum &amp; More: Cryptocurrency\n2. how to buy crypto in uk: \n3. How to Buy Bitcoin with Credit Card (No Verification) &#8211; Guide 2025: Cryptocurrency"
+    },
+    {
+      "index": 72,
+      "query": "latest Harper's Bazaar Spain magazine covers April 2025",
+      "chosen_model": "gpt",
+      "chosen_summary": "The April 2025 covers of Harper's Bazaar Spain feature Carla Bruni, generating significant buzz and discussion online. Observers have noted that there is something unusual about her appearance on these covers. Visuals of the covers are available on the official Harper's Bazaar Spain website.",
+      "rejected_summary": "The April 2025 covers of Harper's Bazaar Spain feature Carla Bruni, drawing notable attention and discussion on forums due to something interesting about her portrayal. The magazine's website hosts the images, which are likely pivotal in generating buzz and commendation or critique about fashion trends and celebrity cover choices for that month.",
+      "llm_input": "Summarize the following search results in 2-3 sentences, highlighting the key information that answers the user's question: latest Harper's Bazaar Spain magazine covers April 2025\n\nResults:\n1. There&#8217;s Something Off with Carla Bruni on the April 2025 Covers of Harper&#8217;s Bazaar Spain&#8230;: Forum Buzz\n2. IMAGE | HARPERSBAZAAR.COM/ES: \n3. IMAGE | HARPERSBAZAAR.COM/ES: "
+    },
+    {
+      "index": 60,
+      "query": "Can you provide details about the website redesign project for the Trust Company of Vermont?",
+      "chosen_model": "gpt",
+      "chosen_summary": "The Trust Company of Vermont recently launched a redesigned website, as announced in Bytes.co News. The new homepage features an updated design and improved user experience, aimed at better serving clients' needs online. The redesign project appears to be a collaborative effort involving professionals with backgrounds in graphic design and digital marketing.",
+      "rejected_summary": "The Trust Company of Vermont initiated a website redesign project that culminated in a new homepage optimized for desktop viewing. The launch was reported by Bytes.co News and involved notable collaboration, with individuals like Jason DiVece leveraging his graphic design background and previous experiences in SEO to contribute to the project. Jason's career path, including time spent working with Peter Jewett, reflects the blending of technology and design expertise that shaped the redesign.",
+      "llm_input": "Summarize the following search results in 2-3 sentences, highlighting the key information that answers the user's question: Can you provide details about the website redesign project for the Trust Company of Vermont?\n\nResults:\n1. The new Trust Company of Vermont website homepage on a desktop computer: \n2. Trust Company of Vermont Website Launch: Bytes.co News\n3. Jason DiVece: Jason moved to Burlington, VT in 2003 to attend Champlain College where he received his BS in Graphic Design. Not quite the coast of Maine, but Lake Champlain is pretty sweet! He first met Peter Jewett while fulfilling an internship requirement at Pete\u2019s fledgling eBay store, and the two later worked together as SEO Analysts for Dealer.com."
+    }
+  ],
+  "scoring_spec": {
+    "state": "QUEUED",
+    "detailed_status": [
+      "LAUNCHING"
+    ],
+    "job_id": "generate_spec_jobs:localuser:dcbe0c82-2d89-4038-ae7f-05fc34f054f0",
+    "scoring_spec": null,
+    "threshold": null,
+    "num_preference_examples_used": null,
+    "num_labeled_examples_used": null,
+    "balanced_accuracy": null,
+    "precision": null,
+    "recall": null,
+    "f1": null
+  }
+}

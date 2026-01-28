@@ -1,0 +1,26 @@
+# Gateway subchart default values
+namespace: gateway
+
+# TLS Configuration
+# Set to the secret name containing the TLS certificate (empty for HTTP-only mode)
+tlsSecretName: ""
+
+# Application Load Balancer
+alb:
+  name: "nlweb-alb"
+  subnetResourceId: ""  # Required: Full ARM resource ID of ALB subnet
+
+# Gateway configuration
+gatewayClassName: "azure-alb-external"
+gatewayName: "nlweb-gateway"
+
+# Namespaces that can route through this gateway
+allowedNamespaces:
+  - ask-api
+  - crawler
+
+# cert-manager configuration (ClusterIssuer is always installed)
+certManager:
+  email: ""
+  issuerName: "letsencrypt-prod"
+  acmeServer: "https://acme-v02.api.letsencrypt.org/directory"

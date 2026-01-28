@@ -1,0 +1,24 @@
+{{- if .Values.autoscaling.enabled }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "crawler.workerName" . }}-scaler
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "crawler.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: {{ include "crawler.workerName" . }}
+  minReplicaCount: {{ .Values.autoscaling.minReplicas }}
+  maxReplicaCount: {{ .Values.autoscaling.maxReplicas }}
+  pollingInterval: {{ .Values.autoscaling.pollingInterval }}
+  cooldownPeriod: {{ .Values.autoscaling.cooldownPeriod }}
+  triggers:
+    - type: azure-queue
+      authenticationRef:
+        name: {{ include "crawler.fullname" . }}-azure-queue-auth
+      metadata:
+        queueName: {{ .Values.autoscaling.queueName }}
+        queueLength: {{ .Values.autoscaling.queueLength | quote }}
+        accountName: {{ required "autoscaling.storageAccountName is required" .Values.autoscaling.storageAccountName }}
+{{- end }}

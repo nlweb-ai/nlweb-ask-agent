@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nlweb-network"
+version = "0.5.6"
+description = "Network interfaces and server for NLWeb - HTTP, MCP, and A2A protocol adapters"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Microsoft Corporation"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "nlweb-core>=0.5.5",
+    "aiohttp>=3.8.0",
+    "aiohttp-cors>=0.7.0",
+    "pyinstrument>=5.1.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/nlweb-ai/NLWeb_Core"
+Repository = "https://github.com/nlweb-ai/NLWeb_Core"
+
+[project.scripts]
+nlweb-server = "nlweb_network.server:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["nlweb_network*"]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+nlweb_network = ["static/*"]

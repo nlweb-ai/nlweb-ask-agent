@@ -1,0 +1,23 @@
+apiVersion: v2
+name: nlweb
+description: NLWeb application stack - Ask API and Crawler
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+dependencies:
+  # Application charts only
+  # Infrastructure (cert-manager, keda, alb-controller, gateway) is installed
+  # separately via setup_k8s.sh before this chart
+  - name: ask-api
+    version: "0.1.0"
+    repository: "file://charts/ask-api"
+    condition: ask-api.enabled
+  - name: chat-app
+    version: "0.1.0"
+    repository: "file://charts/chat-app"
+    condition: chat-app.enabled
+  - name: crawler
+    version: "0.1.0"
+    repository: "file://charts/crawler"
+    condition: crawler.enabled

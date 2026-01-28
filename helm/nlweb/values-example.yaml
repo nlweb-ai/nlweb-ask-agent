@@ -1,0 +1,54 @@
+# EXAMPLE VALUES FILE - FOR REFERENCE ONLY
+#
+# This file is NO LONGER NEEDED for deployment. The Makefiles now discover
+# all Azure resources automatically based on ENV_NAME.
+#
+# Usage (all values are auto-discovered):
+#   cd ask_api && make build deploy ENV_NAME=nlweb-yoast-centralus
+#   cd crawler && make build deploy ENV_NAME=nlweb-yoast-centralus
+#   make install ENV_NAME=nlweb-yoast-centralus
+#
+# This file is kept as a reference for what values can be configured.
+# The actual values shown below are for the yoast-test environment.
+
+global:
+  azure:
+    tenantId: "72f988bf-86f1-41af-91ab-2d7cd011db47"
+
+  keyVault:
+    name: "yoast-test-keys"
+    tenantId: "72f988bf-86f1-41af-91ab-2d7cd011db47"
+
+  containerRegistry:
+    server: "yoasttestcontainerregistry.azurecr.io"
+
+  hostname: "internal-testing.nlweb.ai"
+
+  tls:
+    enabled: true
+
+  certManager:
+    email: "admin@nlweb.ai"
+
+gateway:
+  tls:
+    enabled: true
+  alb:
+    subnetResourceId: "/subscriptions/5019644d-162f-4516-98e7-61c223b51b0c/resourceGroups/mc_yoast-test_crawler-test-1757-aks_westus2/providers/Microsoft.Network/virtualNetworks/aks-vnet-18611137/subnets/alb-gateway"
+  certificateName: "internal-testing-cert"
+  tlsSecretName: "internal-testing-secret"
+
+ask-api:
+  serviceAccount:
+    name: "ask-api-sa"
+  workloadIdentity:
+    clientId: "3b0126ad-cef4-437e-8049-f5abc238f077"
+
+crawler:
+  serviceAccount:
+    name: "crawler-sa"
+  workloadIdentity:
+    clientId: "c9c44114-6dd6-46d7-a3bf-521dc5ac23cd"
+    kedaIdentityId: "21c464ab-7c6b-4d7c-894b-4134ebf95cd0"
+  autoscaling:
+    storageAccountName: "yoastcrawlerstorage"

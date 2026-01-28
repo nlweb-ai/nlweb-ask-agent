@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ask-api.fullname" . }}-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "ask-api.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "ask-api.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.targetPort }}
+      protocol: TCP

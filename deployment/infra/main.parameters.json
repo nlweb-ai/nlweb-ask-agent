@@ -1,0 +1,72 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": {
+      "value": "${AZURE_ENV_NAME}"
+    },
+    "location": {
+      "value": "${AZURE_LOCATION}"
+    },
+    "principalId": {
+      "value": "${AZURE_PRINCIPAL_ID}"
+    },
+    "principalType": {
+      "value": "${AZURE_PRINCIPAL_TYPE=User}"
+    },
+    "appPrincipalId": {
+      "value": "${AZURE_APP_PRINCIPAL_ID}"
+    },
+    "cosmosLocation": {
+      "value": "${AZURE_COSMOS_LOCATION}"
+    },
+    "sqlLocation": {
+      "value": "${AZURE_SQL_LOCATION}"
+    },
+    "resourceGroupName": {
+      "value": "${AZURE_RESOURCE_GROUP}"
+    },
+    "openAiName": {
+      "value": "${AZURE_OPENAI_NAME}"
+    },
+    "searchServiceName": {
+      "value": "${AZURE_SEARCH_NAME}"
+    },
+    "cosmosAccountName": {
+      "value": "${AZURE_COSMOS_NAME}"
+    },
+    "sqlServerName": {
+      "value": "${AZURE_SQL_NAME}"
+    },
+    "storageAccountName": {
+      "value": "${AZURE_STORAGE_NAME}"
+    },
+    "keyVaultName": {
+      "value": "${AZURE_KEYVAULT_NAME}"
+    },
+    "gpt4Capacity": {
+      "value": "${AZURE_OPENAI_GPT4_CAPACITY=30}"
+    },
+    "gpt4MiniCapacity": {
+      "value": "${AZURE_OPENAI_GPT4_MINI_CAPACITY=30}"
+    },
+    "embeddingCapacity": {
+      "value": "${AZURE_OPENAI_EMBEDDING_CAPACITY=60}"
+    },
+    "hostname": {
+      "value": "${AZURE_HOSTNAME}"
+    },
+    "certManagerEmail": {
+      "value": "${AZURE_CERT_MANAGER_EMAIL}"
+    },
+    "kubernetesVersion": {
+      "value": "${AZURE_AKS_KUBERNETES_VERSION=1.34}"
+    },
+    "aksSystemNodePoolVmSize": {
+      "value": "${AZURE_AKS_SYSTEM_VM_SIZE=Standard_D4s_v5}"
+    },
+    "aksUserNodePoolVmSize": {
+      "value": "${AZURE_AKS_USER_VM_SIZE=Standard_D4s_v5}"
+    }
+  }
+}

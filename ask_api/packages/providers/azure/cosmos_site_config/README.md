@@ -1,0 +1,55 @@
+# NLWeb Azure Cosmos DB Site Config Provider
+
+Azure Cosmos DB provider for site-specific configuration storage and lookup.
+
+## Overview
+
+This provider implements site configuration lookup using Azure Cosmos DB, enabling domain-specific query elicitation based on intents and required information checks.
+
+## Features
+
+- **Cosmos DB Integration**: Stores site configs in dedicated `site_configs` container
+- **In-Memory Caching**: 5-minute TTL cache for fast lookups
+- **Azure AD Support**: Managed Identity or API key authentication
+- **Domain Normalization**: Handles www. prefix automatically
+
+## Configuration
+
+Configure in your `config.yaml`:
+
+```yaml
+site_config:
+  enabled: true
+  endpoint_env: COSMOS_DB_ENDPOINT
+  api_key_env: COSMOS_DB_KEY
+  database_name_env: COSMOS_DB_DATABASE_NAME
+  container_name: site_configs
+  use_managed_identity: false
+  cache_ttl: 300
+```
+
+## Usage
+
+The provider is automatically initialized when site_config is enabled:
+
+```python
+from nlweb_cosmos_site_config import SiteConfigLookup
+
+# Initialized automatically from CONFIG
+lookup = SiteConfigLookup()
+
+# Get config for a domain
+config = lookup.get_config("yelp.com")
+if config:
+    intent_elicitations = config.get("intent_elicitations", [])
+```
+
+## Installation
+
+```bash
+pip install -e .
+```
+
+## License
+
+MIT License - Copyright (c) 2025 Microsoft Corporation

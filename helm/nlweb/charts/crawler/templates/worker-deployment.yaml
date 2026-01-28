@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "crawler.workerName" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "crawler.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.worker.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "crawler.workerSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "crawler.workerSelectorLabels" . | nindent 8 }}
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: {{ include "crawler.serviceAccountName" . }}
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: {{ include "crawler.secretProviderClassName" . | quote }}
+      containers:
+        - name: worker
+          image: {{ include "crawler.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            {{- toYaml .Values.worker.command | nindent 12 }}
+          ports:
+            - containerPort: {{ .Values.worker.port }}
+              name: status
+              protocol: TCP
+          volumeMounts:
+            - name: secrets-store
+              mountPath: "/mnt/secrets-store"
+              readOnly: true
+          env:
+            # Queue Configuration
+            - name: QUEUE_TYPE
+              value: "storage"
+            - name: AZURE_STORAGE_ACCOUNT_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "crawler.secretName" . }}
+                  key: BLOB-STORAGE-ACCOUNT-NAME
+            - name: AZURE_STORAGE_QUEUE_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "crawler.secretName" . }}
+                  key: STORAGE-QUEUE-NAME
+            # SQL Database
+            - name: DB_SERVER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "crawler.secretName" . }}
+                  key: SQL-SERVER-FQDN
+            - name: DB_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "crawler.secretName" . }}
+                  key: SQL-DATABASE
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "crawler.secretName" . }}
+                  key: SQL-USERNAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "crawler.secretName" . }}
+                  key: SQL-PASSWORD
+            # Azure OpenAI
+            - name: AZURE_OPENAI_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "crawler.secretName" . }}
+                  key: AZURE-OPENAI-ENDPOINT
+            - name: AZURE_OPENAI_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "crawler.secretName" . }}
+                  key: AZURE-OPENAI-KEY
+            # Azure Cognitive Search
+            - name: AZURE_SEARCH_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "crawler.secretName" . }}
+                  key: AZURE-SEARCH-ENDPOINT
+            - name: AZURE_SEARCH_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "crawler.secretName" . }}
+                  key: AZURE-SEARCH-KEY
+            - name: AZURE_SEARCH_INDEX_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "crawler.secretName" . }}
+                  key: AZURE-SEARCH-INDEX-NAME
+            # Azure Cosmos DB
+            - name: COSMOS_DB_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "crawler.secretName" . }}
+                  key: COSMOS-DB-ENDPOINT
+            - name: COSMOS_DB_DATABASE_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "crawler.secretName" . }}
+                  key: COSMOS-DB-DATABASE-NAME
+            - name: COSMOS_DB_CONTAINER_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "crawler.secretName" . }}
+                  key: COSMOS-DB-CONTAINER-NAME
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}

@@ -1,0 +1,21 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "chat-app.fullname" . }}-route
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chat-app.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - name: {{ .Values.gateway.name }}
+      namespace: {{ .Values.gateway.namespace }}
+      sectionName: apis
+  rules:
+    # Catch-all route for frontend - API routes (more specific paths) take precedence
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ .Values.routing.pathPrefix }}
+      backendRefs:
+        - name: {{ include "chat-app.fullname" . }}-service
+          port: {{ .Values.service.port }}

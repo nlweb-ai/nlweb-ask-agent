@@ -1,0 +1,84 @@
+services:
+  # Ask API - REST/MCP/A2A server
+  ask-api:
+    build:
+      context: ./ask_api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./ask_api/.env
+    volumes:
+      - ~/.azure:/root/.azure
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+      - NLWEB_CONFIG_DIR=/app
+    networks:
+      - nlweb-network
+    restart: unless-stopped
+
+  # Chat App - React frontend with Vite dev server
+  chat-app:
+    build:
+      context: ./chat-app
+      dockerfile: Dockerfile.dev
+      args:
+        - GIT_TOKEN=${GIT_TOKEN}
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./chat-app/src:/app/src
+      - ./chat-app/public:/app/public
+      - ./chat-app/index.html:/app/index.html
+    environment:
+      - VITE_ASK_API_URL=http://ask-api:8000
+    depends_on:
+      - ask-api
+    networks:
+      - nlweb-network
+
+  # Crawler Master - API + Scheduler
+  crawler-master:
+    build:
+      context: ./crawler
+      dockerfile: Dockerfile
+    command: [".venv/bin/python", "code/core/api.py"]
+    ports:
+      - "5001:5001"
+    env_file:
+      - ./crawler/.env
+    environment:
+      - DOCKER_COMPOSE=true
+      - QUEUE_DIR=/app/data/queue
+      - QUEUE_TYPE=file
+    volumes:
+      - ./crawler/data:/app/data
+      - ~/.azure:/root/.azure
+    networks:
+      - nlweb-network
+
+  # Crawler Worker - Queue processor
+  crawler-worker:
+    build:
+      context: ./crawler
+      dockerfile: Dockerfile
+    command: [".venv/bin/python", "code/core/worker.py"]
+    env_file:
+      - ./crawler/.env
+    environment:
+      - QUEUE_DIR=/app/data/queue
+      - QUEUE_TYPE=file
+    volumes:
+      - ./crawler/data:/app/data
+      - ~/.azure:/root/.azure
+    depends_on:
+      - crawler-master
+    deploy:
+      replicas: 1  # Single worker to avoid race conditions
+    networks:
+      - nlweb-network
+
+networks:
+  nlweb-network:
+    driver: bridge

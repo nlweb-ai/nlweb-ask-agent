@@ -1,0 +1,13 @@
+{{- if .Values.autoscaling.enabled }}
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: {{ include "crawler.fullname" . }}-azure-queue-auth
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "crawler.labels" . | nindent 4 }}
+spec:
+  podIdentity:
+    provider: azure-workload
+    identityId: {{ required "workloadIdentity.kedaIdentityId is required" .Values.workloadIdentity.kedaIdentityId | quote }}
+{{- end }}
