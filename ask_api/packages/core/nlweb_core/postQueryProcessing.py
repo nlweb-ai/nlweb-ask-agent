@@ -41,7 +41,7 @@ class PostQueryProcessing:
             modes: List of processing modes (e.g., ['list', 'summarize']).
             send_results: Async callback to send results to the client.
         """
-        if 'summarize' in modes:
+        if "summarize" in modes:
             await self._summarize_results(
                 final_ranked_answers, query_text, send_results
             )

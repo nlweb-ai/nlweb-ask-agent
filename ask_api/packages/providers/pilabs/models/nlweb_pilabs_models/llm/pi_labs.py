@@ -64,6 +64,10 @@ class PiLabsScoringProvider(ScoringLLMProvider):
     _client_lock = threading.Lock()
     _client: PiLabsClient | None = None
 
+    def __init__(self, api_key: str, endpoint: str):
+        self.api_key = api_key
+        self.endpoint = endpoint
+
     @classmethod
     def get_client(cls, **kwargs) -> PiLabsClient:
         with cls._client_lock:
@@ -73,88 +77,78 @@ class PiLabsScoringProvider(ScoringLLMProvider):
 
     async def score(
         self,
-        question: str,
+        questions: list[str],
         context: ScoringContext,
         timeout: float = 30.0,
-        api_key: str = "",
-        endpoint: str = "",
         **kwargs,
     ) -> float:
         """
-        Score a single question/context pair.
+        Score a single context with the given questions.
 
         Args:
-            question: The scoring question
+            questions: List of scoring questions
             context: Structured context (query + item_description or intent/required_info)
             timeout: Request timeout in seconds
-            api_key: Pi Labs API key
-            endpoint: Pi Labs API endpoint
 
         Returns:
             Score between 0-100
         """
-        if not api_key or not endpoint:
-            raise ValueError(
-                "PiLabsScoringProvider requires 'api_key' and 'endpoint' parameters."
-            )
-
         client = self.get_client()
+
+        # Build scoring_spec from questions list
+        scoring_spec = [{"question": q} for q in questions]
 
         if context.item_description is not None:
             # Item ranking mode
             req = PiLabsRequest(
                 llm_input=context.query,
                 llm_output=context.item_description,
-                scoring_spec=[{"question": question}],
+                scoring_spec=scoring_spec,
             )
         else:
             # Intent/presence scoring mode
-            llm_output = json.dumps({
-                "query": context.query,
-                "intent": context.intent,
-                "required_info": context.required_info,
-            })
+            llm_output = json.dumps(
+                {
+                    "query": context.query,
+                    "intent": context.intent,
+                    "required_info": context.required_info,
+                }
+            )
             req = PiLabsRequest(
                 llm_input="",
                 llm_output=llm_output,
-                scoring_spec=[{"question": question}],
+                scoring_spec=scoring_spec,
             )
 
         scores = await client.score(
-            [req], endpoint=endpoint, api_key=api_key, timeout=timeout
+            [req], endpoint=self.endpoint, api_key=self.api_key, timeout=timeout
         )
         return scores[0]
 
     async def score_batch(
         self,
-        question: str,
+        questions: list[str],
         contexts: list[ScoringContext],
         timeout: float = 30.0,
-        api_key: str = "",
-        endpoint: str = "",
         **kwargs,
     ) -> list[float | BaseException]:
         """
-        Score multiple contexts with the same question in a single API call.
+        Score multiple contexts with the given questions in a single API call.
 
         This is optimized to batch all requests into one Pi Labs API call.
 
         Args:
-            question: The scoring question to ask for all contexts
+            questions: List of scoring questions to ask for all contexts
             contexts: List of contexts to score
             timeout: Request timeout in seconds
-            api_key: Pi Labs API key
-            endpoint: Pi Labs API endpoint
 
         Returns:
             List of scores (0-100) or Exception for failures
         """
-        if not api_key or not endpoint:
-            raise ValueError(
-                "PiLabsScoringProvider requires 'api_key' and 'endpoint' parameters."
-            )
-
         client = self.get_client()
+
+        # Build scoring_spec from questions list
+        scoring_spec = [{"question": q} for q in questions]
 
         # Build batch requests
         requests = []
@@ -164,29 +158,29 @@ class PiLabsScoringProvider(ScoringLLMProvider):
                 req = PiLabsRequest(
                     llm_input=context.query,
                     llm_output=context.item_description,
-                    scoring_spec=[{"question": question}],
+                    scoring_spec=scoring_spec,
                 )
             else:
                 # Intent/presence scoring mode
-                llm_output = json.dumps({
-                    "query": context.query,
-                    "intent": context.intent,
-                    "required_info": context.required_info,
-                })
+                llm_output = json.dumps(
+                    {
+                        "query": context.query,
+                        "intent": context.intent,
+                        "required_info": context.required_info,
+                    }
+                )
                 req = PiLabsRequest(
                     llm_input="",
                     llm_output=llm_output,
-                    scoring_spec=[{"question": question}],
+                    scoring_spec=scoring_spec,
                 )
             requests.append(req)
 
         try:
             scores = await client.score(
-                requests, endpoint=endpoint, api_key=api_key, timeout=timeout
+                requests, endpoint=self.endpoint, api_key=self.api_key, timeout=timeout
             )
             return cast(list[float | BaseException], scores)
         except Exception as e:
             # Return the exception for all items
             return [e] * len(contexts)
-
-

@@ -28,19 +28,32 @@ help:
 	@echo "Environment options:"
 	@echo "  ENV_NAME=<name>   # Target environment (default: $(ENV_NAME))"
 	@echo "  GIT_TOKEN=<token> # GitHub token for chat-app npm packages"
+	@echo "  REFRESH=true|false # Use local search-components (default: true)"
 
 # Local development with Docker Compose
+# REFRESH=true (default): Use local search-components from peer directory
+# REFRESH=false: Use published package from npm registry
+REFRESH ?= true
+
+ifeq ($(REFRESH),true)
+COMPOSE_FILES = -f docker-compose.yml -f docker-compose.refresh.yml
+FRONTEND_SERVICES = search-components ask-api chat-app
+else
+COMPOSE_FILES = -f docker-compose.yml
+FRONTEND_SERVICES = ask-api chat-app
+endif
+
 frontend:
-	docker-compose up --build ask-api chat-app
+	docker-compose $(COMPOSE_FILES) up --build $(FRONTEND_SERVICES)
 
 fullstack:
-	docker-compose up --build
+	docker-compose $(COMPOSE_FILES) up --build
 
 down:
-	docker-compose down
+	docker-compose $(COMPOSE_FILES) down
 
 logs:
-	docker-compose logs -f
+	docker-compose $(COMPOSE_FILES) logs -f
 
 install:
 	$(call discover-azure-resources)

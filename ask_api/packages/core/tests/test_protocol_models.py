@@ -105,29 +105,3 @@ class TestQueryExplicitFields:
         assert query.min_score == 0
         query = Query(text="test", min_score=100)
         assert query.min_score == 100
-
-
-class TestAskRequestFromQueryParams:
-    """Tests for AskRequest.from_query_params with explicit Query fields."""
-
-    def test_from_query_params_with_explicit_fields(self):
-        """Test from_query_params properly maps explicit Query fields."""
-        params = {
-            "query": {"text": "test query"},
-            "site": "example.com",
-            "num_results": 50,
-        }
-        request = AskRequest.from_query_params(params)
-
-        assert request.query.text == "test query"
-        assert request.query.site == "example.com"
-        assert request.query.num_results == 50
-
-    def test_from_query_params_nested_query_fields_take_precedence(self):
-        """Test that fields in query dict take precedence over top-level."""
-        params = {
-            "query": {"text": "test", "site": "nested.com"},
-            "site": "toplevel.com",
-        }
-        request = AskRequest.from_query_params(params)
-        assert request.query.site == "nested.com"

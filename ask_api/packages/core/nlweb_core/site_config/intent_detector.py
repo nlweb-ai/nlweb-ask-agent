@@ -116,16 +116,10 @@ class IntentDetector:
             scoring_question = "Does the query match this intent?"
             try:
                 provider = get_scoring_provider()
-                scoring_config = get_config().scoring_llm_model
-                if not scoring_config:
-                    logger.warning("No scoring_llm_model configured, skipping intent detection")
-                    return matching_required_info
                 results = await provider.score_batch(
-                    scoring_question,
+                    [scoring_question],
                     contexts,
                     timeout=8,
-                    api_key=scoring_config.api_key,
-                    endpoint=scoring_config.endpoint,
                 )
 
                 # Process results (scores are now floats directly)

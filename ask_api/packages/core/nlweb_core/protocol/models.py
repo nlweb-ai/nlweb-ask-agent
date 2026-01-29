@@ -159,67 +159,6 @@ class AskRequest(BaseModel):
         description="Contains metadata about the request itself (optional)",
     )
 
-    @classmethod
-    def from_query_params(cls, query_params: Dict[str, Any]) -> "AskRequest":
-        """
-        Build an AskRequest from a raw query_params dictionary.
-
-        This handles both v0.54 nested format and legacy flat formats,
-        normalizing them into the proper AskRequest structure.
-
-        The Query model has extra='allow', so non-protocol fields like
-        num_results, max_results, min_score, endpoint_name, db are preserved
-        as extra fields on the Query object.
-
-        Args:
-            query_params: Raw query parameters dict from HTTP request
-
-        Returns:
-            Validated AskRequest model
-        """
-        # Extract query data (should be a dict with 'text' field)
-        query_data = query_params.get("query", {})
-        if isinstance(query_data, str):
-            # Handle legacy format where query is just a string
-            query_data = {"text": query_data}
-
-        # Add top-level fields to query_data (Query has explicit fields for these)
-        # These are query parameters that should be accessible via direct attribute access
-        for key in [
-            "site",
-            "num_results",
-            "max_results",
-            "min_score",
-        ]:
-            if key in query_params and key not in query_data:
-                query_data[key] = query_params[key]
-
-        # Build context from nested object or prev field
-        context_data = query_params.get("context")
-        if context_data is None and "prev" in query_params:
-            context_data = {"prev": query_params["prev"]}
-
-        # Build prefer from nested object or individual fields
-        prefer_data = query_params.get("prefer")
-        if prefer_data is None:
-            prefer_data = {}
-            if "mode" in query_params:
-                prefer_data["mode"] = query_params["mode"]
-            if "streaming" in query_params:
-                prefer_data["streaming"] = query_params["streaming"]
-            if "response_format" in query_params:
-                prefer_data["response_format"] = query_params["response_format"]
-
-        # Build meta from nested object
-        meta_data = query_params.get("meta")
-
-        return cls(
-            query=Query(**query_data),
-            context=Context(**context_data) if context_data else None,
-            prefer=Prefer(**prefer_data) if prefer_data else None,
-            meta=Meta(**meta_data) if meta_data else None,
-        )
-
 
 # ============================================================================
 # Response Models

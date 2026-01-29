@@ -25,22 +25,6 @@ class BaseInterface(ABC):
         self.responses = []
 
     @abstractmethod
-    async def parse_request(self, request: Any) -> Dict[str, Any]:
-        """
-        Parse incoming request and extract query parameters.
-
-        Args:
-            request: Protocol-specific request object
-
-        Returns:
-            Dict of query parameters for NLWeb handler
-
-        Raises:
-            ValueError: If request is invalid or missing required fields
-        """
-        pass
-
-    @abstractmethod
     async def send_response(self, response: Any, data: Dict[str, Any]) -> None:
         """
         Send data through the protocol-specific response object.
@@ -61,7 +45,9 @@ class BaseInterface(ABC):
         """
         pass
 
-    def create_output_method(self, response: Any) -> Callable[[Dict[str, Any]], Awaitable[None]]:
+    def create_output_method(
+        self, response: Any
+    ) -> Callable[[Dict[str, Any]], Awaitable[None]]:
         """
         Create an output_method callback for NLWeb handlers.
 
@@ -75,13 +61,16 @@ class BaseInterface(ABC):
         Returns:
             Async callback function for handler output
         """
+
         async def output_method(data: Dict[str, Any]) -> None:
             """Callback for handler output."""
             await self.send_response(response, data)
 
         return output_method
 
-    def create_collector_output_method(self) -> Callable[[Dict[str, Any]], Awaitable[None]]:
+    def create_collector_output_method(
+        self,
+    ) -> Callable[[Dict[str, Any]], Awaitable[None]]:
         """
         Create an output_method that collects responses instead of streaming.
 
@@ -91,6 +80,7 @@ class BaseInterface(ABC):
         Returns:
             Async callback function that collects outputs
         """
+
         async def output_method(data: Dict[str, Any]) -> None:
             """Callback that collects output."""
             self.responses.append(data)

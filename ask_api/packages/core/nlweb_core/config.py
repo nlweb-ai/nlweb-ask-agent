@@ -162,6 +162,13 @@ class SiteConfigStorageConfig:
 
 
 @dataclass
+class RankingConfig:
+    scoring_questions: list[str] = field(
+        default_factory=lambda: ["Is this item relevant to the query?"]
+    )
+
+
+@dataclass
 class StorageBehaviorConfig:
     store_anonymous: bool = True
     max_conversations_per_thread: int = 100
@@ -224,6 +231,9 @@ class AppConfig:
 
     # Site Config
     site_config: SiteConfigStorageConfig | None = None
+
+    # Ranking Configuration
+    ranking: RankingConfig | None = None
 
     # NLWeb Configuration
     nlweb: NLWebConfig | None = None
@@ -602,6 +612,21 @@ def _load_site_config_storage(data: dict) -> SiteConfigStorageConfig:
     )
 
 
+def _load_ranking_config(data: dict) -> RankingConfig:
+    """Load ranking configuration from config dict."""
+    if "ranking_config" not in data:
+        return RankingConfig()
+
+    ranking_cfg = data["ranking_config"]
+    scoring_questions = ranking_cfg.get(
+        "scoring_questions",
+        ["Is this item relevant to the query?"],
+    )
+    return RankingConfig(
+        scoring_questions=scoring_questions,
+    )
+
+
 def _load_server_config(data: dict) -> ServerConfig:
     """Load server configuration from config dict."""
     server_cfg = data.get("server", {})
@@ -779,6 +804,7 @@ def load_config() -> AppConfig:
         )
         object_storage = _load_object_storage(data)
         site_config = _load_site_config_storage(data)
+        ranking = _load_ranking_config(data)
         server = _load_server_config(data)
         nlweb = _load_nlweb_config(data, config_directory, base_output_directory)
 
@@ -821,6 +847,7 @@ def load_config() -> AppConfig:
             conversation_storage_default="qdrant_local",
             object_storage=object_storage,
             site_config=site_config,
+            ranking=ranking,
             nlweb=nlweb,
             server=server,
             port=data.get("port", 8080),
@@ -843,6 +870,7 @@ def load_config() -> AppConfig:
         conversation_storage=ConversationStorageConfig(type="qdrant", enabled=False),
         object_storage=ObjectLookupConfig(type="cosmos", enabled=False),
         site_config=SiteConfigStorageConfig(enabled=False),
+        ranking=RankingConfig(),
         conversation_storage_behavior=StorageBehaviorConfig(),
     )
 
@@ -868,6 +896,7 @@ OVERRIDABLE_ATTRS = frozenset(
         "required_info_enabled",
         "aggregation_enabled",
         "who_endpoint_enabled",
+        "scoring_questions",
     }
 )
 
@@ -925,8 +954,15 @@ def set_config_overrides(overrides: dict[str, Any]) -> None:
     # Apply overrides to the nlweb sub-config (where feature flags live)
     if config_copy.nlweb:
         for attr, value in filtered.items():
+            # Skip scoring_questions - it belongs to ranking config
+            if attr == "scoring_questions":
+                continue
             if hasattr(config_copy.nlweb, attr):
                 setattr(config_copy.nlweb, attr, value)
+
+    # Apply scoring_questions to ranking config
+    if "scoring_questions" in filtered and config_copy.ranking:
+        config_copy.ranking.scoring_questions = filtered["scoring_questions"]
 
     _config_var.set(config_copy)
 

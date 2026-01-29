@@ -19,9 +19,12 @@ NLWeb Ask Agent is a distributed question-answering system with semantic search 
 cd ask_api && make init_environment && cd ..
 cd crawler && make init_environment && cd ..
 
-# Start frontend only (ask-api + chat-app)
+# Start frontend with local search-components (default, requires peer directory)
 export GIT_TOKEN=<github-classic-pat-with-read:packages>
 make frontend
+
+# Start frontend with published npm package (no peer directory needed)
+make frontend REFRESH=false
 
 # Start full stack (includes crawler)
 make fullstack
@@ -49,6 +52,38 @@ cd chat-app && pnpm dev
 
 # Crawler
 cd crawler && make dev-master  # + make dev-worker in another terminal
+```
+
+### Local Component Development
+
+By default, `make frontend` links to a local `@nlweb-ai/search-components` package from a peer directory (REFRESH=true). This enables live editing of the component library.
+
+**Prerequisites:**
+```bash
+# Clone search-components as a peer directory
+cd /path/to/repos
+git clone <search-components-repo> search-components
+# Result:
+# repos/
+# ├── nlweb-ask-agent/
+# └── search-components/
+```
+
+**Development:**
+```bash
+# Start with local component linking (default)
+make frontend
+
+# Or explicitly
+make frontend REFRESH=true
+```
+
+Changes to search-components automatically rebuild and the Vite server restarts to pick up the new bundle.
+
+**Without local components:**
+```bash
+# Use the published npm package instead
+make frontend REFRESH=false
 ```
 
 ## AKS Deployment

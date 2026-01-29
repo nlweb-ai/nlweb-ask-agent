@@ -111,8 +111,12 @@ const SITES = [
 
 function App() {
   const [site, setSite] = useState(SITES[0]);
+    // Append URL query parameters to the endpoint for config overrides
+    const queryString = window.location.search;
+    const endpoint = `/ask${queryString}`;
+
     const nlweb = useNlWeb({
-      endpoint: "/ask",
+      endpoint: endpoint,
       site: site.url,
       maxResults: 50
     });
@@ -124,7 +128,7 @@ function App() {
       const newId = localSessions.sessions.some(s => s.sessionId === sessionId) ? crypto.randomUUID() : sessionId ;
       localSessions.startSession(newId, firstResult, {
         site: site.url,
-        endpoint: "/ask"
+        endpoint: endpoint
       })
       setSessionId(newId);
     }

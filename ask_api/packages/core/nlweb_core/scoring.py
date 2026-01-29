@@ -17,6 +17,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, cast
 import asyncio
+import importlib
 import logging
 
 from nlweb_core.config import get_config
@@ -66,16 +67,16 @@ class ScoringLLMProvider(ABC):
     @abstractmethod
     async def score(
         self,
-        question: str,
+        questions: list[str],
         context: ScoringContext,
         timeout: float = 30.0,
         **kwargs,
     ) -> float:
         """
-        Score a single question/context pair.
+        Score a single context with the given questions.
 
         Args:
-            question: The scoring question (e.g., "Is this item relevant to the query?")
+            questions: List of scoring questions (e.g., ["Is this item relevant to the query?"])
             context: Structured context for the scoring operation
             timeout: Request timeout in seconds
             **kwargs: Additional provider-specific arguments (api_key, endpoint, etc.)
@@ -91,19 +92,19 @@ class ScoringLLMProvider(ABC):
 
     async def score_batch(
         self,
-        question: str,
+        questions: list[str],
         contexts: list[ScoringContext],
         timeout: float = 30.0,
         **kwargs,
     ) -> list[float | BaseException]:
         """
-        Score multiple contexts with the same question in parallel.
+        Score multiple contexts with the given questions in parallel.
 
-        Default implementation calls score() for each context.
-        Providers can override this for optimized batch processing.
+        Default implementation calls score() for each context using the first question.
+        Providers can override this for optimized batch processing with multiple questions.
 
         Args:
-            question: The scoring question to ask for all contexts
+            questions: List of scoring questions to ask
             contexts: List of contexts to score
             timeout: Request timeout in seconds
             **kwargs: Additional provider-specific arguments
@@ -112,7 +113,7 @@ class ScoringLLMProvider(ABC):
             List of scores (0-100) or Exception for each failed request
         """
         tasks = [
-            self.score(question, context, timeout=timeout, **kwargs)
+            self.score(questions, context, timeout=timeout, **kwargs)
             for context in contexts
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -163,10 +164,12 @@ def get_scoring_provider() -> ScoringLLMProvider:
     try:
         import_path = model_config.import_path
         class_name = model_config.class_name
-        module = __import__(import_path, fromlist=[class_name])
+        module = importlib.import_module(import_path)
         provider_class = getattr(module, class_name)
-        # Instantiate if it's a class, or use directly if it's already an instance
-        provider = provider_class() if callable(provider_class) else provider_class
+        provider = provider_class(
+            api_key=model_config.api_key,
+            endpoint=model_config.endpoint,
+        )
         _loaded_scoring_providers[llm_type] = cast(ScoringLLMProvider, provider)
         logger.debug(f"Loaded scoring provider: {llm_type} ({class_name})")
     except (ImportError, AttributeError) as e:

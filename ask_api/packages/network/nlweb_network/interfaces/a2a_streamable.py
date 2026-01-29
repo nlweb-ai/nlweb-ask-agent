@@ -60,7 +60,7 @@ class A2AStreamableInterface(BaseInterface):
             "params": params,
             "id": request_id,
             "query": query,
-            "query_params": {"query": query} if query else {}
+            "query_params": {"query": query} if query else {},
         }
 
     def build_agent_card_response(self, request_id: Any) -> Dict[str, Any]:
@@ -78,12 +78,12 @@ class A2AStreamableInterface(BaseInterface):
                     "agent": {
                         "name": self.AGENT_NAME,
                         "version": self.AGENT_VERSION,
-                        "description": "NLWeb RAG agent for natural language search and retrieval"
+                        "description": "NLWeb RAG agent for natural language search and retrieval",
                     },
                     "capabilities": {
                         "streaming": True,
                         "taskManagement": False,
-                        "multiTurn": False
+                        "multiTurn": False,
                     },
                     "skills": [
                         {
@@ -94,38 +94,32 @@ class A2AStreamableInterface(BaseInterface):
                                 "properties": {
                                     "query": {
                                         "type": "string",
-                                        "description": "Natural language search query"
+                                        "description": "Natural language search query",
                                     },
                                     "site": {
                                         "type": "string",
-                                        "description": "Target site identifier (optional)"
+                                        "description": "Target site identifier (optional)",
                                     },
                                     "num_results": {
                                         "type": "integer",
-                                        "description": "Number of results to return (optional)"
-                                    }
+                                        "description": "Number of results to return (optional)",
+                                    },
                                 },
-                                "required": ["query"]
-                            }
+                                "required": ["query"],
+                            },
                         }
                     ],
                     "transports": [
-                        {
-                            "type": "http",
-                            "url": "/a2a",
-                            "protocol": "json-rpc-2.0"
-                        },
-                        {
-                            "type": "sse",
-                            "url": "/a2a-sse",
-                            "protocol": "json-rpc-2.0"
-                        }
-                    ]
+                        {"type": "http", "url": "/a2a", "protocol": "json-rpc-2.0"},
+                        {"type": "sse", "url": "/a2a-sse", "protocol": "json-rpc-2.0"},
+                    ],
                 }
-            }
+            },
         }
 
-    def build_message_response(self, request_id: Any, responses: list) -> Dict[str, Any]:
+    def build_message_response(
+        self, request_id: Any, responses: list
+    ) -> Dict[str, Any]:
         """
         Build A2A message/send response with NLWeb results.
 
@@ -136,12 +130,12 @@ class A2AStreamableInterface(BaseInterface):
         meta = {}
 
         for response in responses:
-            if '_meta' in response:
-                for key, value in response['_meta'].items():
+            if "_meta" in response:
+                for key, value in response["_meta"].items():
                     if key not in meta:
                         meta[key] = value
-            if 'content' in response:
-                content_items.extend(response['content'])
+            if "content" in response:
+                content_items.extend(response["content"])
 
         # Convert NLWeb content to A2A message parts
         parts = []
@@ -149,43 +143,38 @@ class A2AStreamableInterface(BaseInterface):
         # Add metadata as text part
         if meta:
             meta_text = f"Search completed successfully. Version: {meta.get('version', 'unknown')}"
-            parts.append({
-                "kind": "text",
-                "text": meta_text
-            })
+            parts.append({"kind": "text", "text": meta_text})
 
         # Add each content item
         for item in content_items:
             # Add description as text
-            if 'description' in item:
-                parts.append({
-                    "kind": "text",
-                    "text": item['description']
-                })
+            if "description" in item:
+                parts.append({"kind": "text", "text": item["description"]})
 
             # Add structured data as artifact
-            parts.append({
-                "kind": "artifact",
-                "artifact": {
-                    "name": item.get('name', 'result'),
-                    "mimeType": "application/json",
-                    "data": json.dumps(item)
+            parts.append(
+                {
+                    "kind": "artifact",
+                    "artifact": {
+                        "name": item.get("name", "result"),
+                        "mimeType": "application/json",
+                        "data": json.dumps(item),
+                    },
                 }
-            })
+            )
 
         return {
             "jsonrpc": "2.0",
             "id": request_id,
             "result": {
-                "message": {
-                    "role": "agent",
-                    "parts": parts
-                },
-                "status": "completed"
-            }
+                "message": {"role": "agent", "parts": parts},
+                "status": "completed",
+            },
         }
 
-    def build_error_response(self, request_id: Any, error_message: str, error_code: int = -32603) -> Dict[str, Any]:
+    def build_error_response(
+        self, request_id: Any, error_message: str, error_code: int = -32603
+    ) -> Dict[str, Any]:
         """
         Build A2A JSON-RPC 2.0 error response.
 
@@ -199,10 +188,7 @@ class A2AStreamableInterface(BaseInterface):
         return {
             "jsonrpc": "2.0",
             "id": request_id,
-            "error": {
-                "code": error_code,
-                "message": error_message
-            }
+            "error": {"code": error_code, "message": error_message},
         }
 
     async def send_response(self, response: Any, data: Dict[str, Any]) -> None:
@@ -228,7 +214,9 @@ class A2AStreamableInterface(BaseInterface):
         try:
             parsed = await self.parse_request(request)
         except Exception as e:
-            error_response = self.build_error_response(None, f"Parse error: {str(e)}", -32700)
+            error_response = self.build_error_response(
+                None, f"Parse error: {str(e)}", -32700
+            )
             return web.json_response(error_response, status=400)
 
         method = parsed["method"]
@@ -245,19 +233,19 @@ class A2AStreamableInterface(BaseInterface):
 
             if not query:
                 error_response = self.build_error_response(
-                    request_id,
-                    "Missing query in message parts",
-                    -32602
+                    request_id, "Missing query in message parts", -32602
                 )
                 return web.json_response(error_response, status=400)
 
             try:
                 # Execute NLWeb handler in non-streaming mode
                 query_params = parsed["query_params"]
-                query_params["streaming"] = False  # Force non-streaming for message/send
+                query_params["streaming"] = (
+                    False  # Force non-streaming for message/send
+                )
 
                 # Build AskRequest from query_params
-                ask_request = AskRequest.from_query_params(query_params)
+                ask_request = AskRequest.model_validate(query_params)
 
                 output_method = self.create_collector_output_method()
                 handler = handler_class(ask_request, output_method)
@@ -272,17 +260,13 @@ class A2AStreamableInterface(BaseInterface):
 
             except Exception as e:
                 error_response = self.build_error_response(
-                    request_id,
-                    f"Internal error: {str(e)}",
-                    -32603
+                    request_id, f"Internal error: {str(e)}", -32603
                 )
                 return web.json_response(error_response, status=500)
 
         else:
             # Unknown method
             error_response = self.build_error_response(
-                request_id,
-                f"Method not found: {method}",
-                -32601
+                request_id, f"Method not found: {method}", -32601
             )
             return web.json_response(error_response, status=404)
