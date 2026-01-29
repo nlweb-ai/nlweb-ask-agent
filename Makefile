@@ -31,7 +31,7 @@ help:
 
 # Local development with Docker Compose
 frontend:
-	docker-compose up --build ask-api chat-app
+	docker-compose up --build search-components ask-api chat-app
 
 fullstack:
 	docker-compose up --build

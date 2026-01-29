@@ -51,6 +51,29 @@ cd chat-app && pnpm dev
 cd crawler && make dev-master  # + make dev-worker in another terminal
 ```
 
+### Local Component Development
+
+The chat-app links to a local `@nlweb-ai/search-components` package from a peer directory for component development.
+
+**Prerequisites:**
+```bash
+# Clone search-components as a peer directory
+cd /path/to/repos
+git clone <search-components-repo> search-components
+# Result:
+# repos/
+# ├── nlweb-ask-agent/
+# └── search-components/
+```
+
+**Development:**
+```bash
+# Start everything (search-components watch + ask-api + chat-app)
+make frontend
+```
+
+Changes to search-components automatically rebuild and appear in chat-app. The search-components service runs in watch mode, so edits are picked up immediately.
+
 ## AKS Deployment
 
 ```bash
