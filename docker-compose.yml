@@ -1,21 +1,4 @@
 services:
-  # Search Components - Shared React component library (watch mode)
-  search-components:
-    image: node:22-alpine
-    working_dir: /app
-    command: sh -c "corepack enable && pnpm install && pnpm dev"
-    volumes:
-      - ../search-components:/app
-      - search-components-node-modules:/app/node_modules
-    healthcheck:
-      test: ["CMD", "test", "-d", "/app/dist"]
-      interval: 5s
-      timeout: 10s
-      retries: 30
-      start_period: 30s
-    networks:
-      - nlweb-network
-
   # Ask API - REST/MCP/A2A server
   ask-api:
     build:
@@ -48,16 +31,10 @@ services:
       - ./chat-app/src:/app/src
       - ./chat-app/public:/app/public
       - ./chat-app/index.html:/app/index.html
-      # Mount search-components dist into node_modules for local development
-      - ../search-components/dist:/app/node_modules/@nlweb-ai/search-components/dist
-      - ../search-components/package.json:/app/node_modules/@nlweb-ai/search-components/package.json:ro
     environment:
       - VITE_ASK_API_URL=http://ask-api:8000
     depends_on:
-      ask-api:
-        condition: service_started
-      search-components:
-        condition: service_healthy
+      - ask-api
     networks:
       - nlweb-network
 
@@ -105,6 +82,3 @@ services:
 networks:
   nlweb-network:
     driver: bridge
-
-volumes:
-  search-components-node-modules:  # Persist node_modules to avoid reinstall on rebuild
