@@ -896,6 +896,7 @@ OVERRIDABLE_ATTRS = frozenset(
         "required_info_enabled",
         "aggregation_enabled",
         "who_endpoint_enabled",
+        "scoring_questions",
     }
 )
 
@@ -953,8 +954,15 @@ def set_config_overrides(overrides: dict[str, Any]) -> None:
     # Apply overrides to the nlweb sub-config (where feature flags live)
     if config_copy.nlweb:
         for attr, value in filtered.items():
+            # Skip scoring_questions - it belongs to ranking config
+            if attr == "scoring_questions":
+                continue
             if hasattr(config_copy.nlweb, attr):
                 setattr(config_copy.nlweb, attr, value)
+
+    # Apply scoring_questions to ranking config
+    if "scoring_questions" in filtered and config_copy.ranking:
+        config_copy.ranking.scoring_questions = filtered["scoring_questions"]
 
     _config_var.set(config_copy)
 

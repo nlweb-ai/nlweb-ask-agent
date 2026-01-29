@@ -278,21 +278,25 @@ def _parse_bool(value: str) -> bool:
 
 async def config_override_middleware(app, handler):
     """
-    Middleware to set per-request config overrides from query/body params.
+    Middleware to set per-request config overrides from query params.
 
     Supports:
-    - Query params: ?prefer.config.memory=true
+    - Boolean flags: ?memory=true&tool_selection=false
+    - List params: ?scoring_questions=q1&scoring_questions=q2
     """
 
     async def middleware(request: Request):
         overrides = {}
 
-        # Parse prefer.config.* from query params
+        # Handle scoring_questions (list type, can appear multiple times)
+        scoring_questions = request.query.getall("scoring_questions")
+        if scoring_questions:
+            overrides["scoring_questions"] = scoring_questions
+
+        # Parse boolean flags from query params
         for key, value in request.query.items():
-            if key.startswith("prefer.config."):
-                param_name = key[len("prefer.config.") :]
-                if param_name in _OVERRIDE_PARAM_MAP:
-                    overrides[_OVERRIDE_PARAM_MAP[param_name]] = _parse_bool(value)
+            if key in _OVERRIDE_PARAM_MAP:
+                overrides[_OVERRIDE_PARAM_MAP[key]] = _parse_bool(value)
 
         # Set overrides (only does work if there are valid overrides)
         if overrides:
