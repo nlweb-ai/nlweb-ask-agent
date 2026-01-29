@@ -163,7 +163,9 @@ class SiteConfigStorageConfig:
 
 @dataclass
 class RankingConfig:
-    scoring_question: str = "Is this item relevant to the query?"
+    scoring_questions: list[str] = field(
+        default_factory=lambda: ["Is this item relevant to the query?"]
+    )
 
 
 @dataclass
@@ -616,11 +618,12 @@ def _load_ranking_config(data: dict) -> RankingConfig:
         return RankingConfig()
 
     ranking_cfg = data["ranking_config"]
+    scoring_questions = ranking_cfg.get(
+        "scoring_questions",
+        ["Is this item relevant to the query?"],
+    )
     return RankingConfig(
-        scoring_question=ranking_cfg.get(
-            "scoring_question",
-            "Is this item relevant to the query?",
-        ),
+        scoring_questions=scoring_questions,
     )
 
 

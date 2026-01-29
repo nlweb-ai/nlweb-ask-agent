@@ -83,4 +83,5 @@ server:
   host: 0.0.0.0
 
 ranking_config:
-  scoring_question: "Is this item relevant to the query?"
+  scoring_questions:
+    - "Is this item relevant to the query?"

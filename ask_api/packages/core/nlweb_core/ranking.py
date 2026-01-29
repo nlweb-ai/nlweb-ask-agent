@@ -67,10 +67,10 @@ class Ranking:
             for item in items
         ]
 
-        # Get config and scoring question
+        # Get config and scoring questions
         config = get_config()
         ranking_config = config.ranking or RankingConfig()
-        scoring_question = ranking_config.scoring_question
+        scoring_questions = ranking_config.scoring_questions
 
         try:
             # Get the scoring provider and score all items in batch
@@ -79,7 +79,7 @@ class Ranking:
             if not scoring_config:
                 raise ValueError("No scoring_llm_model configured")
             scores = await provider.score_batch(
-                [scoring_question],
+                scoring_questions,
                 contexts,
                 timeout=8,
                 api_key=scoring_config.api_key,
