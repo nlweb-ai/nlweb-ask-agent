@@ -18,8 +18,8 @@ importers:
         specifier: ^2.2.0
         version: 2.2.0(react@19.2.3)
       '@nlweb-ai/search-components':
-        specifier: ^0.1.1
-        version: 0.1.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        specifier: ^0.1.2
+        version: 0.1.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       react:
         specifier: ^19.2.0
         version: 19.2.3
@@ -270,8 +270,8 @@ packages:
   '@napi-rs/wasm-runtime@1.1.1':
     resolution: {integrity: sha512-p64ah1M1ld8xjWv3qbvFwHiFVWrq1yFvV4f7w+mzaqiR4IlSgkqhcRdHwsGgomwzBH51sRY4NEowLxnaBjcW/A==}
 
-  '@nlweb-ai/search-components@0.1.1':
-    resolution: {integrity: sha512-8bnoYB9RGNp8U+49AY7bftiuzTO5e1BpsAeS46UM3LYlvRMnxZ3cSEr7KpPGKwfrb7iWUpC/Yg6wbIiteFVG0A==, tarball: https://npm.pkg.github.com/download/@nlweb-ai/search-components/0.1.1/8a9823629e38e931f24c62b4cad349d1a5354da9}
+  '@nlweb-ai/search-components@0.1.2':
+    resolution: {integrity: sha512-MlxxCOHMjKWsx66yJM+hivFvBrHV6b8fZX/QfapKIaAGhdUmlmCQgwp6U3MgE4+GZyApRT3aYEYENhEaBGl1BA==, tarball: https://npm.pkg.github.com/download/@nlweb-ai/search-components/0.1.2/53563cc5ea88293b14e4353803e3bb275bd8d095}
     peerDependencies:
       react: '>=17.0.0'
       react-dom: '>=17.0.0'
@@ -692,6 +692,10 @@ packages:
 
   deep-is@0.1.4:
     resolution: {integrity: sha512-oIPzksmTg4/MriiaYGO+okXDT7ztn/w3Eptv/+gSIdMdKsJo0u4CfYNFJPy+4SKMuCqGw2wxnA+URMg3t8a/bQ==}
+
+  dequal@2.0.3:
+    resolution: {integrity: sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==}
+    engines: {node: '>=6'}
 
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
@@ -1210,6 +1214,11 @@ packages:
     resolution: {integrity: sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==}
     engines: {node: '>=8'}
 
+  swr@2.3.8:
+    resolution: {integrity: sha512-gaCPRVoMq8WGDcWj9p4YWzCMPHzE0WNl6W8ADIx9c3JBEIdMkJGMzW+uzXvxHMltwcYACr9jP+32H8/hgwMR7w==}
+    peerDependencies:
+      react: ^16.11.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
   tabbable@6.4.0:
     resolution: {integrity: sha512-05PUHKSNE8ou2dwIxTngl4EzcnsCDZGJ/iCLtDflR/SHB/ny14rXc+qU5P4mG9JkusiV7EivzY9Mhm55AzAvCg==}
 
@@ -1543,7 +1552,7 @@ snapshots:
       '@tybys/wasm-util': 0.10.1
     optional: true
 
-  '@nlweb-ai/search-components@0.1.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
+  '@nlweb-ai/search-components@0.1.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
     dependencies:
       '@headlessui/react': 2.2.9(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@heroicons/react': 2.2.0(react@19.2.3)
@@ -1551,6 +1560,7 @@ snapshots:
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
       schema-dts: 1.1.5
+      swr: 2.3.8(react@19.2.3)
       zod: 4.3.6
 
   '@oxc-project/runtime@0.97.0': {}
@@ -1953,6 +1963,8 @@ snapshots:
       ms: 2.1.3
 
   deep-is@0.1.4: {}
+
+  dequal@2.0.3: {}
 
   detect-libc@2.1.2: {}
 
@@ -2378,6 +2390,12 @@ snapshots:
   supports-color@7.2.0:
     dependencies:
       has-flag: 4.0.0
+
+  swr@2.3.8(react@19.2.3):
+    dependencies:
+      dequal: 2.0.3
+      react: 19.2.3
+      use-sync-external-store: 1.6.0(react@19.2.3)
 
   tabbable@6.4.0: {}
 

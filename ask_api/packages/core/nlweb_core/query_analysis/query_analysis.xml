@@ -20,20 +20,41 @@
       </returnStruc>
     </QueryAnalysis>
 
+    <QueryAnalysis ref="NoContextTransliterator" enabled="true" >
+      <method>defaultQueryAnalysisHandler</method>
+      <promptString>
+        The user is querying the site {request.site}.
+
+        IMPORTANT: If the query is in romanized Hindi (Hinglish - Hindi words written in English/Latin script), transliterate it to Devanagari. Examples:
+        - "Mumbai mein barish" → "मुंबई में बारिश"
+        - "aaj ka news" → "आज का news"
+        - "cricket score dekhna hai" → "cricket score देखना है"
+        VERY IMPORTANT: Keep purely English queries in English. Keep Devanagari queries unchanged.
+
+        The user's query is: {request.rawQuery}.
+      </promptString>
+      <returnStruc>
+        {
+          "requires_transliteration": "True or False",
+          "transliterated_query": "The transliterated query if needed, otherwise the original query"
+        }
+      </returnStruc>
+    </QueryAnalysis>
+
     <QueryAnalysis ref="PrevQueryDecontextualizer" enabled="true" >
       <method>defaultQueryAnalysisHandler</method>
       <promptString>
         The user is querying the site {request.site}.
         Rewrite the query, incorporating the context of the previous queries and answers.
-        Keep the decontextualized query short and do not reference the site. 
+        Keep the decontextualized query short and do not reference the site.
 
-        If the query very clearly does not reference earlier queries, 
-        don't change the query. Err on the side of incorporating the context of the 
-        previous queries. If you are not sure whether this is a brand new query, 
-        or follow up, it is likely a follow up. Try your best to incorporate the 
+        If the query very clearly does not reference earlier queries,
+        don't change the query. Err on the side of incorporating the context of the
+        previous queries. If you are not sure whether this is a brand new query,
+        or follow up, it is likely a follow up. Try your best to incorporate the
         context from the previous queries.
 
-        The user's query is: {request.rawQuery}. 
+        The user's query is: {request.rawQuery}.
         Previous queries were: {request.previousQueries}.
        <!-- Previous answers (title + url)provided were: {request.prevAnswers}. -->
       </promptString>
@@ -50,14 +71,14 @@
       <promptString>
         The user is querying the site {request.site}.
         Rewrite the query, incorporating the context .
-        Keep the decontextualized query short and do not reference the site. 
+        Keep the decontextualized query short and do not reference the site.
 
-        If the query very clearly does not reference earlier queries, 
-        don't change the query. Err on the side of incorporating the context. If you are not sure whether this is a brand new query, 
-        or follow up, it is likely a follow up. Try your best to incorporate the 
+        If the query very clearly does not reference earlier queries,
+        don't change the query. Err on the side of incorporating the context. If you are not sure whether this is a brand new query,
+        or follow up, it is likely a follow up. Try your best to incorporate the
         context from the previous queries.
 
-        The user's query is: {request.rawQuery}. 
+        The user's query is: {request.rawQuery}.
         Previous context is: request.context}.
        <!-- Previous answers (title + url)provided were: {request.prevAnswers}. -->
       </promptString>
@@ -74,22 +95,84 @@
       <promptString>
         The user is querying the site {request.site}.
         Rewrite the query, incorporating the context and previous queries.
-        Keep the decontextualized query short and do not reference the site. 
+        Keep the decontextualized query short and do not reference the site.
 
-        If the query very clearly does not reference earlier queries, 
-        don't change the query. Err on the side of incorporating the context. If you are not sure whether this is a brand new query, 
-        or follow up, it is likely a follow up. Try your best to incorporate the 
+        If the query very clearly does not reference earlier queries,
+        don't change the query. Err on the side of incorporating the context. If you are not sure whether this is a brand new query,
+        or follow up, it is likely a follow up. Try your best to incorporate the
         context from the previous queries.
 
         The user's query is: {request.rawQuery}.
         Previous queries were: {request.previousQueries}
-        Previous context is: request.context}.
+        Previous context is: {request.context}.
        <!-- Previous answers (title + url)provided were: {request.prevAnswers}. -->
       </promptString>
       <returnStruc>
         {
           "requires_decontextualization": "True or False",
           "decontextualized_query": "The rewritten query, if decontextualization is required"
+        }
+      </returnStruc>
+    </QueryAnalysis>
+
+    <QueryAnalysis ref="PrevQueryDecontextualizerHindi" enabled="true" >
+      <method>defaultQueryAnalysisHandler</method>
+      <promptString>
+        The user is querying a Hindi news site that uses Hindi content.
+
+        STEP 1 (Transliteration): If the query is in romanized Hindi (Hinglish - Hindi words written in English/Latin script), transliterate it to Devanagari. Examples:
+        - "Mumbai mein barish" → "मुंबई में बारिश"
+        - "aaj ka news" → "आज का news"
+        - "cricket score dekhna hai" → "cricket score देखना है"
+        IMPORTANT: Keep purely English queries in English. Keep Devanagari queries unchanged.
+
+        STEP 2 (Decontextualization): Rewrite the query, incorporating the context of the previous queries and answers.
+        Keep the decontextualized query short and do not reference the site.
+
+        If the query very clearly does not reference earlier queries,
+        don't change the query. Err on the side of incorporating the context of the
+        previous queries. If you are not sure whether this is a brand new query,
+        or follow up, it is likely a follow up. Try your best to incorporate the
+        context from the previous queries.
+
+        The user's query is: {request.rawQuery}.
+        Previous queries were: {request.previousQueries}.
+      </promptString>
+      <returnStruc>
+        {
+          "requires_decontextualization": "True or False",
+          "decontextualized_query": "The rewritten query (transliterated if needed, then decontextualized)"
+        }
+      </returnStruc>
+    </QueryAnalysis>
+
+    <QueryAnalysis ref="FullContextDecontextualizerHindi" enabled="true" >
+      <method>defaultQueryAnalysisHandler</method>
+      <promptString>
+        The user is querying a Hindi news site that uses Hindi content.
+
+        STEP 1 (Transliteration): If the query is in romanized Hindi (Hinglish - Hindi words written in English/Latin script), transliterate it to Devanagari. Examples:
+        - "Mumbai mein barish" → "मुंबई में बारिश"
+        - "aaj ka news" → "आज का news"
+        - "cricket score dekhna hai" → "cricket score देखना है"
+        IMPORTANT: Keep purely English queries in English. Keep Devanagari queries unchanged.
+
+        STEP 2 (Decontextualization): Rewrite the query, incorporating the context and previous queries.
+        Keep the decontextualized query short and do not reference the site.
+
+        If the query very clearly does not reference earlier queries,
+        don't change the query. Err on the side of incorporating the context. If you are not sure whether this is a brand new query,
+        or follow up, it is likely a follow up. Try your best to incorporate the
+        context from the previous queries.
+
+        The user's query is: {request.rawQuery}.
+        Previous queries were: {request.previousQueries}
+        Previous context is: {request.context}.
+      </promptString>
+      <returnStruc>
+        {
+          "requires_decontextualization": "True or False",
+          "decontextualized_query": "The rewritten query (transliterated if needed, then decontextualized)"
         }
       </returnStruc>
     </QueryAnalysis>

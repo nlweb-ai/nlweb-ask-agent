@@ -1,12 +1,10 @@
-import {ChatSearch} from '@nlweb-ai/search-components';
+import {ChatSearch, useNlWeb, DebugTool, SiteDropdown, useSearchSession, useSearchSessions, HistorySidebar} from '@nlweb-ai/search-components';
 import { useState } from 'react';
-import SiteDropdown, {type Site} from './components/SiteDropdown'
 
 const SITES = [
   {url: 'yoast-site-recipes.azurewebsites.net', featured: true},
   {url: 'yoast-site-rss.azurewebsites.net', featured: true},
   {url: 'aajtak.in'},
-  {url: 'github.com'},
   {url: 'techcrunch.com'},
   {url: '9to5mac.com'},
   {url: 'boingboing.net'},
@@ -112,34 +110,78 @@ const SITES = [
 ];
 
 function App() {
-  const [allSites, setAllSites] = useState<Site[]>(SITES);
-  const [site, setSite] = useState<Site>(allSites[0]);
-
-  return (
-    <div className='p-8'>
-      <div className='max-w-3xl mx-auto'>
-        <ChatSearch
-          endpoint="/ask"
-          site={site.url}
+  const [site, setSite] = useState(SITES[0]);
+    const nlweb = useNlWeb({
+      endpoint: "/ask",
+      site: site.url,
+      maxResults: 50
+    });
+    const localSessions = useSearchSessions();
+    const [sessionId, setSessionId] = useState<string>(crypto.randomUUID());
+    const [sessionResults, setSessionResults] = useSearchSession(sessionId);
+    //@ts-ignore
+    function startSearch(firstResult) {
+      const newId = localSessions.sessions.some(s => s.sessionId === sessionId) ? crypto.randomUUID() : sessionId ;
+      localSessions.startSession(newId, firstResult, {
+        site: site.url,
+        endpoint: "/ask"
+      })
+      setSessionId(newId);
+    }
+    function endSearch() {
+      setSessionId(crypto.randomUUID());
+    }
+    //@ts-ignore
+    function selectSession(session: SearchSession) {
+      setSessionId(session.sessionId);
+      setSite(SITES.find(s => s.url == session.backend.site) || {
+        url: session.backend.site
+      });
+    }
+    return (
+      <div className="h-screen flex items-stretch">
+        <HistorySidebar
+          sessions={localSessions.sessions}
+          onSelect={selectSession}
+          onDelete={localSessions.deleteSession}
+          onCreate={endSearch}
         />
-        <div className='flex -mt-3 gap-4'>
-          <SiteDropdown
-            sites={allSites}
-            selected={site}
-            onSelect={(url) => {
-              const targetSite = SITES.find(s => s.url == url);
-              if (targetSite) {
-                setSite(targetSite)
-              } else if (url) {
-                setSite({url: url})
-                setAllSites(curr => [...curr, {url: url}])
-              }
-            }}
-          />
+        <div className='p-8 flex-1'>
+          <div className='max-w-3xl mx-auto'>
+            <ChatSearch
+              key={sessionId}
+              startSession={startSearch}
+              endSession={endSearch}
+              results={sessionResults}
+              setResults={setSessionResults}
+              nlweb={nlweb}
+              sidebar={<HistorySidebar
+                sessions={localSessions.sessions}
+                onSelect={selectSession}
+                onDelete={localSessions.deleteSession}
+                onCreate={endSearch}
+              />}
+            >
+              <div className='absolute z-50 top-2 right-16'>
+                <DebugTool 
+                  site={site.url}
+                  maxResults={50}
+                  streamingState={nlweb}
+                  results={sessionResults}
+                />
+              </div>
+            </ChatSearch>
+            <SiteDropdown 
+              sites={SITES} 
+              selected={site} 
+              onSelect={url => setSite(SITES.find(s => s.url == url) || ({
+                url: url || ''
+              }))}
+            />
+          </div>
         </div>
       </div>
-    </div>
-  )
+    )
 }
 
 export default App

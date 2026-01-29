@@ -52,12 +52,12 @@ class ResultsSummarizer:
         summarizer = ResultsSummarizer(llm=llm)
     """
 
-    DEFAULT_PROMPT_TEMPLATE = """Summarize the following search results in 2-3 sentences, highlighting the key information that answers the user's question: {query}
+    DEFAULT_PROMPT_TEMPLATE = """Summarize the following AI results in 2-3 sentences (*DO NOT mention 'search results' or 'results' in your output*), highlighting the key information that answers the user's question: {query}
 
 Results:
 {results}"""
 
-    SCHEMA = {"summary": "A 2-3 sentence summary of the results"}
+    SCHEMA = {"summary": "A 2-3 sentence summary of the AI results"}
 
     def __init__(
         self,

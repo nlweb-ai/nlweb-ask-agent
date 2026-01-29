@@ -106,6 +106,12 @@ class NLWebHandler:
         Returns:
             The decontextualized query string, or None if no context was provided.
         """
+        # TODO: Handle transliteration via site configuration
+        # Route to language-specific decontextualization if needed
+        if self.request.query.site == "aajtak.in":
+            return await self._decontextualize_query_hindi(site_config)
+
+        # Standard decontextualization for non-transliteration sites
         context = self.request.context
         prev_queries = (context.prev or []) if context else []
         context_text = context.text if context else None
@@ -124,6 +130,49 @@ class NLWebHandler:
             result = await DefaultQueryAnalysisHandler(
                 self.request,
                 prompt_ref="FullContextDecontextualizer",
+                root_node=query_analysis_tree,
+                site_config=site_config,
+            ).do()
+            return result.get("decontextualized_query") if result else None
+
+    async def _decontextualize_query_hindi(self, site_config: dict) -> str | None:
+        """
+        Decontextualize query for Hindi sites with Hinglish transliteration.
+        Uses Hindi-specific prompts that handle romanized Hindi (Hinglish) conversion.
+
+        Args:
+            site_config: Site configuration dict with 'item_type' key.
+
+        Returns:
+            The decontextualized query string (transliterated if needed), or None if no context.
+        """
+        context = self.request.context
+        prev_queries = (context.prev or []) if context else []
+        context_text = context.text if context else None
+
+        if not prev_queries and context_text is None:
+            # No context - just transliterate
+            result = await DefaultQueryAnalysisHandler(
+                self.request,
+                prompt_ref="NoContextTransliterator",
+                root_node=query_analysis_tree,
+                site_config=site_config,
+            ).do()
+            return result.get("transliterated_query") if result else None
+        elif prev_queries and context_text is None:
+            # Decontextualize with prev queries + transliteration
+            result = await DefaultQueryAnalysisHandler(
+                self.request,
+                prompt_ref="PrevQueryDecontextualizerHindi",
+                root_node=query_analysis_tree,
+                site_config=site_config,
+            ).do()
+            return result.get("decontextualized_query") if result else None
+        else:
+            # Decontextualize with full context + transliteration
+            result = await DefaultQueryAnalysisHandler(
+                self.request,
+                prompt_ref="FullContextDecontextualizerHindi",
                 root_node=query_analysis_tree,
                 site_config=site_config,
             ).do()
