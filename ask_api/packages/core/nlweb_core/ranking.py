@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 
-from nlweb_core.config import get_config
+from nlweb_core.config import get_config, RankingConfig
 from nlweb_core.item_retriever import RetrievedItem
 from nlweb_core.protocol.models import Query
 from nlweb_core.llm_exceptions import (
@@ -30,8 +30,8 @@ logger = logging.getLogger(__name__)
 
 class Ranking:
 
-    def __init__(self, level: str = "low") -> None:
-        self.level: str = level
+    def __init__(self) -> None:
+        pass
 
     async def rank(
         self,
@@ -67,12 +67,13 @@ class Ranking:
             for item in items
         ]
 
-        # Use the scoring question for item ranking
-        scoring_question = "Is this item relevant to the query?"
+        # Get config and scoring question
+        config = get_config()
+        ranking_config = config.ranking or RankingConfig()
+        scoring_question = ranking_config.scoring_question
 
         try:
             # Get the scoring provider and score all items in batch
-            config = get_config()
             provider = get_scoring_provider()
             scoring_config = config.scoring_llm_model
             if not scoring_config:
