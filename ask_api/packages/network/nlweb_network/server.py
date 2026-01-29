@@ -437,6 +437,26 @@ def create_app():
     )
     app.router.add_delete("/site-configs/{domain}", delete_site_config_handler)
 
+    # Enable CORS if configured
+    if get_config().server.enable_cors:
+        from aiohttp_cors import setup as cors_setup, ResourceOptions
+
+        cors = cors_setup(
+            app,
+            defaults={
+                "*": ResourceOptions(
+                    allow_credentials=True,
+                    expose_headers="*",
+                    allow_headers="*",
+                    allow_methods="*",
+                )
+            },
+        )
+
+        # Configure CORS for all routes
+        for route in list(app.router.routes()):
+            cors.add(route)
+
     return app
 
 

@@ -89,6 +89,7 @@ class RetrievalProviderConfig:
 @dataclass
 class ServerConfig:
     host: str = "localhost"
+    enable_cors: bool = True
     max_connections: int = 100
     timeout: int = 30
 
@@ -607,6 +608,7 @@ def _load_server_config(data: dict) -> ServerConfig:
 
     return ServerConfig(
         host=_get_config_value(server_cfg.get("host"), "localhost"),
+        enable_cors=_get_config_value(server_cfg.get("enable_cors"), True),
         max_connections=_get_config_value(server_cfg.get("max_connections"), 100),
         timeout=_get_config_value(server_cfg.get("timeout"), 30),
     )
