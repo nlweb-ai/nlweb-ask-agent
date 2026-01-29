@@ -66,16 +66,16 @@ class ScoringLLMProvider(ABC):
     @abstractmethod
     async def score(
         self,
-        question: str,
+        questions: list[str],
         context: ScoringContext,
         timeout: float = 30.0,
         **kwargs,
     ) -> float:
         """
-        Score a single question/context pair.
+        Score a single context with the given questions.
 
         Args:
-            question: The scoring question (e.g., "Is this item relevant to the query?")
+            questions: List of scoring questions (e.g., ["Is this item relevant to the query?"])
             context: Structured context for the scoring operation
             timeout: Request timeout in seconds
             **kwargs: Additional provider-specific arguments (api_key, endpoint, etc.)
@@ -91,19 +91,19 @@ class ScoringLLMProvider(ABC):
 
     async def score_batch(
         self,
-        question: str,
+        questions: list[str],
         contexts: list[ScoringContext],
         timeout: float = 30.0,
         **kwargs,
     ) -> list[float | BaseException]:
         """
-        Score multiple contexts with the same question in parallel.
+        Score multiple contexts with the given questions in parallel.
 
-        Default implementation calls score() for each context.
-        Providers can override this for optimized batch processing.
+        Default implementation calls score() for each context using the first question.
+        Providers can override this for optimized batch processing with multiple questions.
 
         Args:
-            question: The scoring question to ask for all contexts
+            questions: List of scoring questions to ask
             contexts: List of contexts to score
             timeout: Request timeout in seconds
             **kwargs: Additional provider-specific arguments
@@ -112,7 +112,7 @@ class ScoringLLMProvider(ABC):
             List of scores (0-100) or Exception for each failed request
         """
         tasks = [
-            self.score(question, context, timeout=timeout, **kwargs)
+            self.score(questions, context, timeout=timeout, **kwargs)
             for context in contexts
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)

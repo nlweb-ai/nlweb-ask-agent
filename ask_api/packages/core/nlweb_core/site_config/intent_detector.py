@@ -121,7 +121,7 @@ class IntentDetector:
                     logger.warning("No scoring_llm_model configured, skipping intent detection")
                     return matching_required_info
                 results = await provider.score_batch(
-                    scoring_question,
+                    [scoring_question],
                     contexts,
                     timeout=8,
                     api_key=scoring_config.api_key,

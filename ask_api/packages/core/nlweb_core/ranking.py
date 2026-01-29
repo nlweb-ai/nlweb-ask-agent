@@ -79,7 +79,7 @@ class Ranking:
             if not scoring_config:
                 raise ValueError("No scoring_llm_model configured")
             scores = await provider.score_batch(
-                scoring_question,
+                [scoring_question],
                 contexts,
                 timeout=8,
                 api_key=scoring_config.api_key,

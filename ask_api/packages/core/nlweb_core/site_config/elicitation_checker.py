@@ -134,7 +134,7 @@ class ElicitationChecker:
                 logger.warning("No scoring_llm_model configured, skipping elicitation check")
                 return None
             results = await provider.score_batch(
-                scoring_question,
+                [scoring_question],
                 contexts,
                 timeout=8,
                 api_key=scoring_config.api_key,
