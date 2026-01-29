@@ -45,7 +45,7 @@ class MCPSSEInterface(BaseInterface):
             ValueError: If request is invalid or malformed
         """
         # For SSE, we support both GET (query params) and POST (JSON body)
-        if request.method == 'POST':
+        if request.method == "POST":
             try:
                 body = await request.json()
                 method = body.get("method")
@@ -67,10 +67,14 @@ class MCPSSEInterface(BaseInterface):
             "method": method,
             "params": params,
             "id": request_id,
-            "query_params": params.get("arguments", {}) if method == "tools/call" else {}
+            "query_params": (
+                params.get("arguments", {}) if method == "tools/call" else {}
+            ),
         }
 
-    async def send_response(self, response: web.StreamResponse, data: Dict[str, Any]) -> None:
+    async def send_response(
+        self, response: web.StreamResponse, data: Dict[str, Any]
+    ) -> None:
         """
         Send MCP response as Server-Sent Event.
 
@@ -80,14 +84,11 @@ class MCPSSEInterface(BaseInterface):
         """
         # Wrap NLWeb data in MCP format
         # Each SSE event contains a JSON-RPC response with partial results
-        mcp_data = {
-            "jsonrpc": "2.0",
-            "result": data
-        }
+        mcp_data = {"jsonrpc": "2.0", "result": data}
 
         # Format as SSE: data: {json}\n\n
         event_data = f"data: {json.dumps(mcp_data)}\n\n"
-        await response.write(event_data.encode('utf-8'))
+        await response.write(event_data.encode("utf-8"))
 
     async def finalize_response(self, response: web.StreamResponse) -> None:
         """
@@ -99,14 +100,10 @@ class MCPSSEInterface(BaseInterface):
         # Send final completion event
         completion_data = {
             "jsonrpc": "2.0",
-            "result": {
-                "_meta": {
-                    "nlweb/streaming_status": "finished"
-                }
-            }
+            "result": {"_meta": {"nlweb/streaming_status": "finished"}},
         }
         event_data = f"data: {json.dumps(completion_data)}\n\n"
-        await response.write(event_data.encode('utf-8'))
+        await response.write(event_data.encode("utf-8"))
         await response.write_eof()
 
     def build_sse_json_response(self, request_id: Any, result: Dict[str, Any]) -> str:
@@ -120,11 +117,7 @@ class MCPSSEInterface(BaseInterface):
         Returns:
             SSE-formatted string
         """
-        mcp_response = {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": result
-        }
+        mcp_response = {"jsonrpc": "2.0", "id": request_id, "result": result}
         return f"data: {json.dumps(mcp_response)}\n\n"
 
     def build_sse_error(self, request_id: Any, code: int, message: str) -> str:
@@ -142,10 +135,7 @@ class MCPSSEInterface(BaseInterface):
         error_response = {
             "jsonrpc": "2.0",
             "id": request_id,
-            "error": {
-                "code": code,
-                "message": message
-            }
+            "error": {"code": code, "message": message},
         }
         return f"data: {json.dumps(error_response)}\n\n"
 
@@ -176,14 +166,10 @@ class MCPSSEInterface(BaseInterface):
                     "capabilities": {"tools": {}},
                     "serverInfo": {
                         "name": self.SERVER_NAME,
-                        "version": self.SERVER_VERSION
-                    }
+                        "version": self.SERVER_VERSION,
+                    },
                 }
-                result = {
-                    "jsonrpc": "2.0",
-                    "id": request_id,
-                    "result": response_data
-                }
+                result = {"jsonrpc": "2.0", "id": request_id, "result": response_data}
                 return web.json_response(result)
 
             # Handle tools/list (non-streaming)
@@ -196,20 +182,25 @@ class MCPSSEInterface(BaseInterface):
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "query": {"type": "string", "description": "Natural language query"},
-                                    "site": {"type": "string", "description": "Target site identifier"},
-                                    "num_results": {"type": "integer", "description": "Number of results to return"}
+                                    "query": {
+                                        "type": "string",
+                                        "description": "Natural language query",
+                                    },
+                                    "site": {
+                                        "type": "string",
+                                        "description": "Target site identifier",
+                                    },
+                                    "num_results": {
+                                        "type": "integer",
+                                        "description": "Number of results to return",
+                                    },
                                 },
-                                "required": ["query"]
-                            }
+                                "required": ["query"],
+                            },
                         }
                     ]
                 }
-                result = {
-                    "jsonrpc": "2.0",
-                    "id": request_id,
-                    "result": response_data
-                }
+                result = {"jsonrpc": "2.0", "id": request_id, "result": response_data}
                 return web.json_response(result)
 
             # Handle tools/call (streaming via SSE)
@@ -218,26 +209,36 @@ class MCPSSEInterface(BaseInterface):
                 arguments = params.get("arguments", {})
 
                 if tool_name != "ask":
-                    error_msg = self.build_sse_error(request_id, -32602, f"Unknown tool: {tool_name}")
+                    error_msg = self.build_sse_error(
+                        request_id, -32602, f"Unknown tool: {tool_name}"
+                    )
                     response = web.StreamResponse(
                         status=200,
-                        headers={'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache'}
+                        headers={
+                            "Content-Type": "text/event-stream",
+                            "Cache-Control": "no-cache",
+                        },
                     )
                     await response.prepare(request)
-                    await response.write(error_msg.encode('utf-8'))
+                    await response.write(error_msg.encode("utf-8"))
                     await response.write_eof()
                     return response
 
                 query_params = arguments
 
-                if 'query' not in query_params:
-                    error_msg = self.build_sse_error(request_id, -32602, "Missing required parameter: query")
+                if "query" not in query_params:
+                    error_msg = self.build_sse_error(
+                        request_id, -32602, "Missing required parameter: query"
+                    )
                     response = web.StreamResponse(
                         status=200,
-                        headers={'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache'}
+                        headers={
+                            "Content-Type": "text/event-stream",
+                            "Cache-Control": "no-cache",
+                        },
                     )
                     await response.prepare(request)
-                    await response.write(error_msg.encode('utf-8'))
+                    await response.write(error_msg.encode("utf-8"))
                     await response.write_eof()
                     return response
 
@@ -245,23 +246,25 @@ class MCPSSEInterface(BaseInterface):
                 response = web.StreamResponse(
                     status=200,
                     headers={
-                        'Content-Type': 'text/event-stream',
-                        'Cache-Control': 'no-cache',
-                        'Connection': 'keep-alive',
-                    }
+                        "Content-Type": "text/event-stream",
+                        "Cache-Control": "no-cache",
+                        "Connection": "keep-alive",
+                    },
                 )
                 await response.prepare(request)
 
                 # Send initial metadata
-                init_msg = self.build_sse_json_response(request_id, {"_meta": {"version": "0.5"}})
-                await response.write(init_msg.encode('utf-8'))
+                init_msg = self.build_sse_json_response(
+                    request_id, {"_meta": {"version": "0.5"}}
+                )
+                await response.write(init_msg.encode("utf-8"))
 
                 # MCP defaults to non-streaming
-                if 'streaming' not in query_params:
-                    query_params['streaming'] = False
+                if "streaming" not in query_params:
+                    query_params["streaming"] = False
 
                 # Build AskRequest from query_params
-                ask_request = AskRequest.from_query_params(query_params)
+                ask_request = AskRequest.model_validate(query_params)
 
                 # Create streaming output method
                 output_method = self.create_output_method(response)
@@ -276,27 +279,33 @@ class MCPSSEInterface(BaseInterface):
                 return response
 
             else:
-                error_msg = self.build_sse_error(request_id, -32601, f"Method not found: {method}")
+                error_msg = self.build_sse_error(
+                    request_id, -32601, f"Method not found: {method}"
+                )
                 response = web.StreamResponse(
                     status=200,
-                    headers={'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache'}
+                    headers={
+                        "Content-Type": "text/event-stream",
+                        "Cache-Control": "no-cache",
+                    },
                 )
                 await response.prepare(request)
-                await response.write(error_msg.encode('utf-8'))
+                await response.write(error_msg.encode("utf-8"))
                 await response.write_eof()
                 return response
 
         except Exception as e:
             error_msg = self.build_sse_error(
-                request_id,
-                -32603,
-                f"Internal error: {str(e)}"
+                request_id, -32603, f"Internal error: {str(e)}"
             )
             response = web.StreamResponse(
                 status=200,
-                headers={'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache'}
+                headers={
+                    "Content-Type": "text/event-stream",
+                    "Cache-Control": "no-cache",
+                },
             )
             await response.prepare(request)
-            await response.write(error_msg.encode('utf-8'))
+            await response.write(error_msg.encode("utf-8"))
             await response.write_eof()
             return response

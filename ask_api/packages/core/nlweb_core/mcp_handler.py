@@ -11,6 +11,7 @@ import json
 from typing import Awaitable, Callable, Dict, Any
 from nlweb_core.protocol.models import AskRequest
 
+
 class MCPHandler:
     """
     MCP handler class
@@ -46,14 +47,12 @@ class MCPHandler:
             "id": request_id,
             "result": {
                 "protocolVersion": self.MCP_VERSION,
-                "capabilities": {
-                    "tools": {}
-                },
+                "capabilities": {"tools": {}},
                 "serverInfo": {
                     "name": self.SERVER_NAME,
-                    "version": self.SERVER_VERSION
-                }
-            }
+                    "version": self.SERVER_VERSION,
+                },
+            },
         }
 
     def build_tools_list_response(self, request_id: Any) -> Dict[str, Any]:
@@ -79,30 +78,32 @@ class MCPHandler:
                             "properties": {
                                 "query": {
                                     "type": "string",
-                                    "description": "Natural language query"
+                                    "description": "Natural language query",
                                 },
                                 "site": {
                                     "type": "string",
-                                    "description": "Target site identifier"
+                                    "description": "Target site identifier",
                                 },
                                 "num_results": {
                                     "type": "integer",
-                                    "description": "Number of results to return"
+                                    "description": "Number of results to return",
                                 },
                                 "streaming": {
                                     "type": "boolean",
                                     "description": "Enable streaming response",
-                                    "default": False
-                                }
+                                    "default": False,
+                                },
                             },
-                            "required": ["query"]
-                        }
+                            "required": ["query"],
+                        },
                     }
                 ]
-            }
+            },
         }
 
-    def build_tool_call_response(self, request_id: Any, nlweb_result: Dict[str, Any]) -> Dict[str, Any]:
+    def build_tool_call_response(
+        self, request_id: Any, nlweb_result: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Build MCP tools/call response from NLWeb result.
 
@@ -118,15 +119,14 @@ class MCPHandler:
             "id": request_id,
             "result": {
                 "content": [
-                    {
-                        "type": "text",
-                        "text": json.dumps(nlweb_result, indent=2)
-                    }
+                    {"type": "text", "text": json.dumps(nlweb_result, indent=2)}
                 ]
-            }
+            },
         }
 
-    def build_error_response(self, request_id: Any, code: int, message: str) -> Dict[str, Any]:
+    def build_error_response(
+        self, request_id: Any, code: int, message: str
+    ) -> Dict[str, Any]:
         """
         Build JSON-RPC 2.0 error response.
 
@@ -141,10 +141,7 @@ class MCPHandler:
         return {
             "jsonrpc": "2.0",
             "id": request_id,
-            "error": {
-                "code": code,
-                "message": message
-            }
+            "error": {"code": code, "message": message},
         }
 
     def build_json_response(self, responses: list) -> Dict[str, Any]:
@@ -162,21 +159,21 @@ class MCPHandler:
         content = []
 
         for response in responses:
-            if '_meta' in response:
+            if "_meta" in response:
                 # Merge meta information (first one wins for duplicates)
-                for key, value in response['_meta'].items():
+                for key, value in response["_meta"].items():
                     if key not in meta:
                         meta[key] = value
-            if 'content' in response:
+            if "content" in response:
                 # Collect all content items
-                content.extend(response['content'])
+                content.extend(response["content"])
 
         # Build final response
         result = {}
         if meta:
-            result['_meta'] = meta
+            result["_meta"] = meta
         if content:
-            result['content'] = content
+            result["content"] = content
 
         return result
 
@@ -213,9 +210,7 @@ class MCPHandler:
 
                 if tool_name != "ask":
                     response = self.build_error_response(
-                        request_id,
-                        -32602,
-                        f"Unknown tool: {tool_name}"
+                        request_id, -32602, f"Unknown tool: {tool_name}"
                     )
                     return response
 
@@ -225,16 +220,14 @@ class MCPHandler:
 
                 query_params = arguments
 
-                if 'query' not in query_params:
+                if "query" not in query_params:
                     response = self.build_error_response(
-                        request_id,
-                        -32602,
-                        "Missing required parameter: query"
+                        request_id, -32602, "Missing required parameter: query"
                     )
                     return response
 
                 # Build AskRequest from query_params
-                ask_request = AskRequest.from_query_params(query_params)
+                ask_request = AskRequest.model_validate(query_params)
 
                 # Create collector output method
                 output_method = self.create_collector_output_method()
@@ -252,29 +245,25 @@ class MCPHandler:
 
             else:
                 response = self.build_error_response(
-                    request_id,
-                    -32601,
-                    f"Method not found: {method}"
+                    request_id, -32601, f"Method not found: {method}"
                 )
                 return response
 
         except ValueError as e:
             response = self.build_error_response(
-                request_id,
-                -32700 if "JSON" in str(e) else -32602,
-                str(e)
+                request_id, -32700 if "JSON" in str(e) else -32602, str(e)
             )
             return response
 
         except Exception as e:
             response = self.build_error_response(
-                request_id,
-                -32603,
-                f"Internal error: {str(e)}"
+                request_id, -32603, f"Internal error: {str(e)}"
             )
             return response
 
-    def create_collector_output_method(self) -> Callable[[Dict[str, Any]], Awaitable[None]]:
+    def create_collector_output_method(
+        self,
+    ) -> Callable[[Dict[str, Any]], Awaitable[None]]:
         async def output_method(data: Dict[str, Any]) -> None:
             self.responses.append(data)
 

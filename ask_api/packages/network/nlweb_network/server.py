@@ -60,7 +60,7 @@ async def config_handler(request):
 
 async def ask_handler(request):
     """
-    Handle /ask requests (both GET and POST).
+    Handle /ask requests (POST).
 
     Routes to either HTTP SSE (streaming=true, default) or
     HTTP JSON (streaming=false) interface based on prefer.streaming parameter.
@@ -77,19 +77,10 @@ async def ask_handler(request):
     - If prefer.streaming=false: JSON response with the complete NLWeb answer
     - Otherwise (default): Server-Sent Events stream
     """
-    # Get query parameters to check streaming preference
-    query_params = dict(request.query)
-
-    # For POST requests, check JSON body too
-    if request.method == "POST":
-        try:
-            body = await request.json()
-            query_params = {**query_params, **body}
-        except Exception:
-            pass
+    body = await request.json()
 
     # Extract streaming from prefer section (default: true)
-    prefer = query_params.get("prefer", {})
+    prefer = body.get("prefer", {})
     streaming = prefer.get("streaming", True) if isinstance(prefer, dict) else True
 
     # Route to appropriate interface
@@ -291,7 +282,6 @@ async def config_override_middleware(app, handler):
 
     Supports:
     - Query params: ?prefer.config.memory=true
-    - JSON body: {"prefer": {"config": {"memory": true}}}
     """
 
     async def middleware(request: Request):
@@ -303,19 +293,6 @@ async def config_override_middleware(app, handler):
                 param_name = key[len("prefer.config.") :]
                 if param_name in _OVERRIDE_PARAM_MAP:
                     overrides[_OVERRIDE_PARAM_MAP[param_name]] = _parse_bool(value)
-
-        # For POST, also check JSON body prefer.config section
-        if request.method == "POST":
-            content_type = request.content_type or ""
-            if "application/json" in content_type:
-                try:
-                    body = await request.json()
-                    config_section = body.get("prefer", {}).get("config", {})
-                    for param_name, value in config_section.items():
-                        if param_name in _OVERRIDE_PARAM_MAP:
-                            overrides[_OVERRIDE_PARAM_MAP[param_name]] = bool(value)
-                except Exception:
-                    pass  # Let handler deal with malformed JSON
 
         # Set overrides (only does work if there are valid overrides)
         if overrides:
@@ -410,7 +387,6 @@ def create_app():
     app.on_cleanup.append(cleanup_app)
 
     # Add HTTP routes
-    app.router.add_get("/ask", ask_handler)
     app.router.add_post("/ask", ask_handler)
     app.router.add_post("/await", await_handler)
     app.router.add_get("/health", health_handler)

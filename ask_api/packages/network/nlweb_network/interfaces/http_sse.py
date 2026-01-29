@@ -26,43 +26,9 @@ class HTTPSSEInterface(BaseInterface):
     Streams each result immediately as it's generated.
     """
 
-    async def parse_request(self, request: web.Request) -> Dict[str, Any]:
-        """
-        Parse HTTP request and extract query parameters.
-        Validates v0.54 format.
-
-        Args:
-            request: aiohttp Request object
-
-        Returns:
-            Dict of query parameters in v0.54 format
-
-        Raises:
-            ValueError: If request is not v0.54 compliant
-        """
-        # Get query parameters from URL
-        query_params = dict(request.query)
-
-        # For POST requests, merge JSON body params (body takes precedence)
-        if request.method == 'POST':
-            try:
-                body = await request.json()
-                # Merge body params into query_params, with body taking precedence
-                query_params = {**query_params, **body}
-            except Exception:
-                # If body parsing fails, just use query params
-                pass
-
-        # Validate v0.54 structure
-        if 'query' not in query_params or not isinstance(query_params['query'], dict):
-            raise ValueError("Invalid request: missing 'query' object. Expected v0.54 format with nested structure.")
-
-        if 'text' not in query_params['query']:
-            raise ValueError("Invalid request: missing 'query.text' field")
-
-        return query_params
-
-    async def send_response(self, response: web.StreamResponse, data: Dict[str, Any]) -> None:
+    async def send_response(
+        self, response: web.StreamResponse, data: Dict[str, Any]
+    ) -> None:
         """
         Send data as Server-Sent Event.
 
@@ -72,7 +38,7 @@ class HTTPSSEInterface(BaseInterface):
         """
         # Format as SSE: data: {json}\n\n
         event_data = f"data: {json.dumps(data)}\n\n"
-        await response.write(event_data.encode('utf-8'))
+        await response.write(event_data.encode("utf-8"))
 
     async def finalize_response(self, response: web.StreamResponse) -> None:
         """
@@ -83,7 +49,9 @@ class HTTPSSEInterface(BaseInterface):
         """
         await response.write_eof()
 
-    async def handle_request(self, request: web.Request, handler_class) -> web.StreamResponse:
+    async def handle_request(
+        self, request: web.Request, handler_class
+    ) -> web.StreamResponse:
         """
         Handle HTTP request and stream SSE responses.
 
@@ -95,35 +63,30 @@ class HTTPSSEInterface(BaseInterface):
             aiohttp StreamResponse
         """
         import sys
+
         try:
-            # Parse request
-            query_params = await self.parse_request(request)
-            print(f"[DEBUG] Parsed query_params: {query_params}", file=sys.stderr)
+            # Build AskRequest from query_params
+            body = await request.json()
+            ask_request = AskRequest.model_validate(body)
 
             # Create SSE response
             response = web.StreamResponse(
                 status=200,
-                reason='OK',
+                reason="OK",
                 headers={
-                    'Content-Type': 'text/event-stream',
-                    'Cache-Control': 'no-cache',
-                    'Connection': 'keep-alive',
-                }
+                    "Content-Type": "text/event-stream",
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                },
             )
             await response.prepare(request)
-
-            # Build AskRequest from query_params
-            ask_request = AskRequest.from_query_params(query_params)
 
             # Create streaming output method
             output_method = self.create_output_method(response)
 
             # Create and run handler
-            print(f"[DEBUG] Creating handler with class: {handler_class}", file=sys.stderr)
             handler = handler_class(ask_request, output_method)
-            print(f"[DEBUG] Running query...", file=sys.stderr)
             await handler.runQuery()
-            print(f"[DEBUG] Query completed successfully", file=sys.stderr)
 
             # Finalize stream
             await self.finalize_response(response)
@@ -133,25 +96,26 @@ class HTTPSSEInterface(BaseInterface):
         except ValueError as e:
             print(f"[ERROR] ValueError: {e}", file=sys.stderr)
             import traceback
+
             traceback.print_exc(file=sys.stderr)
             # For errors, return v0.54 Failure response via SSE
             response = web.StreamResponse(
                 status=200,  # SSE uses 200 even for errors
-                reason='OK',
+                reason="OK",
                 headers={
-                    'Content-Type': 'text/event-stream',
-                    'Cache-Control': 'no-cache',
-                }
+                    "Content-Type": "text/event-stream",
+                    "Cache-Control": "no-cache",
+                },
             )
             await response.prepare(request)
 
             # Send _meta
             meta_data = {"_meta": {"response_type": "Failure", "version": "0.54"}}
-            await response.write(f"data: {json.dumps(meta_data)}\n\n".encode('utf-8'))
+            await response.write(f"data: {json.dumps(meta_data)}\n\n".encode("utf-8"))
 
             # Send error
             error_data = {"error": {"code": "INVALID_REQUEST", "message": str(e)}}
-            await response.write(f"data: {json.dumps(error_data)}\n\n".encode('utf-8'))
+            await response.write(f"data: {json.dumps(error_data)}\n\n".encode("utf-8"))
             await response.write_eof()
 
             return response
@@ -159,25 +123,26 @@ class HTTPSSEInterface(BaseInterface):
         except Exception as e:
             print(f"[ERROR] Unexpected exception: {e}", file=sys.stderr)
             import traceback
+
             traceback.print_exc(file=sys.stderr)
             # For unexpected errors, return v0.54 Failure response via SSE
             response = web.StreamResponse(
                 status=200,
-                reason='OK',
+                reason="OK",
                 headers={
-                    'Content-Type': 'text/event-stream',
-                    'Cache-Control': 'no-cache',
-                }
+                    "Content-Type": "text/event-stream",
+                    "Cache-Control": "no-cache",
+                },
             )
             await response.prepare(request)
 
             # Send _meta
             meta_data = {"_meta": {"response_type": "Failure", "version": "0.54"}}
-            await response.write(f"data: {json.dumps(meta_data)}\n\n".encode('utf-8'))
+            await response.write(f"data: {json.dumps(meta_data)}\n\n".encode("utf-8"))
 
             # Send error
             error_data = {"error": {"code": "INTERNAL_ERROR", "message": str(e)}}
-            await response.write(f"data: {json.dumps(error_data)}\n\n".encode('utf-8'))
+            await response.write(f"data: {json.dumps(error_data)}\n\n".encode("utf-8"))
             await response.write_eof()
 
             return response

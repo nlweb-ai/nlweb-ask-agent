@@ -56,9 +56,10 @@ class NLWebHandler:
             site_config
         )
         # Note: query_analysis_results is not in use yet
-        query_analysis_results = (
-            await QueryAnalysisHandler(self.request, site_config=site_config).do() or {}
-        )
+        # so it is commented out to avoid unnecessary processing.
+        # query_analysis_results = (
+        #    await QueryAnalysisHandler(self.request, site_config=site_config).do() or {}
+        # )
         if (elicitation_data := await self._check_elicitation()) is not None:
             await self.send_meta("Elicitation", self.request.query.effective_query)
             if self.output_method:

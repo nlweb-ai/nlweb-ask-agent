@@ -60,60 +60,53 @@ class A2ASSEInterface(BaseInterface):
             "params": params,
             "id": request_id,
             "query": query,
-            "query_params": {"query": query} if query else {}
+            "query_params": {"query": query} if query else {},
         }
 
-    async def send_response(self, response: web.StreamResponse, data: Dict[str, Any]) -> None:
+    async def send_response(
+        self, response: web.StreamResponse, data: Dict[str, Any]
+    ) -> None:
         """
         Send data through SSE stream in A2A format.
 
         Each SSE event contains a JSON-RPC 2.0 result with A2A message parts.
         """
         # Check if this is NLWeb internal data
-        if 'content' in data:
+        if "content" in data:
             # Convert NLWeb content to A2A message parts
             parts = []
 
-            for item in data['content']:
+            for item in data["content"]:
                 # Add description as text
-                if 'description' in item:
-                    parts.append({
-                        "kind": "text",
-                        "text": item['description']
-                    })
+                if "description" in item:
+                    parts.append({"kind": "text", "text": item["description"]})
 
                 # Add structured data as artifact
-                parts.append({
-                    "kind": "artifact",
-                    "artifact": {
-                        "name": item.get('name', 'result'),
-                        "mimeType": "application/json",
-                        "data": json.dumps(item)
+                parts.append(
+                    {
+                        "kind": "artifact",
+                        "artifact": {
+                            "name": item.get("name", "result"),
+                            "mimeType": "application/json",
+                            "data": json.dumps(item),
+                        },
                     }
-                })
+                )
 
             # Wrap in A2A message format
             a2a_data = {
                 "jsonrpc": "2.0",
                 "result": {
-                    "message": {
-                        "role": "agent",
-                        "parts": parts
-                    },
-                    "status": "working"
-                }
+                    "message": {"role": "agent", "parts": parts},
+                    "status": "working",
+                },
             }
 
-        elif '_meta' in data:
+        elif "_meta" in data:
             # Handle metadata
-            if data['_meta'].get('nlweb/streaming_status') == 'finished':
+            if data["_meta"].get("nlweb/streaming_status") == "finished":
                 # Final completion message
-                a2a_data = {
-                    "jsonrpc": "2.0",
-                    "result": {
-                        "status": "completed"
-                    }
-                }
+                a2a_data = {"jsonrpc": "2.0", "result": {"status": "completed"}}
             else:
                 # Initial metadata
                 a2a_data = {
@@ -121,13 +114,15 @@ class A2ASSEInterface(BaseInterface):
                     "result": {
                         "message": {
                             "role": "agent",
-                            "parts": [{
-                                "kind": "text",
-                                "text": f"Search started. Version: {data['_meta'].get('version', 'unknown')}"
-                            }]
+                            "parts": [
+                                {
+                                    "kind": "text",
+                                    "text": f"Search started. Version: {data['_meta'].get('version', 'unknown')}",
+                                }
+                            ],
                         },
-                        "status": "working"
-                    }
+                        "status": "working",
+                    },
                 }
         else:
             # Pass through as-is if already in A2A format
@@ -135,24 +130,21 @@ class A2ASSEInterface(BaseInterface):
 
         # Format as SSE
         event_data = f"data: {json.dumps(a2a_data)}\n\n"
-        await response.write(event_data.encode('utf-8'))
+        await response.write(event_data.encode("utf-8"))
 
     async def finalize_response(self, response: web.StreamResponse) -> None:
         """
         Finalize the SSE stream with completion status.
         """
         # Send final completion event
-        completion_data = {
-            "jsonrpc": "2.0",
-            "result": {
-                "status": "completed"
-            }
-        }
+        completion_data = {"jsonrpc": "2.0", "result": {"status": "completed"}}
         event_data = f"data: {json.dumps(completion_data)}\n\n"
-        await response.write(event_data.encode('utf-8'))
+        await response.write(event_data.encode("utf-8"))
         await response.write_eof()
 
-    async def handle_request(self, request: web.Request, handler_class) -> web.StreamResponse:
+    async def handle_request(
+        self, request: web.Request, handler_class
+    ) -> web.StreamResponse:
         """
         Handle A2A SSE streaming request.
 
@@ -165,22 +157,19 @@ class A2ASSEInterface(BaseInterface):
             response = web.StreamResponse(
                 status=200,
                 headers={
-                    'Content-Type': 'text/event-stream',
-                    'Cache-Control': 'no-cache',
-                    'Connection': 'keep-alive',
-                }
+                    "Content-Type": "text/event-stream",
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                },
             )
             await response.prepare(request)
 
             error_data = {
                 "jsonrpc": "2.0",
-                "error": {
-                    "code": -32700,
-                    "message": f"Parse error: {str(e)}"
-                }
+                "error": {"code": -32700, "message": f"Parse error: {str(e)}"},
             }
             event_data = f"data: {json.dumps(error_data)}\n\n"
-            await response.write(event_data.encode('utf-8'))
+            await response.write(event_data.encode("utf-8"))
             await response.write_eof()
             return response
 
@@ -191,10 +180,10 @@ class A2ASSEInterface(BaseInterface):
         response = web.StreamResponse(
             status=200,
             headers={
-                'Content-Type': 'text/event-stream',
-                'Cache-Control': 'no-cache',
-                'Connection': 'keep-alive',
-            }
+                "Content-Type": "text/event-stream",
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+            },
         )
         await response.prepare(request)
 
@@ -205,11 +194,11 @@ class A2ASSEInterface(BaseInterface):
                     "jsonrpc": "2.0",
                     "error": {
                         "code": -32602,
-                        "message": "Missing query in message parts"
-                    }
+                        "message": "Missing query in message parts",
+                    },
                 }
                 event_data = f"data: {json.dumps(error_data)}\n\n"
-                await response.write(event_data.encode('utf-8'))
+                await response.write(event_data.encode("utf-8"))
                 await response.write_eof()
                 return response
 
@@ -219,7 +208,7 @@ class A2ASSEInterface(BaseInterface):
                 query_params["streaming"] = True  # Force streaming for message/stream
 
                 # Build AskRequest from query_params
-                ask_request = AskRequest.from_query_params(query_params)
+                ask_request = AskRequest.model_validate(query_params)
 
                 output_method = self.create_output_method(response)
                 handler = handler_class(ask_request, output_method)
@@ -232,13 +221,10 @@ class A2ASSEInterface(BaseInterface):
             except Exception as e:
                 error_data = {
                     "jsonrpc": "2.0",
-                    "error": {
-                        "code": -32603,
-                        "message": f"Internal error: {str(e)}"
-                    }
+                    "error": {"code": -32603, "message": f"Internal error: {str(e)}"},
                 }
                 event_data = f"data: {json.dumps(error_data)}\n\n"
-                await response.write(event_data.encode('utf-8'))
+                await response.write(event_data.encode("utf-8"))
                 await response.write_eof()
                 return response
 
@@ -246,12 +232,9 @@ class A2ASSEInterface(BaseInterface):
             # Unknown method
             error_data = {
                 "jsonrpc": "2.0",
-                "error": {
-                    "code": -32601,
-                    "message": f"Method not found: {method}"
-                }
+                "error": {"code": -32601, "message": f"Method not found: {method}"},
             }
             event_data = f"data: {json.dumps(error_data)}\n\n"
-            await response.write(event_data.encode('utf-8'))
+            await response.write(event_data.encode("utf-8"))
             await response.write_eof()
             return response
