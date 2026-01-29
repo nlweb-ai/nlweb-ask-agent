@@ -64,6 +64,10 @@ class PiLabsScoringProvider(ScoringLLMProvider):
     _client_lock = threading.Lock()
     _client: PiLabsClient | None = None
 
+    def __init__(self, api_key: str, endpoint: str):
+        self.api_key = api_key
+        self.endpoint = endpoint
+
     @classmethod
     def get_client(cls, **kwargs) -> PiLabsClient:
         with cls._client_lock:
@@ -76,8 +80,6 @@ class PiLabsScoringProvider(ScoringLLMProvider):
         questions: list[str],
         context: ScoringContext,
         timeout: float = 30.0,
-        api_key: str = "",
-        endpoint: str = "",
         **kwargs,
     ) -> float:
         """
@@ -87,17 +89,10 @@ class PiLabsScoringProvider(ScoringLLMProvider):
             questions: List of scoring questions
             context: Structured context (query + item_description or intent/required_info)
             timeout: Request timeout in seconds
-            api_key: Pi Labs API key
-            endpoint: Pi Labs API endpoint
 
         Returns:
             Score between 0-100
         """
-        if not api_key or not endpoint:
-            raise ValueError(
-                "PiLabsScoringProvider requires 'api_key' and 'endpoint' parameters."
-            )
-
         client = self.get_client()
 
         # Build scoring_spec from questions list
@@ -112,11 +107,13 @@ class PiLabsScoringProvider(ScoringLLMProvider):
             )
         else:
             # Intent/presence scoring mode
-            llm_output = json.dumps({
-                "query": context.query,
-                "intent": context.intent,
-                "required_info": context.required_info,
-            })
+            llm_output = json.dumps(
+                {
+                    "query": context.query,
+                    "intent": context.intent,
+                    "required_info": context.required_info,
+                }
+            )
             req = PiLabsRequest(
                 llm_input="",
                 llm_output=llm_output,
@@ -124,7 +121,7 @@ class PiLabsScoringProvider(ScoringLLMProvider):
             )
 
         scores = await client.score(
-            [req], endpoint=endpoint, api_key=api_key, timeout=timeout
+            [req], endpoint=self.endpoint, api_key=self.api_key, timeout=timeout
         )
         return scores[0]
 
@@ -133,8 +130,6 @@ class PiLabsScoringProvider(ScoringLLMProvider):
         questions: list[str],
         contexts: list[ScoringContext],
         timeout: float = 30.0,
-        api_key: str = "",
-        endpoint: str = "",
         **kwargs,
     ) -> list[float | BaseException]:
         """
@@ -146,17 +141,10 @@ class PiLabsScoringProvider(ScoringLLMProvider):
             questions: List of scoring questions to ask for all contexts
             contexts: List of contexts to score
             timeout: Request timeout in seconds
-            api_key: Pi Labs API key
-            endpoint: Pi Labs API endpoint
 
         Returns:
             List of scores (0-100) or Exception for failures
         """
-        if not api_key or not endpoint:
-            raise ValueError(
-                "PiLabsScoringProvider requires 'api_key' and 'endpoint' parameters."
-            )
-
         client = self.get_client()
 
         # Build scoring_spec from questions list
@@ -174,11 +162,13 @@ class PiLabsScoringProvider(ScoringLLMProvider):
                 )
             else:
                 # Intent/presence scoring mode
-                llm_output = json.dumps({
-                    "query": context.query,
-                    "intent": context.intent,
-                    "required_info": context.required_info,
-                })
+                llm_output = json.dumps(
+                    {
+                        "query": context.query,
+                        "intent": context.intent,
+                        "required_info": context.required_info,
+                    }
+                )
                 req = PiLabsRequest(
                     llm_input="",
                     llm_output=llm_output,
@@ -188,11 +178,9 @@ class PiLabsScoringProvider(ScoringLLMProvider):
 
         try:
             scores = await client.score(
-                requests, endpoint=endpoint, api_key=api_key, timeout=timeout
+                requests, endpoint=self.endpoint, api_key=self.api_key, timeout=timeout
             )
             return cast(list[float | BaseException], scores)
         except Exception as e:
             # Return the exception for all items
             return [e] * len(contexts)
-
-

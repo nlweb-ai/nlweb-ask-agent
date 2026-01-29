@@ -17,6 +17,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, cast
 import asyncio
+import importlib
 import logging
 
 from nlweb_core.config import get_config
@@ -163,10 +164,12 @@ def get_scoring_provider() -> ScoringLLMProvider:
     try:
         import_path = model_config.import_path
         class_name = model_config.class_name
-        module = __import__(import_path, fromlist=[class_name])
+        module = importlib.import_module(import_path)
         provider_class = getattr(module, class_name)
-        # Instantiate if it's a class, or use directly if it's already an instance
-        provider = provider_class() if callable(provider_class) else provider_class
+        provider = provider_class(
+            api_key=model_config.api_key,
+            endpoint=model_config.endpoint,
+        )
         _loaded_scoring_providers[llm_type] = cast(ScoringLLMProvider, provider)
         logger.debug(f"Loaded scoring provider: {llm_type} ({class_name})")
     except (ImportError, AttributeError) as e:

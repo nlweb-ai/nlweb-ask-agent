@@ -75,15 +75,10 @@ class Ranking:
         try:
             # Get the scoring provider and score all items in batch
             provider = get_scoring_provider()
-            scoring_config = config.scoring_llm_model
-            if not scoring_config:
-                raise ValueError("No scoring_llm_model configured")
             scores = await provider.score_batch(
                 scoring_questions,
                 contexts,
                 timeout=8,
-                api_key=scoring_config.api_key,
-                endpoint=scoring_config.endpoint,
             )
         except Exception as e:
             logger.error(f"Ranking failed: {e}", exc_info=True)
