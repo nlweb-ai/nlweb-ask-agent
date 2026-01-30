@@ -3,15 +3,17 @@
 
 """
 Azure Cosmos DB implementation for site configuration lookup.
+Uses native async client for proper async/await support.
 """
 
 import hashlib
 import time
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from urllib.parse import urlparse
-from azure.cosmos import CosmosClient, exceptions
-from azure.identity import DefaultAzureCredential
+from azure.cosmos.aio import CosmosClient
+from azure.cosmos import exceptions
+from azure.identity.aio import DefaultAzureCredential
 
 from nlweb_core.config import get_config
 
@@ -35,12 +37,12 @@ def generate_config_id(domain: str) -> str:
 class SiteConfigLookup:
     """
     Azure Cosmos DB implementation for site configuration lookup.
-    Uses same Cosmos DB as object_storage, different container.
+    Uses native async client for proper connection pooling.
     """
 
     def __init__(self):
         """
-        Initialize Cosmos DB client.
+        Initialize Cosmos DB configuration. Client is created lazily on first use.
 
         Uses get_config().site_config for all connection parameters.
         endpoint and database_name must be configured.
@@ -49,42 +51,54 @@ class SiteConfigLookup:
         if not config.site_config or not config.site_config.enabled:
             raise ValueError("Site config is not enabled in configuration")
 
-        site_cfg = config.site_config
+        self._site_cfg = config.site_config
 
         # Get endpoint and database from site_config
-        endpoint = site_cfg.endpoint
-        database_name = site_cfg.database_name
-
-        if not endpoint:
+        if not self._site_cfg.endpoint:
             raise ValueError(
                 "Site config endpoint not configured. "
                 "Set endpoint_env in config.yaml site_config section."
             )
-        if not database_name:
+        if not self._site_cfg.database_name:
             raise ValueError(
                 "Site config database_name not configured. "
                 "Set database_name_env in config.yaml site_config section."
             )
 
-        # Always use Azure AD authentication (Managed Identity)
-        credential = DefaultAzureCredential()
-        self.client = CosmosClient(endpoint, credential=credential)
-
-        # Get database and container
-        self.database = self.client.get_database_client(database_name)
-        self.container = self.database.get_container_client(site_cfg.container_name)
+        # Client initialized lazily on first use
+        self._client: Optional[CosmosClient] = None
+        self._credential: Optional[DefaultAzureCredential] = None
+        self._container = None
 
         # Initialize cache
-        self.cache_ttl = site_cfg.cache_ttl
+        self.cache_ttl = self._site_cfg.cache_ttl
         self.cache: Dict[str, Dict[str, Any]] = {}
 
         logger.info(
-            f"SiteConfigLookup initialized: endpoint={endpoint}, "
-            f"database={database_name}, container={site_cfg.container_name}, "
+            f"SiteConfigLookup initialized: endpoint={self._site_cfg.endpoint}, "
+            f"database={self._site_cfg.database_name}, "
+            f"container={self._site_cfg.container_name}, "
             f"cache_ttl={self.cache_ttl}s"
         )
 
-    def get_config(self, domain: str) -> Optional[Dict[str, Any]]:
+    def _ensure_client(self):
+        """Create client if not already initialized."""
+        if self._client is None:
+            assert self._site_cfg.endpoint is not None
+            assert self._site_cfg.database_name is not None
+            assert self._site_cfg.container_name is not None
+
+            self._credential = DefaultAzureCredential()
+            self._client = CosmosClient(
+                self._site_cfg.endpoint,
+                credential=self._credential,
+            )
+            database = self._client.get_database_client(self._site_cfg.database_name)
+            self._container = database.get_container_client(
+                self._site_cfg.container_name
+            )
+
+    async def get_config(self, domain: str) -> Optional[Dict[str, Any]]:
         """
         Retrieve site configuration for a domain with caching.
 
@@ -113,6 +127,9 @@ class SiteConfigLookup:
                 logger.debug(f"Cache expired for domain: {normalized_domain}")
                 del self.cache[cache_key]
 
+        self._ensure_client()
+        assert self._container is not None
+
         # Cosmos DB lookup
         config_id = generate_config_id(normalized_domain)
 
@@ -122,7 +139,7 @@ class SiteConfigLookup:
                 f"id={config_id}"
             )
 
-            item = self.container.read_item(
+            item = await self._container.read_item(
                 item=config_id, partition_key=normalized_domain
             )
 
@@ -165,7 +182,7 @@ class SiteConfigLookup:
             )
             return None
 
-    def get_config_for_site_filter(
+    async def get_config_for_site_filter(
         self, site_filter: Optional[str]
     ) -> Optional[Dict[str, Any]]:
         """
@@ -195,9 +212,11 @@ class SiteConfigLookup:
         else:
             domain = site_filter
 
-        return self.get_config(domain)
+        return await self.get_config(domain)
 
-    def get_item_type_for_ranking(self, site_filter: Optional[str]) -> str | None:
+    async def get_item_type_for_ranking(
+        self, site_filter: Optional[str]
+    ) -> Optional[str]:
         """
         Get the primary item type for ranking purposes.
 
@@ -206,10 +225,9 @@ class SiteConfigLookup:
 
         Args:
             site_filter: Site filter from query (e.g., "yelp.com", "https://www.yelp.com")
-            default: Default value if not configured (defaults to "item")
 
         Returns:
-            First item_type from config, or default
+            First item_type from config, or None
         """
         if not site_filter:
             return None
@@ -235,7 +253,7 @@ class SiteConfigLookup:
             normalized_domain = normalized_domain[4:]
 
         # Get item_types from config
-        item_types = self.get_config_type(normalized_domain, "item_types")
+        item_types = await self.get_config_type(normalized_domain, "item_types")
 
         if item_types and isinstance(item_types, list) and len(item_types) > 0:
             return item_types[0]
@@ -261,7 +279,7 @@ class SiteConfigLookup:
             self.cache.clear()
             logger.info("Entire cache invalidated")
 
-    def prewarm_cache(self, domains: list):
+    async def prewarm_cache(self, domains: List[str]):
         """
         Pre-load configurations for popular domains on startup.
 
@@ -272,13 +290,13 @@ class SiteConfigLookup:
 
         for domain in domains:
             try:
-                self.get_config(domain)
+                await self.get_config(domain)
             except Exception as e:
                 logger.warning(f"Failed to prewarm cache for {domain}: {e}")
 
         logger.info(f"Cache pre-warming complete: {len(self.cache)} configs loaded")
 
-    def get_full_config(self, domain: str) -> Optional[Dict[str, Any]]:
+    async def get_full_config(self, domain: str) -> Optional[Dict[str, Any]]:
         """
         Retrieve full config document for a domain (all config types).
 
@@ -293,6 +311,9 @@ class SiteConfigLookup:
         if normalized_domain.startswith("www."):
             normalized_domain = normalized_domain[4:]
 
+        self._ensure_client()
+        assert self._container is not None
+
         # Generate config ID
         config_id = generate_config_id(normalized_domain)
 
@@ -302,7 +323,7 @@ class SiteConfigLookup:
                 f"id={config_id}"
             )
 
-            item = self.container.read_item(
+            item = await self._container.read_item(
                 item=config_id, partition_key=normalized_domain
             )
 
@@ -320,7 +341,7 @@ class SiteConfigLookup:
             )
             return None
 
-    def get_config_type(
+    async def get_config_type(
         self, domain: str, config_type: str
     ) -> Optional[Dict[str, Any]]:
         """
@@ -338,6 +359,9 @@ class SiteConfigLookup:
         if normalized_domain.startswith("www."):
             normalized_domain = normalized_domain[4:]
 
+        self._ensure_client()
+        assert self._container is not None
+
         # Generate config ID
         config_id = generate_config_id(normalized_domain)
 
@@ -346,7 +370,7 @@ class SiteConfigLookup:
                 f"Fetching {config_type} config from Cosmos DB: domain={normalized_domain}"
             )
 
-            item = self.container.read_item(
+            item = await self._container.read_item(
                 item=config_id, partition_key=normalized_domain
             )
 
@@ -373,7 +397,7 @@ class SiteConfigLookup:
             )
             return None
 
-    def update_config_type(
+    async def update_config_type(
         self, domain: str, config_type: str, config_data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
@@ -394,12 +418,15 @@ class SiteConfigLookup:
         if normalized_domain.startswith("www."):
             normalized_domain = normalized_domain[4:]
 
+        self._ensure_client()
+        assert self._container is not None
+
         # Generate config ID
         config_id = generate_config_id(normalized_domain)
 
         try:
             # Try to read existing document
-            item = self.container.read_item(
+            item = await self._container.read_item(
                 item=config_id, partition_key=normalized_domain
             )
 
@@ -410,7 +437,7 @@ class SiteConfigLookup:
             item["config"][config_type] = config_data
 
             # Upsert
-            self.container.upsert_item(item)
+            await self._container.upsert_item(item)
 
             # Invalidate cache for this domain
             self.invalidate_cache(normalized_domain)
@@ -427,7 +454,7 @@ class SiteConfigLookup:
                 "config": {config_type: config_data},
             }
 
-            self.container.upsert_item(item)
+            await self._container.upsert_item(item)
 
             # Invalidate cache for this domain
             self.invalidate_cache(normalized_domain)
@@ -445,7 +472,7 @@ class SiteConfigLookup:
             )
             raise
 
-    def delete_config_type(
+    async def delete_config_type(
         self, domain: str, config_type: str
     ) -> Optional[Dict[str, Any]]:
         """
@@ -464,12 +491,15 @@ class SiteConfigLookup:
         if normalized_domain.startswith("www."):
             normalized_domain = normalized_domain[4:]
 
+        self._ensure_client()
+        assert self._container is not None
+
         # Generate config ID
         config_id = generate_config_id(normalized_domain)
 
         try:
             # Read existing document
-            item = self.container.read_item(
+            item = await self._container.read_item(
                 item=config_id, partition_key=normalized_domain
             )
 
@@ -487,7 +517,7 @@ class SiteConfigLookup:
 
             # If config is now empty, delete entire document
             if not config:
-                self.container.delete_item(
+                await self._container.delete_item(
                     item=config_id, partition_key=normalized_domain
                 )
 
@@ -502,7 +532,7 @@ class SiteConfigLookup:
 
             # Otherwise, update document with remaining config types
             item["config"] = config
-            self.container.upsert_item(item)
+            await self._container.upsert_item(item)
 
             # Invalidate cache for this domain
             self.invalidate_cache(normalized_domain)
@@ -522,7 +552,7 @@ class SiteConfigLookup:
             )
             raise
 
-    def delete_full_config(self, domain: str) -> bool:
+    async def delete_full_config(self, domain: str) -> bool:
         """
         Delete all config types for a domain (delete entire document).
 
@@ -537,12 +567,17 @@ class SiteConfigLookup:
         if normalized_domain.startswith("www."):
             normalized_domain = normalized_domain[4:]
 
+        self._ensure_client()
+        assert self._container is not None
+
         # Generate config ID
         config_id = generate_config_id(normalized_domain)
 
         try:
             # Delete document
-            self.container.delete_item(item=config_id, partition_key=normalized_domain)
+            await self._container.delete_item(
+                item=config_id, partition_key=normalized_domain
+            )
 
             # Invalidate cache for this domain
             self.invalidate_cache(normalized_domain)
@@ -561,3 +596,13 @@ class SiteConfigLookup:
                 exc_info=True,
             )
             raise
+
+    async def close(self):
+        """Close the Cosmos client and release resources."""
+        if self._client is not None:
+            await self._client.close()
+            self._client = None
+        if self._credential is not None:
+            await self._credential.close()
+            self._credential = None
+        self._container = None

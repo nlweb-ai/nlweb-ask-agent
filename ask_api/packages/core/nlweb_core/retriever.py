@@ -22,7 +22,7 @@ _client_cache_locks = defaultdict(asyncio.Lock)  # Per-key locks instead of glob
 _preloaded_modules = {}
 
 # Object lookup client cache
-_object_lookup_client = None
+_object_lookup_client: Optional["ObjectLookupInterface"] = None
 _object_lookup_lock = asyncio.Lock()
 
 
@@ -70,6 +70,11 @@ class ObjectLookupInterface(ABC):
         """
         pass
 
+    @abstractmethod
+    async def close(self) -> None:
+        """Close the client and release resources."""
+        pass
+
 
 async def get_object_lookup_client() -> Optional[ObjectLookupInterface]:
     """
@@ -112,6 +117,19 @@ async def get_object_lookup_client() -> Optional[ObjectLookupInterface]:
                 raise ValueError(f"Failed to load object storage client: {e}")
 
         return _object_lookup_client
+
+
+async def close_object_lookup_client():
+    """
+    Close the object lookup client and release resources.
+    Should be called during application shutdown.
+    """
+    global _object_lookup_client
+
+    async with _object_lookup_lock:
+        if _object_lookup_client is not None:
+            await _object_lookup_client.close()
+            _object_lookup_client = None
 
 
 async def enrich_results_from_object_storage(
