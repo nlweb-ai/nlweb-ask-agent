@@ -10,13 +10,12 @@ Code for calling Azure Open AI endpoints for LLM functionality.
 
 import logging
 import json
-from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from openai import AsyncAzureOpenAI
 import asyncio
-import threading
 from typing import Dict, Any
 from nlweb_core.llm import GenerativeLLMProvider
 from nlweb_core.scoring import ScoringLLMProvider, ScoringContext
+from nlweb_core.azure_credentials import get_openai_token_provider
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +24,11 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
     """Implementation of GenerativeLLMProvider for Azure OpenAI."""
 
     # Global client with thread-safe initialization
-    _client_lock = threading.Lock()
+    _client_lock = asyncio.Lock()
     _client = None
 
     @classmethod
-    def get_client(
+    async def get_client(
         cls,
         endpoint: str | None = None,
         api_key: str | None = None,
@@ -54,7 +53,7 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
             raise ValueError(error_msg)
 
         # Create client with the resolved endpoint/api_version
-        with cls._client_lock:  # Thread-safe client initialization
+        async with cls._client_lock:  # Thread-safe client initialization
             # Always create a new client if we don't have one, or if the endpoint changed
             if (
                 cls._client is None
@@ -64,10 +63,7 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
                 # Create new client
                 try:
                     if auth_method == "azure_ad":
-                        token_provider = get_bearer_token_provider(
-                            DefaultAzureCredential(),
-                            "https://cognitiveservices.azure.com/.default",
-                        )
+                        token_provider = await get_openai_token_provider()
 
                         cls._client = AsyncAzureOpenAI(
                             azure_endpoint=endpoint,
@@ -179,7 +175,7 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
             TimeoutError: If the request times out
         """
         # Get client with all required parameters
-        client = self.get_client(
+        client = await self.get_client(
             endpoint=endpoint,
             api_key=api_key,
             api_version=api_version,
@@ -245,7 +241,7 @@ class AzureOpenAIScoringProvider(ScoringLLMProvider):
     """
 
     # Global client with thread-safe initialization
-    _client_lock = threading.Lock()
+    _client_lock = asyncio.Lock()
     _client = None
     _last_endpoint = None
 
@@ -264,7 +260,7 @@ class AzureOpenAIScoringProvider(ScoringLLMProvider):
         self.model = kwargs.get("model", "gpt-4.1-mini")
 
     @classmethod
-    def get_client(
+    async def get_client(
         cls,
         endpoint: str | None = None,
         api_key: str | None = None,
@@ -288,15 +284,12 @@ class AzureOpenAIScoringProvider(ScoringLLMProvider):
             raise ValueError(error_msg)
 
         # Create client with the resolved endpoint/api_version
-        with cls._client_lock:  # Thread-safe client initialization
+        async with cls._client_lock:  # Thread-safe client initialization
             # Always create a new client if we don't have one, or if the endpoint changed
             if cls._client is None or cls._last_endpoint != endpoint:
                 try:
                     if auth_method == "azure_ad":
-                        token_provider = get_bearer_token_provider(
-                            DefaultAzureCredential(),
-                            "https://cognitiveservices.azure.com/.default",
-                        )
+                        token_provider = await get_openai_token_provider()
 
                         cls._client = AsyncAzureOpenAI(
                             azure_endpoint=endpoint,
@@ -416,12 +409,14 @@ Provide a relevance score."""
             raise ValueError("Model name is required for Azure OpenAI scoring")
 
         # Get client
-        client = self.get_client(
+        client = await self.get_client(
             endpoint=endpoint,
             api_key=api_key,
             api_version=api_version,
             auth_method=auth_method,
         )
+        if client is None:
+            raise ValueError("Failed to initialize Azure OpenAI client")
 
         # Build prompt (questions parameter is ignored for LLM-based scoring)
         prompt = self._build_scoring_prompt(context)

@@ -10,10 +10,10 @@ import logging
 from typing import Dict, Any, Optional
 from azure.cosmos.aio import CosmosClient
 from azure.cosmos.exceptions import CosmosResourceNotFoundError
-from azure.identity.aio import DefaultAzureCredential
 
 from nlweb_core.retriever import ObjectLookupInterface
 from nlweb_core.config import get_config
+from nlweb_core.azure_credentials import get_azure_credential
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +37,9 @@ class CosmosObjectLookup(ObjectLookupInterface):
 
         # Client initialized lazily on first use
         self._client: Optional[CosmosClient] = None
-        self._credential: Optional[DefaultAzureCredential] = None
         self._container = None
 
-    def _ensure_client(self):
+    async def _ensure_client(self):
         """Create client if not already initialized."""
         if self._client is None:
             # These are validated in __init__, assert for type checker
@@ -48,10 +47,10 @@ class CosmosObjectLookup(ObjectLookupInterface):
             assert self._storage_config.database_name is not None
             assert self._storage_config.container_name is not None
 
-            self._credential = DefaultAzureCredential()
+            credential = await get_azure_credential()
             self._client = CosmosClient(
                 self._storage_config.endpoint,
-                credential=self._credential,
+                credential=credential,
             )
             database = self._client.get_database_client(
                 self._storage_config.database_name
@@ -70,7 +69,7 @@ class CosmosObjectLookup(ObjectLookupInterface):
         Returns:
             Complete object dictionary or None if not found
         """
-        self._ensure_client()
+        await self._ensure_client()
         assert self._container is not None
 
         try:
@@ -109,7 +108,4 @@ class CosmosObjectLookup(ObjectLookupInterface):
         if self._client is not None:
             await self._client.close()
             self._client = None
-        if self._credential is not None:
-            await self._credential.close()
-            self._credential = None
         self._container = None

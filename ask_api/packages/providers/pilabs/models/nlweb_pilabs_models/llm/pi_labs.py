@@ -52,6 +52,8 @@ class PiLabsClient:
             ],
             timeout=timeout,
         )
+        if resp.status_code != 200:
+            logger.error(f"Pi Labs scoring API error {resp.status_code}: {resp.text}")
         resp.raise_for_status()
         return [r.get("total_score", 0) * 100 for r in resp.json()]
 
