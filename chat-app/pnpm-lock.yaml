@@ -18,8 +18,8 @@ importers:
         specifier: ^2.2.0
         version: 2.2.0(react@19.2.3)
       '@nlweb-ai/search-components':
-        specifier: ^0.1.2
-        version: 0.1.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        specifier: ^0.1.4
+        version: 0.1.4(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       react:
         specifier: ^19.2.0
         version: 19.2.3
@@ -270,8 +270,8 @@ packages:
   '@napi-rs/wasm-runtime@1.1.1':
     resolution: {integrity: sha512-p64ah1M1ld8xjWv3qbvFwHiFVWrq1yFvV4f7w+mzaqiR4IlSgkqhcRdHwsGgomwzBH51sRY4NEowLxnaBjcW/A==}
 
-  '@nlweb-ai/search-components@0.1.2':
-    resolution: {integrity: sha512-MlxxCOHMjKWsx66yJM+hivFvBrHV6b8fZX/QfapKIaAGhdUmlmCQgwp6U3MgE4+GZyApRT3aYEYENhEaBGl1BA==, tarball: https://npm.pkg.github.com/download/@nlweb-ai/search-components/0.1.2/53563cc5ea88293b14e4353803e3bb275bd8d095}
+  '@nlweb-ai/search-components@0.1.4':
+    resolution: {integrity: sha512-Msg0urYosRIou5NpoHMcUklsFU0dC2bWZO5C0CdCpT//hrvXeATu6CAgnUAgkbo7PCdh/SMOhXVr5KH9beAjrw==, tarball: https://npm.pkg.github.com/download/@nlweb-ai/search-components/0.1.4/26a148071a41bfd2a2108a2f055ffc26d0402c9d}
     peerDependencies:
       react: '>=17.0.0'
       react-dom: '>=17.0.0'
@@ -1552,7 +1552,7 @@ snapshots:
       '@tybys/wasm-util': 0.10.1
     optional: true
 
-  '@nlweb-ai/search-components@0.1.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
+  '@nlweb-ai/search-components@0.1.4(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
     dependencies:
       '@headlessui/react': 2.2.9(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@heroicons/react': 2.2.0(react@19.2.3)
