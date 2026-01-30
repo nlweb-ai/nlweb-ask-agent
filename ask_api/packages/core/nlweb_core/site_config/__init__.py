@@ -17,18 +17,22 @@ logger = logging.getLogger(__name__)
 class SiteConfigLookupProtocol(Protocol):
     """Protocol defining the interface for site configuration lookup providers."""
 
-    def get_config(self, domain: str) -> Optional[dict[str, Any]]:
+    async def get_config(self, domain: str) -> Optional[dict[str, Any]]:
         """Retrieve site configuration for a domain with caching."""
         ...
 
-    def get_config_for_site_filter(
+    async def get_config_for_site_filter(
         self, site_filter: Optional[str]
     ) -> Optional[dict[str, Any]]:
         """Retrieve site configuration for a site filter (URL or domain)."""
         ...
 
-    def get_item_type_for_ranking(self, site_filter: Optional[str]) -> str | None:
+    async def get_item_type_for_ranking(self, site_filter: Optional[str]) -> str | None:
         """Get the primary item type for ranking purposes."""
+        ...
+
+    async def close(self) -> None:
+        """Close the client and release resources."""
         ...
 
 
@@ -59,6 +63,14 @@ def set_elicitation_handler(handler: ElicitationHandler | None) -> None:
     _elicitation_handler = handler
 
 
+async def close_site_config_lookup() -> None:
+    """Close the site config lookup client and release resources."""
+    global _site_config_lookup
+    if _site_config_lookup is not None:
+        await _site_config_lookup.close()
+        _site_config_lookup = None
+
+
 __all__ = [
     "IntentDetector",
     "ElicitationChecker",
@@ -67,6 +79,7 @@ __all__ = [
     "initialize_site_config",
     "get_site_config_lookup",
     "get_elicitation_handler",
+    "close_site_config_lookup",
 ]
 
 

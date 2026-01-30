@@ -62,7 +62,7 @@ async def get_site_config_handler(request):
             )
 
         # Get full config
-        result = lookup.get_full_config(domain)
+        result = await lookup.get_full_config(domain)
 
         if not result:
             return web.json_response(
@@ -113,7 +113,7 @@ async def get_config_type_handler(request):
             )
 
         # Get specific config type
-        result = lookup.get_config_type(domain, config_type)
+        result = await lookup.get_config_type(domain, config_type)
 
         if not result:
             return web.json_response(
@@ -176,7 +176,7 @@ async def update_config_type_handler(request):
             )
 
         # Update config type
-        result = lookup.update_config_type(domain, config_type, config_data)
+        result = await lookup.update_config_type(domain, config_type, config_data)
 
         # Return appropriate status
         if result.get("created"):
@@ -238,7 +238,7 @@ async def delete_config_type_handler(request):
             )
 
         # Delete config type
-        result = lookup.delete_config_type(domain, config_type)
+        result = await lookup.delete_config_type(domain, config_type)
 
         if not result:
             return web.json_response(
@@ -307,7 +307,7 @@ async def delete_site_config_handler(request):
             )
 
         # Delete full config
-        result = lookup.delete_full_config(domain)
+        result = await lookup.delete_full_config(domain)
 
         if not result:
             return web.json_response(

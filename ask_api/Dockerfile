@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy all necessary files
-COPY pyproject.toml uv.lock .python-version config.yaml run_server.py ./
+COPY pyproject.toml uv.lock .python-version config.yaml run_server.py logging_config.py ./
 COPY packages/ packages/
 
 RUN uv sync --frozen

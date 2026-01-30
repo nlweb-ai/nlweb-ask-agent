@@ -43,7 +43,7 @@ class NLWebHandler:
         # Build site_config with item_type for use throughout the query
         site_config_lookup = get_site_config_lookup()
         if site_config_lookup:
-            item_type = site_config_lookup.get_item_type_for_ranking(
+            item_type = await site_config_lookup.get_item_type_for_ranking(
                 self.request.query.site
             )
         else:
@@ -191,7 +191,7 @@ class NLWebHandler:
         if not site_config_lookup:
             return None
 
-        site_config = site_config_lookup.get_config_for_site_filter(
+        site_config = await site_config_lookup.get_config_for_site_filter(
             self.request.query.site
         )
         if not site_config:

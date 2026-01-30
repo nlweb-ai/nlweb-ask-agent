@@ -371,13 +371,41 @@ async def init_app(app):
 
 
 async def cleanup_app(app):
-    """Cleanup conversation storage on shutdown."""
+    """Cleanup resources on shutdown."""
+    # Cleanup conversation storage
     if "conversation_storage" in app:
         try:
             await app["conversation_storage"].backend.close()
             print("Conversation storage closed")
         except Exception as e:
             print(f"Error closing conversation storage: {e}")
+
+    # Cleanup object lookup client (Cosmos DB)
+    try:
+        from nlweb_core.retriever import close_object_lookup_client
+
+        await close_object_lookup_client()
+        print("Object lookup client closed")
+    except Exception as e:
+        print(f"Error closing object lookup client: {e}")
+
+    # Cleanup vector database clients (Azure Search, etc.)
+    try:
+        from nlweb_core.retriever import close_vectordb_clients
+
+        await close_vectordb_clients()
+        print("Vector database clients closed")
+    except Exception as e:
+        print(f"Error closing vector database clients: {e}")
+
+    # Cleanup site config lookup client (Cosmos DB)
+    try:
+        from nlweb_core.site_config import close_site_config_lookup
+
+        await close_site_config_lookup()
+        print("Site config lookup client closed")
+    except Exception as e:
+        print(f"Error closing site config lookup client: {e}")
 
 
 def create_app():
