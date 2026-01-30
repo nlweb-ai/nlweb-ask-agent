@@ -132,7 +132,7 @@ def initialize_site_config(config) -> Optional[ElicitationHandler]:
 
     except Exception as e:
         logger.error(f"Failed to initialize SiteConfigLookup: {e}", exc_info=True)
-        return None
+        raise
 
     # Create ElicitationHandler (uses ask_llm_parallel with scoring model)
     try:
@@ -147,4 +147,4 @@ def initialize_site_config(config) -> Optional[ElicitationHandler]:
 
     except Exception as e:
         logger.error(f"Failed to initialize ElicitationHandler: {e}", exc_info=True)
-        return None
+        raise

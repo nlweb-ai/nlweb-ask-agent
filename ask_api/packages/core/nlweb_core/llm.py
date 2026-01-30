@@ -384,14 +384,14 @@ async def ask_llm(
         )
         model_config = provider_config
     else:
-        return {}
+        raise ValueError("No valid LLM configuration found")
 
     try:
         # Get the provider instance based on llm_type
         try:
             provider_instance = _get_provider(llm_type, model_config)
         except ValueError as e:
-            return {}
+            raise
 
         logger.debug(
             f"Calling LLM provider {provider_instance} with model {model_id} at level {level}"

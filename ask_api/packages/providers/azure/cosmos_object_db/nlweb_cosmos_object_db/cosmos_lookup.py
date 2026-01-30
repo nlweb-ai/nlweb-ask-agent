@@ -102,7 +102,7 @@ class CosmosObjectLookup(ObjectLookupInterface):
             return None
         except Exception as e:
             logger.error(f"Error fetching object {object_id} from Cosmos DB: {e}")
-            return None
+            raise
 
     async def close(self):
         """Close the Cosmos client and release resources."""

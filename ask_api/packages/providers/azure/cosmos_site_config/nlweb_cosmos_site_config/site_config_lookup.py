@@ -180,7 +180,7 @@ class SiteConfigLookup:
                 f"Error fetching config for domain {normalized_domain}: {e}",
                 exc_info=True,
             )
-            return None
+            raise
 
     async def get_config_for_site_filter(
         self, site_filter: Optional[str]
@@ -208,15 +208,13 @@ class SiteConfigLookup:
                 logger.warning(
                     f"Failed to parse site filter as URL: {site_filter} - {e}"
                 )
-                return None
+                raise
         else:
             domain = site_filter
 
         return await self.get_config(domain)
 
-    async def get_item_type_for_ranking(
-        self, site_filter: Optional[str]
-    ) -> Optional[str]:
+    async def get_item_type_for_ranking(self, site_filter: str | None) -> str | None:
         """
         Get the primary item type for ranking purposes.
 
@@ -243,7 +241,7 @@ class SiteConfigLookup:
                 logger.warning(
                     f"Failed to parse site filter as URL: {site_filter} - {e}"
                 )
-                return None
+                raise
         else:
             domain = site_filter
 
@@ -293,6 +291,7 @@ class SiteConfigLookup:
                 await self.get_config(domain)
             except Exception as e:
                 logger.warning(f"Failed to prewarm cache for {domain}: {e}")
+                raise
 
         logger.info(f"Cache pre-warming complete: {len(self.cache)} configs loaded")
 
@@ -339,7 +338,7 @@ class SiteConfigLookup:
                 f"Error fetching full config for domain {normalized_domain}: {e}",
                 exc_info=True,
             )
-            return None
+            raise e
 
     async def get_config_type(
         self, domain: str, config_type: str
@@ -395,7 +394,7 @@ class SiteConfigLookup:
                 f"Error fetching {config_type} config for domain {normalized_domain}: {e}",
                 exc_info=True,
             )
-            return None
+            raise
 
     async def update_config_type(
         self, domain: str, config_type: str, config_data: Dict[str, Any]

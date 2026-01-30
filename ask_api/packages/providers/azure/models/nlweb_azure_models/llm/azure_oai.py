@@ -8,6 +8,7 @@ Backwards compatibility is not guaranteed at this time.
 Code for calling Azure Open AI endpoints for LLM functionality.
 """
 
+import logging
 import json
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from openai import AsyncAzureOpenAI
@@ -16,6 +17,8 @@ import threading
 from typing import Dict, Any
 from nlweb_core.llm import GenerativeLLMProvider
 from nlweb_core.scoring import ScoringLLMProvider, ScoringContext
+
+logger = logging.getLogger(__name__)
 
 
 class AzureOpenAIProvider(GenerativeLLMProvider):
@@ -26,7 +29,14 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
     _client = None
 
     @classmethod
-    def get_client(cls, endpoint: str | None = None, api_key: str | None = None, api_version: str | None = None, auth_method: str = "api_key", **kwargs) -> AsyncAzureOpenAI | None:
+    def get_client(
+        cls,
+        endpoint: str | None = None,
+        api_key: str | None = None,
+        api_version: str | None = None,
+        auth_method: str = "api_key",
+        **kwargs,
+    ) -> AsyncAzureOpenAI | None:
         """
         Get or initialize the Azure OpenAI client.
 
@@ -46,20 +56,24 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
         # Create client with the resolved endpoint/api_version
         with cls._client_lock:  # Thread-safe client initialization
             # Always create a new client if we don't have one, or if the endpoint changed
-            if cls._client is None or not hasattr(cls, '_last_endpoint') or cls._last_endpoint != endpoint:
+            if (
+                cls._client is None
+                or not hasattr(cls, "_last_endpoint")
+                or cls._last_endpoint != endpoint
+            ):
                 # Create new client
                 try:
                     if auth_method == "azure_ad":
                         token_provider = get_bearer_token_provider(
                             DefaultAzureCredential(),
-                            "https://cognitiveservices.azure.com/.default"
+                            "https://cognitiveservices.azure.com/.default",
                         )
 
                         cls._client = AsyncAzureOpenAI(
                             azure_endpoint=endpoint,
                             azure_ad_token_provider=token_provider,
                             api_version=api_version,
-                            timeout=30.0
+                            timeout=30.0,
                         )
                     elif auth_method == "api_key":
                         if not api_key:
@@ -70,7 +84,7 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
                             azure_endpoint=endpoint,
                             api_key=api_key,
                             api_version=api_version,
-                            timeout=30.0  # Set timeout explicitly
+                            timeout=30.0,  # Set timeout explicitly
                         )
                     else:
                         error_msg = f"Unsupported authentication method: {auth_method}"
@@ -80,8 +94,7 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
                     cls._last_endpoint = endpoint
 
                 except Exception as e:
-                    return None
-
+                    raise
 
         return cls._client
 
@@ -102,32 +115,31 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
         # Handle None content case
         if content is None:
             return {}
-            
+
         # Handle empty string case
         response_text = content.strip()
         if not response_text:
             return {}
-            
+
         # Remove markdown code block indicators if present
-        response_text = response_text.replace('```json', '').replace('```', '').strip()
-                
+        response_text = response_text.replace("```json", "").replace("```", "").strip()
+
         # Find the JSON object within the response
-        start_idx = response_text.find('{')
-        end_idx = response_text.rfind('}') + 1
-        
+        start_idx = response_text.find("{")
+        end_idx = response_text.rfind("}") + 1
+
         if start_idx == -1 or end_idx == 0:
             error_msg = "No valid JSON object found in response"
             return {}
-            
 
         json_str = response_text[start_idx:end_idx]
-                
+
         try:
             result = json.loads(json_str)
             return result
         except json.JSONDecodeError as e:
-            error_msg = f"Failed to parse response as JSON: {e}"
-            return {}
+            logger.error(f"Failed to parse response as JSON: {e}")
+            raise e
 
     async def get_completion(
         self,
@@ -141,7 +153,7 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
         api_key: str | None = None,
         api_version: str | None = None,
         auth_method: str = "api_key",
-        **kwargs
+        **kwargs,
     ) -> Dict[str, Any]:
         """
         Get completion from Azure OpenAI.
@@ -167,7 +179,12 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
             TimeoutError: If the request times out
         """
         # Get client with all required parameters
-        client = self.get_client(endpoint=endpoint, api_key=api_key, api_version=api_version, auth_method=auth_method)
+        client = self.get_client(
+            endpoint=endpoint,
+            api_key=api_key,
+            api_version=api_version,
+            auth_method=auth_method,
+        )
         if client is None:
             return {}
         if model is None:
@@ -179,7 +196,7 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
                 client.chat.completions.create(
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": prompt}
+                        {"role": "user", "content": prompt},
                     ],
                     max_tokens=max_tokens,
                     temperature=temperature,
@@ -188,25 +205,27 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
                     presence_penalty=0.0,
                     frequency_penalty=0.0,
                     model=model,
-                    response_format={"type": "json_object"}
+                    response_format={"type": "json_object"},
                 ),
-                timeout=timeout
+                timeout=timeout,
             )
-            
+
             # Safely extract content from response, handling potential None
-            if not response or not hasattr(response, 'choices') or not response.choices:
+            if not response or not hasattr(response, "choices") or not response.choices:
                 return {}
-                
+
             # Check if message and content exist
-            if not hasattr(response.choices[0], 'message') or not hasattr(response.choices[0].message, 'content'):
+            if not hasattr(response.choices[0], "message") or not hasattr(
+                response.choices[0].message, "content"
+            ):
                 return {}
-                
+
             ansr_str = response.choices[0].message.content
             ansr = self.clean_response(ansr_str)
             return ansr
-            
+
         except asyncio.TimeoutError:
-            return {}
+            raise
         except Exception as e:
             raise
 
@@ -240,14 +259,19 @@ class AzureOpenAIScoringProvider(ScoringLLMProvider):
         """
         self.endpoint = endpoint
         self.api_key = api_key
-        self.api_version = kwargs.get('api_version', '2024-02-01')
-        self.auth_method = kwargs.get('auth_method', 'api_key')
-        self.model = kwargs.get('model', 'gpt-4.1-mini')
+        self.api_version = kwargs.get("api_version", "2024-02-01")
+        self.auth_method = kwargs.get("auth_method", "api_key")
+        self.model = kwargs.get("model", "gpt-4.1-mini")
 
     @classmethod
-    def get_client(cls, endpoint: str | None = None, api_key: str | None = None,
-                   api_version: str | None = None, auth_method: str = "api_key",
-                   **kwargs) -> AsyncAzureOpenAI | None:
+    def get_client(
+        cls,
+        endpoint: str | None = None,
+        api_key: str | None = None,
+        api_version: str | None = None,
+        auth_method: str = "api_key",
+        **kwargs,
+    ) -> AsyncAzureOpenAI | None:
         """Get or initialize the Azure OpenAI client.
 
         Args:
@@ -271,14 +295,14 @@ class AzureOpenAIScoringProvider(ScoringLLMProvider):
                     if auth_method == "azure_ad":
                         token_provider = get_bearer_token_provider(
                             DefaultAzureCredential(),
-                            "https://cognitiveservices.azure.com/.default"
+                            "https://cognitiveservices.azure.com/.default",
                         )
 
                         cls._client = AsyncAzureOpenAI(
                             azure_endpoint=endpoint,
                             azure_ad_token_provider=token_provider,
                             api_version=api_version,
-                            timeout=30.0
+                            timeout=30.0,
                         )
                     elif auth_method == "api_key":
                         if not api_key:
@@ -289,7 +313,7 @@ class AzureOpenAIScoringProvider(ScoringLLMProvider):
                             azure_endpoint=endpoint,
                             api_key=api_key,
                             api_version=api_version,
-                            timeout=30.0
+                            timeout=30.0,
                         )
                     else:
                         error_msg = f"Unsupported authentication method: {auth_method}"
@@ -360,7 +384,7 @@ Provide a relevance score."""
         questions: list[str],
         context: ScoringContext,
         timeout: float = 30.0,
-        **kwargs
+        **kwargs,
     ) -> float:
         """Score a single context.
 
@@ -382,11 +406,11 @@ Provide a relevance score."""
             interface compatibility. LLM scoring uses a direct prompt template instead.
         """
         # Use instance config as defaults, allow kwargs to override
-        endpoint = kwargs.get('endpoint', self.endpoint)
-        api_key = kwargs.get('api_key', self.api_key)
-        api_version = kwargs.get('api_version', self.api_version)
-        auth_method = kwargs.get('auth_method', self.auth_method)
-        model = kwargs.get('model', self.model)
+        endpoint = kwargs.get("endpoint", self.endpoint)
+        api_key = kwargs.get("api_key", self.api_key)
+        api_version = kwargs.get("api_version", self.api_version)
+        auth_method = kwargs.get("auth_method", self.auth_method)
+        model = kwargs.get("model", self.model)
 
         if not model:
             raise ValueError("Model name is required for Azure OpenAI scoring")
@@ -396,7 +420,7 @@ Provide a relevance score."""
             endpoint=endpoint,
             api_key=api_key,
             api_version=api_version,
-            auth_method=auth_method
+            auth_method=auth_method,
         )
 
         # Build prompt (questions parameter is ignored for LLM-based scoring)
@@ -405,7 +429,7 @@ Provide a relevance score."""
         # Define the expected JSON schema
         schema = {
             "score": "integer between 0 and 100",
-            "description": "brief explanation (optional)"
+            "description": "brief explanation (optional)",
         }
         system_prompt = f"""You are a scoring assistant. Provide a response that matches this JSON schema: {json.dumps(schema)}"""
 
@@ -414,20 +438,24 @@ Provide a relevance score."""
                 client.chat.completions.create(
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": prompt}
+                        {"role": "user", "content": prompt},
                     ],
                     max_tokens=500,
                     temperature=0.3,  # Lower temperature for more consistent scoring
                     top_p=0.1,
                     stream=False,
                     model=model,
-                    response_format={"type": "json_object"}
+                    response_format={"type": "json_object"},
                 ),
-                timeout=timeout
+                timeout=timeout,
             )
 
             # Extract and parse response
-            if not response or not response.choices or not response.choices[0].message.content:
+            if (
+                not response
+                or not response.choices
+                or not response.choices[0].message.content
+            ):
                 raise ValueError("Empty response from Azure OpenAI")
 
             content = response.choices[0].message.content
@@ -435,7 +463,7 @@ Provide a relevance score."""
             # Parse JSON response
             try:
                 result = json.loads(content)
-                score = result.get('score', 0)
+                score = result.get("score", 0)
 
                 # Ensure score is in valid range
                 if isinstance(score, (int, float)):
@@ -447,7 +475,9 @@ Provide a relevance score."""
                 raise ValueError(f"Failed to parse scoring response as JSON: {e}")
 
         except asyncio.TimeoutError:
-            raise TimeoutError(f"Azure OpenAI scoring request timed out after {timeout}s")
+            raise TimeoutError(
+                f"Azure OpenAI scoring request timed out after {timeout}s"
+            )
         except Exception as e:
             raise ValueError(f"Azure OpenAI scoring failed: {e}")
 
@@ -456,7 +486,7 @@ Provide a relevance score."""
         questions: list[str],
         contexts: list[ScoringContext],
         timeout: float = 30.0,
-        **kwargs
+        **kwargs,
     ) -> list[float | BaseException]:
         """Score multiple contexts with the given questions in parallel.
 

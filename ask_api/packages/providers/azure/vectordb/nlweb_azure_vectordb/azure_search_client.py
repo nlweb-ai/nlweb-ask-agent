@@ -232,16 +232,13 @@ class AzureSearchClient(VectorDBClientInterface):
                     processed_results.append(processed_result)
                 except Exception as e:
                     logger.error(f"Error processing result {result}: {e}")
-                    print(f"Error processing result {result}: {e}", file=sys.stderr)
-                    continue
+                    raise
 
             return processed_results
 
         except Exception as e:
-            import traceback
-
-            traceback.print_exc()
-            return []
+            logger.error(f"Error during Azure Search operation: {e}")
+            raise e
 
     async def close(self):
         """Close all search clients and release resources."""

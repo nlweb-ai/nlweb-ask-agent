@@ -37,13 +37,11 @@ class IntentDetector:
             Default prompt string
         """
         # Replace underscores with spaces for readability
-        readable_value = intent_value.replace('_', ' ')
+        readable_value = intent_value.replace("_", " ")
         return f"Does the query have the intent specified: {readable_value}?"
 
     async def detect_intents(
-        self,
-        query: str,
-        intent_elicitations: List[Dict[str, Any]]
+        self, query: str, intent_elicitations: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """
         Detect which intents match the query using score-based detection.
@@ -98,10 +96,7 @@ class IntentDetector:
 
             for intent_value, pairs in intent_groups.items():
                 # Build ScoringContext for scoring provider
-                contexts.append(ScoringContext(
-                    query=query,
-                    intent=intent_value
-                ))
+                contexts.append(ScoringContext(query=query, intent=intent_value))
 
                 # Collect all required_info for this intent
                 required_info_list = [required_info for _, _, required_info in pairs]
@@ -127,7 +122,9 @@ class IntentDetector:
                     result = results[i] if i < len(results) else None
                     # Handle exceptions or missing results
                     if result is None or isinstance(result, BaseException):
-                        logger.warning(f"Intent '{intent_value}' scoring failed: {result}")
+                        logger.warning(
+                            f"Intent '{intent_value}' scoring failed: {result}"
+                        )
                         continue
                     score = result  # score is now a float directly
 
@@ -146,11 +143,8 @@ class IntentDetector:
                         )
 
             except Exception as e:
-                logger.error(
-                    f"Error during batch intent detection: {e}",
-                    exc_info=True
-                )
-                # On error, don't block - just skip these intents
+                logger.error(f"Error during batch intent detection: {e}", exc_info=True)
+                raise
 
         logger.info(
             f"Intent detection complete: {len(matching_required_info)} "

@@ -11,10 +11,13 @@ Backwards compatibility is not guaranteed at this time.
 from xml.etree import ElementTree as ET
 import asyncio
 import importlib
+import logging
 import os
 import json
 import re
 from nlweb_core.utils import fill_prompt_variables
+
+logger = logging.getLogger(__name__)
 
 # Load query_analysis.xml once at module level
 query_analysis_tree = None
@@ -45,7 +48,8 @@ except Exception as e:
     import traceback
 
     traceback.print_exc()
-    pass
+    logger.error("Error loading query analysis XML files", exc_info=True)
+    raise
 
 
 class QueryAnalysisHandler:
@@ -127,7 +131,11 @@ class QueryAnalysisHandler:
                     tasks.append(task)
 
                 except (ImportError, AttributeError) as e:
-                    self.results[ref] = {"error": str(e)}
+                    logger.error(
+                        f"Error loading analysis module for ref {ref}: {e}",
+                        exc_info=True,
+                    )
+                    raise
 
         # Execute all tasks in parallel and update results as they complete
         if tasks:
@@ -143,7 +151,8 @@ class QueryAnalysisHandler:
             result = await instance.do()
             self.results[ref] = result
         except Exception as e:
-            self.results[ref] = {"error": str(e)}
+            logger.error(f"Error executing analysis for ref {ref}: {e}", exc_info=True)
+            raise
 
 
 class DefaultQueryAnalysisHandler:
@@ -244,8 +253,8 @@ class DefaultQueryAnalysisHandler:
             return_struc_text = return_struc_node.text.strip()
             return_struc = json.loads(return_struc_text)
         except json.JSONDecodeError as e:
-            return {"error": f"Invalid JSON in returnStruc: {e}"}
-
+            logger.error(f"Invalid JSON in returnStruc: {e}", exc_info=True)
+            raise
         # Build and substitute variables in the prompt
         prompt_params = self._build_prompt_params()
         filled_prompt = fill_prompt_variables(prompt_str, prompt_params)
@@ -263,4 +272,5 @@ class DefaultQueryAnalysisHandler:
             )
             return result
         except Exception as e:
-            return {"error": f"LLM call failed: {e}"}
+            logger.error(f"LLM call failed: {e}", exc_info=True)
+            raise
