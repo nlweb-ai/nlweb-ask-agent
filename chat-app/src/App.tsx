@@ -1,4 +1,4 @@
-import {ChatSearch, useNlWeb, DebugTool, SiteDropdown, useSearchSession, useSearchSessions, HistorySidebar} from '@nlweb-ai/search-components';
+import {ChatSearch, useNlWeb, DebugTool, SiteDropdown, useSearchSession, useSearchSessions, HistorySidebar, type SearchSession } from '@nlweb-ai/search-components';
 import { useState } from 'react';
 
 const SITES = [
@@ -123,19 +123,18 @@ function App() {
     const localSessions = useSearchSessions();
     const [sessionId, setSessionId] = useState<string>(crypto.randomUUID());
     const [sessionResults, setSessionResults] = useSearchSession(sessionId);
-    //@ts-ignore
-    function startSearch(firstResult) {
+    function startSearch(query: string) {
       const newId = localSessions.sessions.some(s => s.sessionId === sessionId) ? crypto.randomUUID() : sessionId ;
-      localSessions.startSession(newId, firstResult, {
+      localSessions.startSession(newId, query, {
         site: site.url,
         endpoint: endpoint
       })
       setSessionId(newId);
+      return newId;
     }
     function endSearch() {
       setSessionId(crypto.randomUUID());
     }
-    //@ts-ignore
     function selectSession(session: SearchSession) {
       setSessionId(session.sessionId);
       setSite(SITES.find(s => s.url == session.backend.site) || {
@@ -153,7 +152,6 @@ function App() {
         <div className='p-8 flex-1'>
           <div className='max-w-3xl mx-auto'>
             <ChatSearch
-              key={sessionId}
               startSession={startSearch}
               endSession={endSearch}
               results={sessionResults}
