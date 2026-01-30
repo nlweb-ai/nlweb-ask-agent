@@ -389,6 +389,15 @@ async def cleanup_app(app):
     except Exception as e:
         print(f"Error closing object lookup client: {e}")
 
+    # Cleanup vector database clients (Azure Search, etc.)
+    try:
+        from nlweb_core.retriever import close_vectordb_clients
+
+        await close_vectordb_clients()
+        print("Vector database clients closed")
+    except Exception as e:
+        print(f"Error closing vector database clients: {e}")
+
     # Cleanup site config lookup client (Cosmos DB)
     try:
         from nlweb_core.site_config import close_site_config_lookup

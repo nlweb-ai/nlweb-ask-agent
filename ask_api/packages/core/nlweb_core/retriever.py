@@ -15,7 +15,7 @@ from nlweb_core.config import get_config, RetrievalProviderConfig
 from nlweb_core.item_retriever import ItemRetriever, RetrievedItem
 
 # Client cache for reusing instances
-_client_cache = {}
+_client_cache: Dict[str, "VectorDBClientInterface"] = {}
 _client_cache_locks = defaultdict(asyncio.Lock)  # Per-key locks instead of global lock
 
 # Preloaded client modules
@@ -48,6 +48,11 @@ class VectorDBClientInterface(ABC):
         Returns:
             List of RetrievedItem objects
         """
+        pass
+
+    @abstractmethod
+    async def close(self) -> None:
+        """Close the client and release resources."""
         pass
 
 
@@ -130,6 +135,19 @@ async def close_object_lookup_client():
         if _object_lookup_client is not None:
             await _object_lookup_client.close()
             _object_lookup_client = None
+
+
+async def close_vectordb_clients():
+    """
+    Close all cached vector database clients and release resources.
+    Should be called during application shutdown.
+    """
+    global _client_cache
+
+    for cache_key in list(_client_cache.keys()):
+        client = _client_cache.pop(cache_key, None)
+        if client is not None:
+            await client.close()
 
 
 async def enrich_results_from_object_storage(
