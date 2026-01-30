@@ -15,6 +15,7 @@ import asyncio
 import threading
 from typing import Dict, Any
 from nlweb_core.llm import GenerativeLLMProvider
+from nlweb_core.scoring import ScoringLLMProvider, ScoringContext
 
 
 class AzureOpenAIProvider(GenerativeLLMProvider):
@@ -215,3 +216,266 @@ provider = AzureOpenAIProvider()
 
 # For backwards compatibility
 get_azure_openai_completion = provider.get_completion
+
+
+class AzureOpenAIScoringProvider(ScoringLLMProvider):
+    """Implementation of ScoringLLMProvider for Azure OpenAI.
+
+    This provider uses Azure OpenAI to score items based on relevance to a query.
+    It returns numeric scores between 0-100.
+    """
+
+    # Global client with thread-safe initialization
+    _client_lock = threading.Lock()
+    _client = None
+    _last_endpoint = None
+
+    def __init__(self, endpoint: str, api_key: str | None = None, **kwargs):
+        """Initialize the Azure OpenAI scoring provider.
+
+        Args:
+            endpoint: Azure OpenAI endpoint URL (required)
+            api_key: API key for authentication (required for api_key auth, optional for azure_ad)
+            **kwargs: Additional configuration (api_version, auth_method, model)
+        """
+        self.endpoint = endpoint
+        self.api_key = api_key
+        self.api_version = kwargs.get('api_version', '2024-02-01')
+        self.auth_method = kwargs.get('auth_method', 'api_key')
+        self.model = kwargs.get('model', 'gpt-4.1-mini')
+
+    @classmethod
+    def get_client(cls, endpoint: str | None = None, api_key: str | None = None,
+                   api_version: str | None = None, auth_method: str = "api_key",
+                   **kwargs) -> AsyncAzureOpenAI | None:
+        """Get or initialize the Azure OpenAI client.
+
+        Args:
+            endpoint: Azure OpenAI endpoint URL (required)
+            api_key: API key (required for api_key auth)
+            api_version: API version (required)
+            auth_method: Authentication method ('api_key' or 'azure_ad')
+
+        Returns:
+            Configured AsyncAzureOpenAI client or None on error
+        """
+        if not endpoint or not api_version:
+            error_msg = f"Missing required Azure OpenAI configuration - endpoint: {endpoint}, api_version: {api_version}"
+            raise ValueError(error_msg)
+
+        # Create client with the resolved endpoint/api_version
+        with cls._client_lock:  # Thread-safe client initialization
+            # Always create a new client if we don't have one, or if the endpoint changed
+            if cls._client is None or cls._last_endpoint != endpoint:
+                try:
+                    if auth_method == "azure_ad":
+                        token_provider = get_bearer_token_provider(
+                            DefaultAzureCredential(),
+                            "https://cognitiveservices.azure.com/.default"
+                        )
+
+                        cls._client = AsyncAzureOpenAI(
+                            azure_endpoint=endpoint,
+                            azure_ad_token_provider=token_provider,
+                            api_version=api_version,
+                            timeout=30.0
+                        )
+                    elif auth_method == "api_key":
+                        if not api_key:
+                            error_msg = "Missing required Azure OpenAI API key for api_key authentication"
+                            raise ValueError(error_msg)
+
+                        cls._client = AsyncAzureOpenAI(
+                            azure_endpoint=endpoint,
+                            api_key=api_key,
+                            api_version=api_version,
+                            timeout=30.0
+                        )
+                    else:
+                        error_msg = f"Unsupported authentication method: {auth_method}"
+                        raise ValueError(error_msg)
+
+                    # Track the endpoint we used to create this client
+                    cls._last_endpoint = endpoint
+
+                except Exception as e:
+                    raise ValueError(f"Failed to initialize Azure OpenAI client: {e}")
+
+        return cls._client
+
+    def _build_scoring_prompt(self, context: ScoringContext) -> str:
+        """Build a scoring prompt from context.
+
+        Args:
+            context: Structured context for scoring
+
+        Returns:
+            Formatted prompt string
+        """
+        # Determine the scoring mode based on context fields
+        if context.item_description and context.item_type:
+            # Item ranking mode - use the NLWeb ranking prompt template
+            item_type = context.item_type or "item"
+            prompt = f"""Assign a score between 0 and 100 to the following {item_type} based on how relevant it is to the user's question. Use your knowledge from other sources, about the item, to make a judgement.
+
+If the score is above 50, provide a short description of the item highlighting the relevance to the user's question, without mentioning the user's question.
+
+Provide an explanation of the relevance of the item to the user's question, without mentioning the user's question or the score or explicitly mentioning the term relevance.
+
+If the score is below 75, in the description, include the reason why it is still relevant.
+
+The user's question is: {context.query}
+
+The item's description is: {context.item_description}"""
+        elif context.intent:
+            # Intent detection mode
+            prompt = f"""Assign a score between 0 and 100 based on how well the user's query matches the specified intent.
+
+User's query: {context.query}
+
+Intent to check: {context.intent}
+
+Provide a score indicating the match strength (0 = no match, 100 = perfect match)."""
+        elif context.required_info:
+            # Presence checking mode
+            prompt = f"""Assign a score between 0 and 100 based on whether the user's query contains the required information.
+
+User's query: {context.query}
+
+Required information: {context.required_info}
+
+Provide a score indicating presence (0 = not present, 100 = fully present)."""
+        else:
+            # Generic scoring (fallback)
+            prompt = f"""Assign a score between 0 and 100 for the following query.
+
+Query: {context.query}
+
+Provide a relevance score."""
+
+        return prompt
+
+    async def score(
+        self,
+        questions: list[str],
+        context: ScoringContext,
+        timeout: float = 30.0,
+        **kwargs
+    ) -> float:
+        """Score a single context.
+
+        Args:
+            questions: List of scoring questions (ignored for LLM-based scoring)
+            context: Structured context for the scoring operation
+            timeout: Request timeout in seconds
+            **kwargs: Additional provider-specific arguments (overrides instance config)
+
+        Returns:
+            Score between 0-100
+
+        Raises:
+            ValueError: If the request fails or response is invalid
+            TimeoutError: If the request times out
+
+        Note:
+            The 'questions' parameter is ignored for LLM-based scoring to maintain
+            interface compatibility. LLM scoring uses a direct prompt template instead.
+        """
+        # Use instance config as defaults, allow kwargs to override
+        endpoint = kwargs.get('endpoint', self.endpoint)
+        api_key = kwargs.get('api_key', self.api_key)
+        api_version = kwargs.get('api_version', self.api_version)
+        auth_method = kwargs.get('auth_method', self.auth_method)
+        model = kwargs.get('model', self.model)
+
+        if not model:
+            raise ValueError("Model name is required for Azure OpenAI scoring")
+
+        # Get client
+        client = self.get_client(
+            endpoint=endpoint,
+            api_key=api_key,
+            api_version=api_version,
+            auth_method=auth_method
+        )
+
+        # Build prompt (questions parameter is ignored for LLM-based scoring)
+        prompt = self._build_scoring_prompt(context)
+
+        # Define the expected JSON schema
+        schema = {
+            "score": "integer between 0 and 100",
+            "description": "brief explanation (optional)"
+        }
+        system_prompt = f"""You are a scoring assistant. Provide a response that matches this JSON schema: {json.dumps(schema)}"""
+
+        try:
+            response = await asyncio.wait_for(
+                client.chat.completions.create(
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=500,
+                    temperature=0.3,  # Lower temperature for more consistent scoring
+                    top_p=0.1,
+                    stream=False,
+                    model=model,
+                    response_format={"type": "json_object"}
+                ),
+                timeout=timeout
+            )
+
+            # Extract and parse response
+            if not response or not response.choices or not response.choices[0].message.content:
+                raise ValueError("Empty response from Azure OpenAI")
+
+            content = response.choices[0].message.content
+
+            # Parse JSON response
+            try:
+                result = json.loads(content)
+                score = result.get('score', 0)
+
+                # Ensure score is in valid range
+                if isinstance(score, (int, float)):
+                    return float(max(0, min(100, score)))
+                else:
+                    raise ValueError(f"Invalid score type: {type(score)}")
+
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Failed to parse scoring response as JSON: {e}")
+
+        except asyncio.TimeoutError:
+            raise TimeoutError(f"Azure OpenAI scoring request timed out after {timeout}s")
+        except Exception as e:
+            raise ValueError(f"Azure OpenAI scoring failed: {e}")
+
+    async def score_batch(
+        self,
+        questions: list[str],
+        contexts: list[ScoringContext],
+        timeout: float = 30.0,
+        **kwargs
+    ) -> list[float | BaseException]:
+        """Score multiple contexts with the given questions in parallel.
+
+        Args:
+            questions: List of scoring questions to ask
+            contexts: List of contexts to score
+            timeout: Request timeout in seconds
+            **kwargs: Additional provider-specific arguments
+
+        Returns:
+            List of scores (0-100) or Exception for each failed request
+        """
+        tasks = [
+            self.score(questions, context, timeout=timeout, **kwargs)
+            for context in contexts
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        return list(results)
+
+
+# Note: Scoring provider instances are created and cached by get_scoring_provider() in nlweb_core.scoring
+# No module-level singleton needed here

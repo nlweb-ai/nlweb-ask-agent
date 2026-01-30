@@ -34,6 +34,9 @@ embedding:
   auth_method: api_key  # Use 'azure_ad' for managed identity
   model: text-embedding-3-small
 
+# Scoring model configuration - choose either Pi Labs or Azure OpenAI
+
+# Option 1: Pi Labs scoring (specialized scoring model)
 scoring-llm-model:
   llm_type: pilabs
   import_path: nlweb_pilabs_models.llm.pi_labs
@@ -41,16 +44,17 @@ scoring-llm-model:
   endpoint_env: PI_LABS_ENDPOINT
   api_key_env: PI_LABS_KEY
 
-
+# Option 2: Azure OpenAI scoring (LLM-based scoring)
+# Uncomment the section below and comment out the Pi Labs section above to use Azure OpenAI
 #scoring-llm-model:
 #  llm_type: azure_openai
 #  model: gpt-4.1-mini
 #  endpoint_env: AZURE_OPENAI_ENDPOINT
 #  api_key_env: AZURE_OPENAI_KEY
-#  api_version: "2024-02-15-preview"
+#  api_version: "2024-02-01"
 #  auth_method: api_key
 #  import_path: nlweb_azure_models.llm.azure_oai
-#  class_name: provider
+#  class_name: AzureOpenAIScoringProvider
 
 
 retrieval:

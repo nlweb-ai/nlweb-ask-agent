@@ -289,7 +289,7 @@ async def config_override_middleware(app, handler):
         overrides = {}
 
         # Handle scoring_questions (list type, can appear multiple times)
-        scoring_questions = request.query.getall("scoring_questions")
+        scoring_questions = request.query.getall("scoring_questions", default=[])
         if scoring_questions:
             overrides["scoring_questions"] = scoring_questions
 
