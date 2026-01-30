@@ -24,6 +24,11 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
     NLWEB_CONFIG_DIR=/app
 
+# Add entrypoint script to pre-warm Azure credentials (fixes race condition on macOS Docker)
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["docker-entrypoint.sh"]
+
 # Standard Docker pattern: Use CMD with full command
 # Azure App Service will respect this if no startup command is configured
 CMD [".venv/bin/python", "run_server.py"]
