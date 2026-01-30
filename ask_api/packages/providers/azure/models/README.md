@@ -208,23 +208,7 @@ Azure OpenAI scoring uses **direct prompt templates** (not question-based scorin
 - Item ranking uses the NLWeb ranking prompt template
 - Focuses on relevance judgment and explanation generation
 - The `scoring_questions` config field is ignored (used only by PI Labs)
-- Leverages LLM's reasoning capabilities for nuanced scoring
 
-### When to Use Each Scoring Provider
-
-**Azure OpenAI Scoring:**
-- ✅ Flexible - works with any domain/content type
-- ✅ Leverages latest LLM reasoning capabilities
-- ✅ No separate model deployment needed
-- ⚠️ Higher latency (50-200ms per item)
-- ⚠️ Higher cost per scoring operation
-
-**Pi Labs Scoring:**
-- ✅ Optimized for scoring performance
-- ✅ Lower latency (~10-50ms per item)
-- ✅ Lower cost per operation
-- ⚠️ Requires separate Pi Labs deployment
-- ⚠️ Domain-specific tuning may be needed
 
 ## Complete Azure Stack Example
 
