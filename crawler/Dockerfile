@@ -34,6 +34,11 @@ EXPOSE 5001
 ENV PYTHONUNBUFFERED=1 \
     FLASK_ENV=production
 
+# Add entrypoint script to pre-warm Azure credentials (fixes race condition on macOS Docker)
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["docker-entrypoint.sh"]
+
 # Default to master mode (API server)
 # Worker deployments override with: command: [".venv/bin/python", "code/core/worker.py"]
 CMD [".venv/bin/python", "code/core/api.py"]
