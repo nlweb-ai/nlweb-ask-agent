@@ -13,9 +13,8 @@ import asyncio
 import importlib
 import logging
 import os
-import json
-import re
 from nlweb_core.utils import fill_prompt_variables
+from nlweb_core.query_analysis.response_models import get_response_model
 
 logger = logging.getLogger(__name__)
 
@@ -231,10 +230,11 @@ class DefaultQueryAnalysisHandler:
     async def do(self):
         """
         Execute the default query analysis:
-        1. Extract promptString and returnStruc from XML node
-        2. Substitute variables in the prompt
-        3. Call ask_llm
-        4. Return the result
+        1. Extract promptString from XML node
+        2. Get responseModel from XML attribute
+        3. Substitute variables in the prompt
+        4. Call ask_llm with Pydantic model
+        5. Return the result as a dict
         """
         # Extract promptString
         prompt_node = self.xml_node.find("promptString")
@@ -243,34 +243,35 @@ class DefaultQueryAnalysisHandler:
 
         prompt_str = prompt_node.text.strip()
 
-        # Extract returnStruc
-        return_struc_node = self.xml_node.find("returnStruc")
-        if return_struc_node is None or not return_struc_node.text:
-            return {"error": "No returnStruc found in XML"}
+        # Get responseModel from XML attribute
+        response_model_name = self.xml_node.get("responseModel")
+        if not response_model_name:
+            return {"error": "No responseModel attribute found in XML"}
 
-        # Parse the returnStruc JSON
+        # Look up the Pydantic model class
         try:
-            return_struc_text = return_struc_node.text.strip()
-            return_struc = json.loads(return_struc_text)
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in returnStruc: {e}", exc_info=True)
+            response_model = get_response_model(response_model_name)
+        except ValueError as e:
+            logger.error(f"Invalid responseModel: {e}", exc_info=True)
             raise
+
         # Build and substitute variables in the prompt
         prompt_params = self._build_prompt_params()
         filled_prompt = fill_prompt_variables(prompt_str, prompt_params)
 
-        # Call the LLM
+        # Call the LLM with Pydantic model for type-safe response
         try:
             from nlweb_core.llm import ask_llm
 
             result = await ask_llm(
                 filled_prompt,
-                return_struc,
+                response_model,
                 level="low",
                 timeout=8,
                 query_params=prompt_params,
             )
-            return result
+            # Convert Pydantic model to dict for compatibility with existing code
+            return result.model_dump()
         except Exception as e:
             logger.error(f"LLM call failed: {e}", exc_info=True)
             raise

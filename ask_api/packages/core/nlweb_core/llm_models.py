@@ -43,3 +43,8 @@ class ScoreResponse(BaseModel):
 class QuestionResponse(BaseModel):
     """Response model for generated follow-up questions."""
     question: str = Field(..., min_length=1, description="The generated question text")
+
+
+class SummaryResponse(BaseModel):
+    """Response model for search result summaries."""
+    summary: str = Field(..., min_length=1, description="A 2-3 sentence summary of the AI results")

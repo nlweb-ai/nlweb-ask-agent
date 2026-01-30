@@ -9,7 +9,7 @@ high-llm-model:
   model: gpt-4.1
   endpoint_env: AZURE_OPENAI_ENDPOINT
   api_key_env: AZURE_OPENAI_KEY
-  api_version: "2024-02-01"
+  api_version: "2024-08-01-preview"
   auth_method: api_key
   import_path: nlweb_azure_models.llm.azure_oai
   class_name: provider
@@ -20,7 +20,7 @@ low-llm-model:
   model: gpt-4.1-mini
   endpoint_env: AZURE_OPENAI_ENDPOINT
   api_key_env: AZURE_OPENAI_KEY
-  api_version: "2024-02-01"
+  api_version: "2024-08-01-preview"
   auth_method: api_key  # Use 'azure_ad' for managed identity
   import_path: nlweb_azure_models.llm.azure_oai
   class_name: provider
@@ -51,7 +51,7 @@ scoring-llm-model:
 #  model: gpt-4.1-mini
 #  endpoint_env: AZURE_OPENAI_ENDPOINT
 #  api_key_env: AZURE_OPENAI_KEY
-#  api_version: "2024-02-01"
+#  api_version: "2024-08-01-preview"
 #  auth_method: api_key
 #  import_path: nlweb_azure_models.llm.azure_oai
 #  class_name: AzureOpenAIScoringProvider
