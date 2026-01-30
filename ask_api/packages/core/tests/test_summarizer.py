@@ -144,30 +144,30 @@ class TestResultsSummarizer:
         assert result is None
         mock_llm.assert_not_called()
 
-    async def test_summarize_returns_none_when_llm_fails(self, mock_llm, sample_results):
-        """Test summarize returns None when LLM raises exception."""
+    async def test_summarize_raises_when_llm_fails(self, mock_llm, sample_results):
+        """Test summarize raises exception when LLM raises exception."""
         mock_llm.side_effect = Exception("LLM error")
         summarizer = ResultsSummarizer(llm=mock_llm)
-        result = await summarizer.summarize("test query", sample_results)
 
-        assert result is None
+        with pytest.raises(Exception, match="LLM error"):
+            await summarizer.summarize("test query", sample_results)
 
-    async def test_summarize_returns_none_when_response_missing_summary(
+    async def test_summarize_raises_when_response_missing_summary(
         self, mock_llm, sample_results
     ):
-        """Test summarize returns None when LLM response lacks summary key."""
+        """Test summarize raises ValueError when LLM response lacks summary key."""
         mock_llm.return_value = {"other_key": "value"}
         summarizer = ResultsSummarizer(llm=mock_llm)
-        result = await summarizer.summarize("test query", sample_results)
 
-        assert result is None
+        with pytest.raises(ValueError, match="LLM response missing 'summary' field"):
+            await summarizer.summarize("test query", sample_results)
 
-    async def test_summarize_returns_none_when_response_is_none(
+    async def test_summarize_raises_when_response_is_none(
         self, mock_llm, sample_results
     ):
-        """Test summarize returns None when LLM returns None."""
+        """Test summarize raises ValueError when LLM returns None."""
         mock_llm.return_value = None
         summarizer = ResultsSummarizer(llm=mock_llm)
-        result = await summarizer.summarize("test query", sample_results)
 
-        assert result is None
+        with pytest.raises(ValueError, match="LLM response missing 'summary' field"):
+            await summarizer.summarize("test query", sample_results)

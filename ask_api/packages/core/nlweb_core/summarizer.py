@@ -126,12 +126,12 @@ Results:
         try:
             response = await self._llm(prompt, self.SCHEMA)
         except Exception:
-            return None
+            raise
 
         if response and "summary" in response:
             return SummaryResult(summary=response["summary"], raw_response=response)
 
-        return None
+        raise ValueError("LLM response missing 'summary' field")
 
 
 def create_default_summarizer() -> ResultsSummarizer:

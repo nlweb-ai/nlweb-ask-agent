@@ -20,6 +20,85 @@ from nlweb_core.azure_credentials import get_openai_token_provider
 logger = logging.getLogger(__name__)
 
 
+def normalize_schema_for_structured_output(schema: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Normalize a schema to be compatible with Azure OpenAI Structured Outputs.
+
+    Handles two input formats:
+    1. Proper JSON Schema (has "type": "object" and "properties")
+    2. Informal dict schemas (e.g., {"field": "description"})
+
+    Azure OpenAI Structured Outputs requirements:
+    - Root must be "type": "object"
+    - All fields must be in "required" array
+    - Must include "additionalProperties": false
+
+    Args:
+        schema: Input schema (either proper JSON Schema or informal dict)
+
+    Returns:
+        Normalized JSON Schema compatible with Structured Outputs
+    """
+    # Check if this is already a proper JSON Schema
+    if schema.get("type") == "object" and "properties" in schema:
+        # Already proper JSON Schema - ensure it has required fields for structured outputs
+        normalized = schema.copy()
+
+        # Ensure additionalProperties is false (required for strict mode)
+        normalized["additionalProperties"] = False
+
+        # Ensure all properties are in required array
+        if "properties" in normalized:
+            normalized["required"] = list(normalized["properties"].keys())
+
+        return normalized
+
+    # Handle Pydantic-generated schemas (have $defs, title, etc.)
+    if "$defs" in schema or "title" in schema:
+        # This is a Pydantic model_json_schema() output
+        normalized = schema.copy()
+        normalized["additionalProperties"] = False
+        if "properties" in normalized and "required" not in normalized:
+            normalized["required"] = list(normalized["properties"].keys())
+        return normalized
+
+    # Convert informal schema to proper JSON Schema
+    # Informal format: {"field_name": "description of field"}
+    properties = {}
+    for key, value in schema.items():
+        if isinstance(value, str):
+            # Infer type from description keywords
+            description = value.lower()
+            if "integer" in description or "score" in description:
+                properties[key] = {"type": "integer", "description": value}
+            elif "number" in description or "float" in description:
+                properties[key] = {"type": "number", "description": value}
+            elif "boolean" in description or "true/false" in description:
+                properties[key] = {"type": "boolean", "description": value}
+            elif "array" in description or "list" in description:
+                properties[key] = {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": value,
+                }
+            else:
+                # Default to string
+                properties[key] = {"type": "string", "description": value}
+        elif isinstance(value, dict):
+            # Already a property definition
+            properties[key] = value
+        else:
+            # Fallback to string
+            properties[key] = {"type": "string"}
+
+    return {
+        "type": "object",
+        "properties": properties,
+        "required": list(properties.keys()),
+        "additionalProperties": False,
+    }
+
+
 class AzureOpenAIProvider(GenerativeLLMProvider):
     """Implementation of GenerativeLLMProvider for Azure OpenAI."""
 
@@ -185,7 +264,12 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
             return {}
         if model is None:
             return {}
-        system_prompt = f"""Provide a response that matches this JSON schema: {json.dumps(schema)}"""
+
+        # Normalize schema for structured outputs
+        normalized_schema = normalize_schema_for_structured_output(schema)
+
+        # System prompt - can be simpler now since schema is enforced by API
+        system_prompt = "You are a helpful assistant. Respond with JSON matching the required schema."
 
         try:
             response = await asyncio.wait_for(
@@ -201,7 +285,14 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
                     presence_penalty=0.0,
                     frequency_penalty=0.0,
                     model=model,
-                    response_format={"type": "json_object"},
+                    response_format={
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": "response_schema",
+                            "strict": True,
+                            "schema": normalized_schema,
+                        },
+                    },
                 ),
                 timeout=timeout,
             )
@@ -216,9 +307,12 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
             ):
                 return {}
 
-            ansr_str = response.choices[0].message.content
-            ansr = self.clean_response(ansr_str)
-            return ansr
+            # With structured outputs, response is guaranteed to be valid JSON
+            content = response.choices[0].message.content
+            if content is None:
+                return {}
+
+            return json.loads(content)
 
         except asyncio.TimeoutError:
             raise
@@ -421,12 +515,23 @@ Provide a relevance score."""
         # Build prompt (questions parameter is ignored for LLM-based scoring)
         prompt = self._build_scoring_prompt(context)
 
-        # Define the expected JSON schema
-        schema = {
-            "score": "integer between 0 and 100",
-            "description": "brief explanation (optional)",
+        # Define the expected JSON schema for structured outputs
+        scoring_schema = {
+            "type": "object",
+            "properties": {
+                "score": {
+                    "type": "integer",
+                    "description": "Relevance score between 0 and 100",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Brief explanation of the score",
+                },
+            },
+            "required": ["score", "description"],
+            "additionalProperties": False,
         }
-        system_prompt = f"""You are a scoring assistant. Provide a response that matches this JSON schema: {json.dumps(schema)}"""
+        system_prompt = "You are a scoring assistant. Provide a relevance score and brief explanation."
 
         try:
             response = await asyncio.wait_for(
@@ -440,7 +545,14 @@ Provide a relevance score."""
                     top_p=0.1,
                     stream=False,
                     model=model,
-                    response_format={"type": "json_object"},
+                    response_format={
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": "scoring_response",
+                            "strict": True,
+                            "schema": scoring_schema,
+                        },
+                    },
                 ),
                 timeout=timeout,
             )
@@ -455,19 +567,15 @@ Provide a relevance score."""
 
             content = response.choices[0].message.content
 
-            # Parse JSON response
-            try:
-                result = json.loads(content)
-                score = result.get("score", 0)
+            # With structured outputs, response is guaranteed to be valid JSON
+            result = json.loads(content)
+            score = result.get("score", 0)
 
-                # Ensure score is in valid range
-                if isinstance(score, (int, float)):
-                    return float(max(0, min(100, score)))
-                else:
-                    raise ValueError(f"Invalid score type: {type(score)}")
-
-            except json.JSONDecodeError as e:
-                raise ValueError(f"Failed to parse scoring response as JSON: {e}")
+            # Ensure score is in valid range
+            if isinstance(score, (int, float)):
+                return float(max(0, min(100, score)))
+            else:
+                raise ValueError(f"Invalid score type: {type(score)}")
 
         except asyncio.TimeoutError:
             raise TimeoutError(
