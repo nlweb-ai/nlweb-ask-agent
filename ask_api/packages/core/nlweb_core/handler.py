@@ -212,6 +212,7 @@ class NLWebHandler:
                 return elicitation_prompt
         except Exception as e:
             logger.error(f"Error during elicitation evaluation: {e}", exc_info=True)
+            raise
 
         return None
 

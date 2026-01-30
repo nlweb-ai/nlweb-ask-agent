@@ -9,10 +9,13 @@ using the SSE (Server-Sent Events) protocol.
 """
 
 import json
+import logging
 from typing import Dict, Any
 from aiohttp import web
 from .base import BaseInterface
 from nlweb_core.protocol.models import AskRequest
+
+logger = logging.getLogger(__name__)
 
 
 class HTTPSSEInterface(BaseInterface):
@@ -94,7 +97,7 @@ class HTTPSSEInterface(BaseInterface):
             return response
 
         except ValueError as e:
-            print(f"[ERROR] ValueError: {e}", file=sys.stderr)
+            logger.error(f"ValueError: {e}", exc_info=True)
             import traceback
 
             traceback.print_exc(file=sys.stderr)
@@ -121,7 +124,7 @@ class HTTPSSEInterface(BaseInterface):
             return response
 
         except Exception as e:
-            print(f"[ERROR] Unexpected exception: {e}", file=sys.stderr)
+            logger.error(f"Unexpected exception: {e}", exc_info=True)
             import traceback
 
             traceback.print_exc(file=sys.stderr)

@@ -21,23 +21,21 @@ TableServiceClient = None
 TableClient = None
 ResourceExistsError = None
 ResourceNotFoundError = None
-DefaultAzureCredential = None
+
 
 def _ensure_azure_imports():
     """Import Azure dependencies only when needed."""
     global _azure_imports_done, TableServiceClient, TableClient
-    global ResourceExistsError, ResourceNotFoundError, DefaultAzureCredential
+    global ResourceExistsError, ResourceNotFoundError
 
     if not _azure_imports_done:
         from azure.data.tables.aio import TableServiceClient as TSC, TableClient as TC
         from azure.core.exceptions import ResourceExistsError as REE, ResourceNotFoundError as RNFE
-        from azure.identity.aio import DefaultAzureCredential as DAC
 
         TableServiceClient = TSC
         TableClient = TC
         ResourceExistsError = REE
         ResourceNotFoundError = RNFE
-        DefaultAzureCredential = DAC
         _azure_imports_done = True
 
 
@@ -66,30 +64,44 @@ class AzureTableStorage(ConversationStorageInterface):
 
         self.config = config
         self.table_name = config.table_name or "conversations"
+        self.table_service_client = None
+        self.table_client = None
+        self._table_initialized = False
+        self._client_initialized = False
+
+        # Validate configuration
+        if not config.connection_string and not (config.host and config.auth_method == 'azure_ad'):
+            raise ValueError("Azure Table Storage requires either connection_string or (host + auth_method='azure_ad')")
+
+    async def _ensure_client(self):
+        """Create client if not already initialized."""
+        if self._client_initialized:
+            return
 
         # Support both connection string and Azure AD authentication
-        if config.connection_string:
+        if self.config.connection_string:
             # Use connection string (shared key)
             self.table_service_client = TableServiceClient.from_connection_string(
-                conn_str=config.connection_string
+                conn_str=self.config.connection_string
             )
-        elif config.host and config.auth_method == 'azure_ad':
-            # Use Azure AD (managed identity)
-            account_url = f"https://{config.host}.table.core.windows.net"
-            credential = DefaultAzureCredential()
+        elif self.config.host and self.config.auth_method == 'azure_ad':
+            # Use Azure AD (managed identity) with shared credential
+            from nlweb_core.azure_credentials import get_azure_credential
+            account_url = f"https://{self.config.host}.table.core.windows.net"
+            credential = await get_azure_credential()
             self.table_service_client = TableServiceClient(
                 endpoint=account_url,
                 credential=credential
             )
-        else:
-            raise ValueError("Azure Table Storage requires either connection_string or (host + auth_method='azure_ad')")
 
         # Get table client
         self.table_client = self.table_service_client.get_table_client(self.table_name)
-        self._table_initialized = False
+        self._client_initialized = True
 
     async def _ensure_table_exists(self):
         """Create the table if it doesn't exist (lazy initialization)."""
+        await self._ensure_client()
+
         if self._table_initialized:
             return
 

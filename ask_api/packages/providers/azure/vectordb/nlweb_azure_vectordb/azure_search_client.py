@@ -7,7 +7,6 @@ Azure AI Search Client - Interface for Azure AI Search operations.
 """
 
 import logging
-import sys
 import time
 from typing import List, Dict, Union, Optional, Any
 
@@ -21,6 +20,7 @@ CredentialType = Union[DefaultAzureCredential, AzureKeyCredential]
 from nlweb_core.embedding import get_embedding
 from nlweb_core.retriever import VectorDBClientInterface
 from nlweb_core.item_retriever import RetrievedItem
+from nlweb_core.azure_credentials import get_azure_credential
 
 
 logger = logging.getLogger(__name__)
@@ -83,21 +83,17 @@ class AzureSearchClient(VectorDBClientInterface):
         self._clients: Dict[str, SearchClient] = {}
         self._credential: Optional[CredentialType] = None
 
-    def _ensure_credential(self) -> CredentialType:
+    async def _ensure_credential(self) -> CredentialType:
         """Create credential if not already initialized."""
-        if self._credential is None:
-            if self.auth_method == "azure_ad":
-                self._credential = DefaultAzureCredential()
-            elif self.auth_method == "api_key":
-                assert self.api_key is not None  # Validated in __init__
-                self._credential = AzureKeyCredential(self.api_key)
-            else:
-                raise ValueError(
-                    f"Unsupported authentication method: {self.auth_method}"
-                )
-        return self._credential
+        if self.auth_method == "azure_ad":
+            return await get_azure_credential()
+        elif self.auth_method == "api_key":
+            assert self.api_key is not None  # Validated in __init__
+            return AzureKeyCredential(self.api_key)
+        else:
+            raise ValueError(f"Unsupported authentication method: {self.auth_method}")
 
-    def _ensure_client(self, index_name: Optional[str] = None) -> SearchClient:
+    async def _ensure_client(self, index_name: Optional[str] = None) -> SearchClient:
         """
         Get or create client for the specified index.
 
@@ -110,7 +106,7 @@ class AzureSearchClient(VectorDBClientInterface):
         index_name = index_name or self.default_index_name
 
         if index_name not in self._clients:
-            credential = self._ensure_credential()
+            credential = await self._ensure_credential()
             self._clients[index_name] = SearchClient(
                 endpoint=self.api_endpoint,
                 index_name=index_name,
@@ -183,7 +179,7 @@ class AzureSearchClient(VectorDBClientInterface):
             error_msg = f"Embedding dimension {len(vector_embedding)} not supported. Must be 1536."
             raise ValueError(error_msg)
 
-        search_client = self._ensure_client(index_name)
+        search_client = await self._ensure_client(index_name)
 
         # Handle both single site and multiple sites
         if isinstance(sites, str):
@@ -232,25 +228,16 @@ class AzureSearchClient(VectorDBClientInterface):
                     processed_results.append(processed_result)
                 except Exception as e:
                     logger.error(f"Error processing result {result}: {e}")
-                    print(f"Error processing result {result}: {e}", file=sys.stderr)
-                    continue
+                    raise
 
             return processed_results
 
         except Exception as e:
-            import traceback
-
-            traceback.print_exc()
-            return []
+            logger.error(f"Error during Azure Search operation: {e}")
+            raise e
 
     async def close(self):
         """Close all search clients and release resources."""
         for client in self._clients.values():
             await client.close()
         self._clients.clear()
-
-        if self._credential is not None and isinstance(
-            self._credential, DefaultAzureCredential
-        ):
-            await self._credential.close()
-        self._credential = None

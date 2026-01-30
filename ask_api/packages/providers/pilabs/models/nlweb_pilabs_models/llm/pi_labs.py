@@ -1,10 +1,13 @@
 import threading
+import logging
 from typing import Any, cast
 from dataclasses import dataclass
 import httpx
 import json
 
 from nlweb_core.scoring import ScoringLLMProvider, ScoringContext
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -49,6 +52,8 @@ class PiLabsClient:
             ],
             timeout=timeout,
         )
+        if resp.status_code != 200:
+            logger.error(f"Pi Labs scoring API error {resp.status_code}: {resp.text}")
         resp.raise_for_status()
         return [r.get("total_score", 0) * 100 for r in resp.json()]
 
@@ -189,5 +194,5 @@ class PiLabsScoringProvider(ScoringLLMProvider):
             )
             return cast(list[float | BaseException], scores)
         except Exception as e:
-            # Return the exception for all items
-            return [e] * len(contexts)
+            logger.error(f"Error during Pi Labs scoring operation: {e}")
+            raise

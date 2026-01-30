@@ -38,7 +38,7 @@ class ElicitationChecker:
         Returns:
             Default detection prompt
         """
-        readable_value = required_info.replace('_', ' ')
+        readable_value = required_info.replace("_", " ")
         return f"Does the query contain the required information: {readable_value}?"
 
     def _get_default_elicitation_prompt(self, required_info: str) -> str:
@@ -51,7 +51,7 @@ class ElicitationChecker:
         Returns:
             Default elicitation prompt to ask user
         """
-        readable_value = required_info.replace('_', ' ')
+        readable_value = required_info.replace("_", " ")
         # Generate more natural questions based on common patterns
         if required_info == "location":
             return "Where are you located?"
@@ -65,9 +65,7 @@ class ElicitationChecker:
             return f"What is your {readable_value}?"
 
     async def evaluate_elicitation(
-        self,
-        query: str,
-        required_info_configs: List[Dict[str, Any]]
+        self, query: str, required_info_configs: List[Dict[str, Any]]
     ) -> Optional[Dict[str, Any]]:
         """
         Evaluate required_info checks from matching intents using batch scoring.
@@ -106,10 +104,15 @@ class ElicitationChecker:
                 else:
                     # Keep the info with custom prompts if available
                     existing = all_required_info[required_info_value]
-                    if "detection_prompt" in info and "detection_prompt" not in existing:
+                    if (
+                        "detection_prompt" in info
+                        and "detection_prompt" not in existing
+                    ):
                         all_required_info[required_info_value] = info
 
-        logger.debug(f"Total unique required_info to evaluate: {len(all_required_info)}")
+        logger.debug(
+            f"Total unique required_info to evaluate: {len(all_required_info)}"
+        )
 
         if not all_required_info:
             return None
@@ -120,10 +123,7 @@ class ElicitationChecker:
 
         for required_info, info in required_info_list:
             # Build ScoringContext for scoring provider
-            contexts.append(ScoringContext(
-                query=query,
-                required_info=required_info
-            ))
+            contexts.append(ScoringContext(query=query, required_info=required_info))
 
         # Call scoring provider in batch with standard question
         scoring_question = "Does the query contain the required information?"
@@ -141,7 +141,9 @@ class ElicitationChecker:
                 result = results[i] if i < len(results) else None
                 # Handle exceptions or missing results - treat as missing info
                 if result is None or isinstance(result, BaseException):
-                    logger.warning(f"Required info '{required_info}' scoring failed: {result}")
+                    logger.warning(
+                        f"Required info '{required_info}' scoring failed: {result}"
+                    )
                     missing_info.append(info)
                     continue
                 score = result  # score is now a float directly
@@ -171,13 +173,14 @@ class ElicitationChecker:
 
         except Exception as e:
             logger.error(
-                f"Error during batch elicitation evaluation: {e}",
-                exc_info=True
+                f"Error during batch elicitation evaluation: {e}", exc_info=True
             )
             # On error, don't block the query - skip elicitation
-            return None
+            raise
 
-    async def _generate_follow_up(self, query: str, missing_info: List[Dict[str, Any]]) -> Dict[str, Any]:
+    async def _generate_follow_up(
+        self, query: str, missing_info: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """
         Generate structured elicitation response for missing required_info using LLM.
 
@@ -191,7 +194,8 @@ class ElicitationChecker:
         """
         # Collect missing required_info values (filter out None values)
         missing_values: List[str] = [
-            v for info in missing_info
+            v
+            for info in missing_info
             if (v := info.get("value")) is not None and isinstance(v, str)
         ]
 
@@ -207,11 +211,7 @@ class ElicitationChecker:
             question_text = self._get_default_elicitation_prompt(required_info_value)
 
             # Always use "text" type (config doesn't specify type or options)
-            question = {
-                "id": question_id,
-                "text": question_text,
-                "type": "text"
-            }
+            question = {"id": question_id, "text": question_text, "type": "text"}
 
             questions.append(question)
 
@@ -225,7 +225,7 @@ class ElicitationChecker:
                 schema=QuestionResponse,
                 level="low",  # Use low-tier LLM for cost efficiency
                 timeout=5,
-                max_length=200
+                max_length=200,
             )
 
             if results and len(results) > 0:
@@ -234,25 +234,27 @@ class ElicitationChecker:
                 if not isinstance(result, Exception):
                     composite_text = result.question.strip()
                     if composite_text:
-                        logger.debug(f"LLM-generated composite question: {composite_text}")
+                        logger.debug(
+                            f"LLM-generated composite question: {composite_text}"
+                        )
 
         except Exception as e:
-            logger.warning(f"Failed to generate LLM composite question: {e}, using default")
+            logger.warning(f"Failed to generate LLM composite question: {e}")
+            raise
 
         # Fallback composite text if LLM didn't generate one
         if not composite_text:
-            readable_values = [v.replace('_', ' ') for v in missing_values]
+            readable_values = [v.replace("_", " ") for v in missing_values]
             if len(missing_values) == 1:
-                composite_text = f"To help with your query about \"{query}\", could you tell me your {readable_values[0]}?"
+                composite_text = f'To help with your query about "{query}", could you tell me your {readable_values[0]}?'
             else:
-                values_str = ", ".join(readable_values[:-1]) + f" and {readable_values[-1]}"
-                composite_text = f"To provide the best results for \"{query}\", I need to know your {values_str}."
+                values_str = (
+                    ", ".join(readable_values[:-1]) + f" and {readable_values[-1]}"
+                )
+                composite_text = f'To provide the best results for "{query}", I need to know your {values_str}.'
 
         # Return v0.54 compliant elicitation structure
-        return {
-            "text": composite_text,
-            "questions": questions
-        }
+        return {"text": composite_text, "questions": questions}
 
     def _build_llm_composite_prompt(self, query: str, missing_values: List[str]) -> str:
         """

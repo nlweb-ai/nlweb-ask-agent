@@ -13,9 +13,9 @@ from typing import Optional, Dict, Any, List
 from urllib.parse import urlparse
 from azure.cosmos.aio import CosmosClient
 from azure.cosmos import exceptions
-from azure.identity.aio import DefaultAzureCredential
 
 from nlweb_core.config import get_config
+from nlweb_core.azure_credentials import get_azure_credential
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,6 @@ class SiteConfigLookup:
 
         # Client initialized lazily on first use
         self._client: Optional[CosmosClient] = None
-        self._credential: Optional[DefaultAzureCredential] = None
         self._container = None
 
         # Initialize cache
@@ -81,17 +80,17 @@ class SiteConfigLookup:
             f"cache_ttl={self.cache_ttl}s"
         )
 
-    def _ensure_client(self):
+    async def _ensure_client(self):
         """Create client if not already initialized."""
         if self._client is None:
             assert self._site_cfg.endpoint is not None
             assert self._site_cfg.database_name is not None
             assert self._site_cfg.container_name is not None
 
-            self._credential = DefaultAzureCredential()
+            credential = await get_azure_credential()
             self._client = CosmosClient(
                 self._site_cfg.endpoint,
-                credential=self._credential,
+                credential=credential,
             )
             database = self._client.get_database_client(self._site_cfg.database_name)
             self._container = database.get_container_client(
@@ -127,7 +126,7 @@ class SiteConfigLookup:
                 logger.debug(f"Cache expired for domain: {normalized_domain}")
                 del self.cache[cache_key]
 
-        self._ensure_client()
+        await self._ensure_client()
         assert self._container is not None
 
         # Cosmos DB lookup
@@ -180,7 +179,7 @@ class SiteConfigLookup:
                 f"Error fetching config for domain {normalized_domain}: {e}",
                 exc_info=True,
             )
-            return None
+            raise
 
     async def get_config_for_site_filter(
         self, site_filter: Optional[str]
@@ -208,15 +207,13 @@ class SiteConfigLookup:
                 logger.warning(
                     f"Failed to parse site filter as URL: {site_filter} - {e}"
                 )
-                return None
+                raise
         else:
             domain = site_filter
 
         return await self.get_config(domain)
 
-    async def get_item_type_for_ranking(
-        self, site_filter: Optional[str]
-    ) -> Optional[str]:
+    async def get_item_type_for_ranking(self, site_filter: str | None) -> str | None:
         """
         Get the primary item type for ranking purposes.
 
@@ -243,7 +240,7 @@ class SiteConfigLookup:
                 logger.warning(
                     f"Failed to parse site filter as URL: {site_filter} - {e}"
                 )
-                return None
+                raise
         else:
             domain = site_filter
 
@@ -293,6 +290,7 @@ class SiteConfigLookup:
                 await self.get_config(domain)
             except Exception as e:
                 logger.warning(f"Failed to prewarm cache for {domain}: {e}")
+                raise
 
         logger.info(f"Cache pre-warming complete: {len(self.cache)} configs loaded")
 
@@ -311,7 +309,7 @@ class SiteConfigLookup:
         if normalized_domain.startswith("www."):
             normalized_domain = normalized_domain[4:]
 
-        self._ensure_client()
+        await self._ensure_client()
         assert self._container is not None
 
         # Generate config ID
@@ -339,7 +337,7 @@ class SiteConfigLookup:
                 f"Error fetching full config for domain {normalized_domain}: {e}",
                 exc_info=True,
             )
-            return None
+            raise e
 
     async def get_config_type(
         self, domain: str, config_type: str
@@ -359,7 +357,7 @@ class SiteConfigLookup:
         if normalized_domain.startswith("www."):
             normalized_domain = normalized_domain[4:]
 
-        self._ensure_client()
+        await self._ensure_client()
         assert self._container is not None
 
         # Generate config ID
@@ -395,7 +393,7 @@ class SiteConfigLookup:
                 f"Error fetching {config_type} config for domain {normalized_domain}: {e}",
                 exc_info=True,
             )
-            return None
+            raise
 
     async def update_config_type(
         self, domain: str, config_type: str, config_data: Dict[str, Any]
@@ -418,7 +416,7 @@ class SiteConfigLookup:
         if normalized_domain.startswith("www."):
             normalized_domain = normalized_domain[4:]
 
-        self._ensure_client()
+        await self._ensure_client()
         assert self._container is not None
 
         # Generate config ID
@@ -491,7 +489,7 @@ class SiteConfigLookup:
         if normalized_domain.startswith("www."):
             normalized_domain = normalized_domain[4:]
 
-        self._ensure_client()
+        await self._ensure_client()
         assert self._container is not None
 
         # Generate config ID
@@ -567,7 +565,7 @@ class SiteConfigLookup:
         if normalized_domain.startswith("www."):
             normalized_domain = normalized_domain[4:]
 
-        self._ensure_client()
+        await self._ensure_client()
         assert self._container is not None
 
         # Generate config ID
@@ -602,7 +600,4 @@ class SiteConfigLookup:
         if self._client is not None:
             await self._client.close()
             self._client = None
-        if self._credential is not None:
-            await self._credential.close()
-            self._credential = None
         self._container = None

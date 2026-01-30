@@ -10,15 +10,14 @@ Backwards compatibility is not guaranteed at this time.
 
 import json
 import asyncio
-import threading
-from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from typing import List, Optional
 from openai import AsyncAzureOpenAI
 from nlweb_core.config import get_config
+from nlweb_core.azure_credentials import get_openai_token_provider
 
 
-# Global client with thread-safe initialization
-_client_lock = threading.Lock()
+# Global client with async-safe initialization
+_client_lock = asyncio.Lock()
 azure_openai_client = None
 
 def get_azure_openai_endpoint():
@@ -59,10 +58,10 @@ def get_azure_openai_api_version():
     default_version = "2024-10-21"
     return default_version
 
-def get_azure_openai_client():
+async def get_azure_openai_client():
     """Get or initialize the Azure OpenAI client."""
     global azure_openai_client
-    with _client_lock:  # Thread-safe client initialization
+    async with _client_lock:  # Async-safe client initialization
         if azure_openai_client is None:
             endpoint = get_azure_openai_endpoint()
             api_version = get_azure_openai_api_version()
@@ -74,10 +73,7 @@ def get_azure_openai_client():
 
             try:
                 if auth_method == "azure_ad":
-                    token_provider = get_bearer_token_provider(
-                        DefaultAzureCredential(),
-                        "https://cognitiveservices.azure.com/.default"
-                    )
+                    token_provider = await get_openai_token_provider()
 
                     azure_openai_client = AsyncAzureOpenAI(
                         azure_endpoint=endpoint,
@@ -104,26 +100,25 @@ def get_azure_openai_client():
             except Exception as e:
                 raise
 
-
     return azure_openai_client
 
 async def get_azure_embedding(
-    text: str, 
+    text: str,
     model: Optional[str] = None,
     timeout: float = 30.0
 ) -> List[float]:
     """
     Generate embeddings using Azure OpenAI.
-    
+
     Args:
         text: The text to embed
         model: The model deployment name to use (optional)
         timeout: Maximum time to wait for the embedding response in seconds
-        
+
     Returns:
         List of floats representing the embedding vector
     """
-    client = get_azure_openai_client()
+    client = await get_azure_openai_client()
     
     # If model is not provided, get from config
     if model is None:
@@ -156,16 +151,16 @@ async def get_azure_batch_embeddings(
 ) -> List[List[float]]:
     """
     Generate embeddings for multiple texts using Azure OpenAI.
-    
+
     Args:
         texts: List of texts to embed
         model: The model deployment name to use (optional)
         timeout: Maximum time to wait for the batch embedding response in seconds
-        
+
     Returns:
         List of embedding vectors, each a list of floats
     """
-    client = get_azure_openai_client()
+    client = await get_azure_openai_client()
     
     # If model is not provided, get from config
     if model is None:

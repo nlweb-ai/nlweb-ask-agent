@@ -9,10 +9,13 @@ and returns a single JSON response.
 """
 
 import json
+import logging
 from typing import Dict, Any
 from aiohttp import web
 from .base import BaseInterface
 from nlweb_core.protocol.models import AskRequest
+
+logger = logging.getLogger(__name__)
 
 
 class HTTPJSONInterface(BaseInterface):
@@ -134,6 +137,7 @@ class HTTPJSONInterface(BaseInterface):
             return web.json_response(result)
 
         except ValueError as e:
+            logger.error(f"[ERROR] ValueError: {e}", exc_info=True)
             return web.json_response(
                 {
                     "_meta": {"response_type": "Failure", "version": "0.54"},
@@ -142,6 +146,7 @@ class HTTPJSONInterface(BaseInterface):
                 status=400,
             )
         except Exception as e:
+            logger.error(f"[ERROR] ValueError: {e}", exc_info=True)
             return web.json_response(
                 {
                     "_meta": {"response_type": "Failure", "version": "0.54"},
