@@ -6,6 +6,7 @@ import pytest
 from unittest.mock import AsyncMock
 
 from nlweb_core.summarizer import ResultsSummarizer, SummaryResult
+from nlweb_core.llm_models import SummaryResponse
 
 
 class TestSummaryResult:
@@ -33,8 +34,8 @@ class TestResultsSummarizer:
 
     @pytest.fixture
     def mock_llm(self):
-        """Create a mock LLM callable."""
-        mock = AsyncMock(return_value={"summary": "Mock summary of results"})
+        """Create a mock LLM callable that returns SummaryResponse."""
+        mock = AsyncMock(return_value=SummaryResponse(summary="Mock summary of results"))
         return mock
 
     @pytest.fixture
@@ -128,7 +129,7 @@ class TestResultsSummarizer:
 
     async def test_summarize_returns_summary_result(self, mock_llm, sample_results):
         """Test summarize returns SummaryResult on success."""
-        mock_llm.return_value = {"summary": "LLM generated summary"}
+        mock_llm.return_value = SummaryResponse(summary="LLM generated summary")
         summarizer = ResultsSummarizer(llm=mock_llm)
         result = await summarizer.summarize("test query", sample_results)
 
@@ -152,22 +153,18 @@ class TestResultsSummarizer:
         with pytest.raises(Exception, match="LLM error"):
             await summarizer.summarize("test query", sample_results)
 
-    async def test_summarize_raises_when_response_missing_summary(
+    async def test_summarize_raises_when_llm_raises_validation_error(
         self, mock_llm, sample_results
     ):
-        """Test summarize raises ValueError when LLM response lacks summary key."""
-        mock_llm.return_value = {"other_key": "value"}
+        """Test summarize propagates validation errors from LLM."""
+        from nlweb_core.llm_exceptions import LLMValidationError
+
+        mock_llm.side_effect = LLMValidationError(
+            "LLM response failed validation",
+            raw_response={"other_key": "value"},
+            validation_error=None,
+        )
         summarizer = ResultsSummarizer(llm=mock_llm)
 
-        with pytest.raises(ValueError, match="LLM response missing 'summary' field"):
-            await summarizer.summarize("test query", sample_results)
-
-    async def test_summarize_raises_when_response_is_none(
-        self, mock_llm, sample_results
-    ):
-        """Test summarize raises ValueError when LLM returns None."""
-        mock_llm.return_value = None
-        summarizer = ResultsSummarizer(llm=mock_llm)
-
-        with pytest.raises(ValueError, match="LLM response missing 'summary' field"):
+        with pytest.raises(LLMValidationError):
             await summarizer.summarize("test query", sample_results)

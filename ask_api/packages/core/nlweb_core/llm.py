@@ -325,19 +325,19 @@ async def ask_llm_parallel(
 
 async def ask_llm(
     prompt: str,
-    schema: Dict[str, Any],
+    schema: Type[T],
     provider: Optional[str] = None,
     level: str = "low",
     timeout: int = 8,
     query_params: Optional[Dict[str, Any]] = None,
     max_length: int = 512,
-) -> Dict[str, Any]:
+) -> T:
     """
     Route an LLM request to the specified endpoint, with dispatch based on llm_type.
 
     Args:
         prompt: The text prompt to send to the LLM
-        schema: JSON schema that the response should conform to
+        schema: A Pydantic model class for type-safe responses
         provider: The LLM endpoint to use (if None, use model config based on level)
         level: The model tier to use ('low', 'high', or 'scoring')
         timeout: Request timeout in seconds
@@ -345,12 +345,16 @@ async def ask_llm(
         max_length: Maximum length of the response in tokens (default: 512)
 
     Returns:
-        Parsed JSON response from the LLM
+        Validated Pydantic model instance
 
     Raises:
         ValueError: If the endpoint is unknown or response cannot be parsed
         TimeoutError: If the request times out
+        LLMValidationError: If the response fails Pydantic validation
     """
+    # Convert Pydantic model to JSON schema for the provider
+    json_schema: Dict[str, Any] = schema.model_json_schema()
+
     # Get model config based on level (new format) or fall back to old format
     config = get_config()
     model_config = None
@@ -377,7 +381,7 @@ async def ask_llm(
         provider_name = provider or config.preferred_llm_endpoint
         provider_config = config.get_llm_provider(provider_name)
         if not provider_config or not provider_config.models:
-            return {}
+            raise ValueError("No valid LLM configuration found")
         llm_type = provider_config.llm_type
         model_id = getattr(
             provider_config.models, level if level in ["high", "low"] else "low"
@@ -390,7 +394,7 @@ async def ask_llm(
         # Get the provider instance based on llm_type
         try:
             provider_instance = _get_provider(llm_type, model_config)
-        except ValueError as e:
+        except ValueError:
             raise
 
         logger.debug(
@@ -407,12 +411,11 @@ async def ask_llm(
         )
         api_key_val = model_config.api_key if hasattr(model_config, "api_key") else None
 
-        # Simply call the provider's get_completion method, passing all config parameters
-        # Each provider should handle thread-safety internally
-        result = await asyncio.wait_for(
+        # Call the provider's get_completion method
+        raw_result = await asyncio.wait_for(
             provider_instance.get_completion(
                 prompt,
-                schema,
+                json_schema,
                 model=model_id,
                 timeout=timeout,
                 max_tokens=max_length,
@@ -428,7 +431,16 @@ async def ask_llm(
             ),
             timeout=timeout,
         )
-        return result
+
+        # Validate and return Pydantic model instance
+        try:
+            return schema.model_validate(raw_result)
+        except ValidationError as e:
+            raise LLMValidationError(
+                f"LLM response failed validation: {e}",
+                raw_response=raw_result,
+                validation_error=e,
+            )
 
     except asyncio.TimeoutError as e:
         # Timeout is a specific, well-known error - raise it directly

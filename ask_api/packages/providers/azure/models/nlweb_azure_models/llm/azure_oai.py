@@ -22,11 +22,7 @@ logger = logging.getLogger(__name__)
 
 def normalize_schema_for_structured_output(schema: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Normalize a schema to be compatible with Azure OpenAI Structured Outputs.
-
-    Handles two input formats:
-    1. Proper JSON Schema (has "type": "object" and "properties")
-    2. Informal dict schemas (e.g., {"field": "description"})
+    Normalize a Pydantic-generated JSON schema for Azure OpenAI Structured Outputs.
 
     Azure OpenAI Structured Outputs requirements:
     - Root must be "type": "object"
@@ -34,69 +30,21 @@ def normalize_schema_for_structured_output(schema: Dict[str, Any]) -> Dict[str, 
     - Must include "additionalProperties": false
 
     Args:
-        schema: Input schema (either proper JSON Schema or informal dict)
+        schema: JSON Schema from Pydantic's model_json_schema()
 
     Returns:
         Normalized JSON Schema compatible with Structured Outputs
     """
-    # Check if this is already a proper JSON Schema
-    if schema.get("type") == "object" and "properties" in schema:
-        # Already proper JSON Schema - ensure it has required fields for structured outputs
-        normalized = schema.copy()
+    normalized = schema.copy()
 
-        # Ensure additionalProperties is false (required for strict mode)
-        normalized["additionalProperties"] = False
+    # Ensure additionalProperties is false (required for strict mode)
+    normalized["additionalProperties"] = False
 
-        # Ensure all properties are in required array
-        if "properties" in normalized:
-            normalized["required"] = list(normalized["properties"].keys())
+    # Ensure all properties are in required array if not already set
+    if "properties" in normalized and "required" not in normalized:
+        normalized["required"] = list(normalized["properties"].keys())
 
-        return normalized
-
-    # Handle Pydantic-generated schemas (have $defs, title, etc.)
-    if "$defs" in schema or "title" in schema:
-        # This is a Pydantic model_json_schema() output
-        normalized = schema.copy()
-        normalized["additionalProperties"] = False
-        if "properties" in normalized and "required" not in normalized:
-            normalized["required"] = list(normalized["properties"].keys())
-        return normalized
-
-    # Convert informal schema to proper JSON Schema
-    # Informal format: {"field_name": "description of field"}
-    properties = {}
-    for key, value in schema.items():
-        if isinstance(value, str):
-            # Infer type from description keywords
-            description = value.lower()
-            if "integer" in description or "score" in description:
-                properties[key] = {"type": "integer", "description": value}
-            elif "number" in description or "float" in description:
-                properties[key] = {"type": "number", "description": value}
-            elif "boolean" in description or "true/false" in description:
-                properties[key] = {"type": "boolean", "description": value}
-            elif "array" in description or "list" in description:
-                properties[key] = {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": value,
-                }
-            else:
-                # Default to string
-                properties[key] = {"type": "string", "description": value}
-        elif isinstance(value, dict):
-            # Already a property definition
-            properties[key] = value
-        else:
-            # Fallback to string
-            properties[key] = {"type": "string"}
-
-    return {
-        "type": "object",
-        "properties": properties,
-        "required": list(properties.keys()),
-        "additionalProperties": False,
-    }
+    return normalized
 
 
 class AzureOpenAIProvider(GenerativeLLMProvider):

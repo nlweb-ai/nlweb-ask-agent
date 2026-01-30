@@ -14,7 +14,11 @@ Backwards compatibility is not guaranteed at this time.
 
 from dataclasses import dataclass
 from functools import partial
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Type
+
+from pydantic import BaseModel
+
+from nlweb_core.llm_models import SummaryResponse
 
 
 @dataclass
@@ -57,17 +61,19 @@ class ResultsSummarizer:
 Results:
 {results}"""
 
-    SCHEMA = {"summary": "A 2-3 sentence summary of the AI results"}
+    # Pydantic model for type-safe schema
+    SCHEMA: Type[SummaryResponse] = SummaryResponse
 
     def __init__(
         self,
-        llm: Callable[[str, Dict[str, Any]], Awaitable[Dict[str, Any]]],
+        llm: Callable[[str, Type[BaseModel]], Awaitable[BaseModel]],
         prompt_template: Optional[str] = None,
     ):
         """Initialize the summarizer.
 
         Args:
-            llm: Async callable with signature (prompt, schema) -> Dict.
+            llm: Async callable with signature (prompt, schema) -> response.
+                 Takes a Pydantic model class and returns a model instance.
                  Use functools.partial to bind level/timeout if needed.
             prompt_template: Optional custom prompt template. Should include
                             {query} and {results} placeholders.
@@ -128,10 +134,15 @@ Results:
         except Exception:
             raise
 
-        if response and "summary" in response:
-            return SummaryResult(summary=response["summary"], raw_response=response)
+        # Response is guaranteed to be a SummaryResponse Pydantic model
+        if not isinstance(response, SummaryResponse):
+            raise ValueError(
+                f"Expected SummaryResponse, got {type(response).__name__}"
+            )
 
-        raise ValueError("LLM response missing 'summary' field")
+        return SummaryResult(
+            summary=response.summary, raw_response={"summary": response.summary}
+        )
 
 
 def create_default_summarizer() -> ResultsSummarizer:
