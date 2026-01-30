@@ -64,7 +64,14 @@ class PiLabsScoringProvider(ScoringLLMProvider):
     _client_lock = threading.Lock()
     _client: PiLabsClient | None = None
 
-    def __init__(self, api_key: str, endpoint: str):
+    def __init__(self, api_key: str, endpoint: str, **kwargs):
+        """Initialize PiLabs scoring provider.
+
+        Args:
+            api_key: API key for authentication
+            endpoint: API endpoint URL
+            **kwargs: Additional parameters (model, api_version, auth_method) - ignored for Pi Labs
+        """
         self.api_key = api_key
         self.endpoint = endpoint
 

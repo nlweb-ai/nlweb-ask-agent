@@ -169,6 +169,9 @@ def get_scoring_provider() -> ScoringLLMProvider:
         provider = provider_class(
             api_key=model_config.api_key,
             endpoint=model_config.endpoint,
+            model=model_config.model,
+            api_version=model_config.api_version,
+            auth_method=model_config.auth_method,
         )
         _loaded_scoring_providers[llm_type] = cast(ScoringLLMProvider, provider)
         logger.debug(f"Loaded scoring provider: {llm_type} ({class_name})")
