@@ -7,6 +7,7 @@ import json
 import sys
 import threading
 import signal
+import hashlib
 from datetime import datetime
 from flask import Flask, jsonify
 from typing import Any
@@ -85,22 +86,44 @@ type_inherits = lambda parent, type_: (
 
 should_not_skip = lambda obj: (
     isinstance(obj, dict)
-    and ("@id" in obj or "url" in obj)  # Accept either @id or url
+    # Removed @id/url requirement - will generate hash-based ID if needed
     and not any(type_inherits(skipped, obj.get("@type")) for skipped in skip_types)
     and not ("@graph" in obj and "@id" not in obj)  # Exclude graph containers without @id
 )
 
 
-def normalize_object_id(obj: dict) -> dict:
+def normalize_object_id(obj: dict, file_url: str) -> dict:
     """
-    Ensure object has an @id field. If missing, use url field as @id.
+    Ensure object has an @id field.
+    Priority: @id > url > generated (file_url#hash)
+
     Modifies object in place and returns it.
 
-    This allows processing of schema.org objects that use 'url' instead of '@id'
-    as their identifier, which is common in real-world implementations.
+    Args:
+        obj: Schema.org object
+        file_url: URL of the file being processed
+
+    Returns:
+        Modified object with @id field
     """
-    if "@id" not in obj and "url" in obj:
+    if "@id" in obj:
+        # Already has @id, use it as-is
+        return obj
+
+    if "url" in obj:
+        # Has url field, use it as @id
         obj["@id"] = obj["url"]
+        return obj
+
+    # No @id or url - generate one from file_url + content hash
+    # Create stable hash of object content
+    content_str = json.dumps(obj, sort_keys=True, ensure_ascii=True)
+    content_hash = hashlib.sha256(content_str.encode('utf-8')).hexdigest()[:16]
+
+    # Use # as delimiter (standard URI fragment identifier)
+    obj["@id"] = f"{file_url}#{content_hash}"
+    logger.debug(f"Generated @id for entity: {obj['@id']}")
+
     return obj
 
 
@@ -112,7 +135,7 @@ is_graph = lambda item: (
 )
 
 
-def extract_objects_from_schema_file(content: str, content_type: str | None):
+def extract_objects_from_schema_file(content: str, content_type: str | None, file_url: str):
     ### Maybe each line of the schema file is a tab-separated pair: "URL\tJSON_STRING" ###
 
     if content_type and "tsv" in content_type.lower():
@@ -140,10 +163,11 @@ def extract_objects_from_schema_file(content: str, content_type: str | None):
                     )
                     continue
 
-                _url_part, json_str = parts
+                page_url, json_str = parts
                 parsed = json.loads(json_str)
                 for obj in filter(should_not_skip, parsed):
-                    normalize_object_id(obj)  # Ensure @id exists
+                    # Use page_url (first column) not file_url for TSV format
+                    normalize_object_id(obj, page_url)  # Ensure @id exists
                     if obj['@id'] not in unique_objects:
                         unique_objects[obj['@id']] = obj
 
@@ -151,7 +175,8 @@ def extract_objects_from_schema_file(content: str, content_type: str | None):
                 for obj in filter(is_graph, parsed):
                     graph_objects = list(filter(should_not_skip, obj["@graph"]))
                     for gobj in graph_objects:
-                        normalize_object_id(gobj)  # Ensure @id exists
+                        # Use page_url (first column) not file_url for TSV format
+                        normalize_object_id(gobj, page_url)  # Ensure @id exists
                         if gobj['@id'] not in unique_objects:
                             unique_objects[gobj['@id']] = gobj
             except json.JSONDecodeError as e:
@@ -176,7 +201,7 @@ def extract_objects_from_schema_file(content: str, content_type: str | None):
 
         # Skip objects which are invalid or masked in skip_types
         for obj in filter(should_not_skip, content_json):
-            normalize_object_id(obj)  # Ensure @id exists
+            normalize_object_id(obj, file_url)  # Ensure @id exists
             if obj['@id'] not in unique_objects:  # Keep first occurrence
                 unique_objects[obj['@id']] = obj
 
@@ -184,7 +209,7 @@ def extract_objects_from_schema_file(content: str, content_type: str | None):
         for obj in filter(is_graph, content_json):
             graph_objects = list(filter(should_not_skip, obj["@graph"]))
             for gobj in graph_objects:
-                normalize_object_id(gobj)  # Ensure @id exists
+                normalize_object_id(gobj, file_url)  # Ensure @id exists
                 if gobj['@id'] not in unique_objects:
                     unique_objects[gobj['@id']] = gobj
 
@@ -209,7 +234,7 @@ def extract_objects_from_schema_file(content: str, content_type: str | None):
     unique_objects = {}
 
     for obj in filter(should_not_skip, objects):
-        normalize_object_id(obj)  # Ensure @id exists
+        normalize_object_id(obj, file_url)  # Ensure @id exists
         if obj['@id'] not in unique_objects:  # Keep first occurrence
             unique_objects[obj['@id']] = obj
 
@@ -217,10 +242,10 @@ def extract_objects_from_schema_file(content: str, content_type: str | None):
     for obj in filter(is_graph, objects):
         graph_objects = list(filter(should_not_skip, obj["@graph"]))
         for gobj in graph_objects:
-            normalize_object_id(gobj)  # Ensure @id exists
+            normalize_object_id(gobj, file_url)  # Ensure @id exists
             if gobj['@id'] not in unique_objects:
                 unique_objects[gobj['@id']] = gobj
-        
+
     return list(unique_objects.keys()), list(unique_objects.values())
 
 
@@ -260,7 +285,7 @@ def extract_schema_data_from_url(url, content_type=None):
         response.raise_for_status()
         logger.info(f"Fetched {url}: {status_code} status, {content_length} bytes")
 
-        ids, objects = extract_objects_from_schema_file(response.text, content_type)
+        ids, objects = extract_objects_from_schema_file(response.text, content_type, url)
         num_objects = len(ids)
         logger.debug(f"Extracted {num_objects} IDs from array in {url}")
         return ids, objects
