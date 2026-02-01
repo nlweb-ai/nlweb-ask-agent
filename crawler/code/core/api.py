@@ -188,7 +188,7 @@ def delete_site(site_url):
     try:
         cursor = conn.cursor()
 
-        # Get all unique schema_maps for this site
+        # Get all unique schema_maps for this site (across all users)
         cursor.execute(
             """
             SELECT DISTINCT schema_map FROM files
@@ -204,9 +204,10 @@ def delete_site(site_url):
             files_removed = _delete_schema_map_internal(conn, site_url, schema_map_url)
             total_files_removed += files_removed
 
-        # Finally delete the site itself
+        # Finally delete the site itself (across all users)
         cursor.execute("DELETE FROM sites WHERE site_url = %s", (site_url,))
         conn.commit()
+        conn.close()
 
         return jsonify(
             {
@@ -215,17 +216,18 @@ def delete_site(site_url):
                 "files_queued_for_removal": total_files_removed,
             }
         )
-    finally:
-        # Rollback any uncommitted transactions before closing
+    except Exception as e:
+        # Rollback on error
         try:
             conn.rollback()
         except:
             pass
         conn.close()
+        raise
 
 
 def _delete_schema_map_internal(conn, site_url, schema_map_url):
-    """Internal function to delete files for a schema_map and queue removal jobs"""
+    """Internal function to delete files for a schema_map and queue removal jobs (across all users)"""
     cursor = conn.cursor()
 
     # Get all files for this schema_map before deleting
@@ -317,6 +319,7 @@ def delete_schema_file(site_url):
         # Use the internal function to delete files and queue removal jobs
         files_removed = _delete_schema_map_internal(conn, site_url, schema_map_url)
         conn.commit()
+        conn.close()
 
         return jsonify(
             {
@@ -325,13 +328,14 @@ def delete_schema_file(site_url):
                 "files_queued_for_removal": files_removed,
             }
         )
-    finally:
-        # Rollback any uncommitted transactions before closing
+    except Exception as e:
+        # Rollback on error
         try:
             conn.rollback()
         except:
             pass
         conn.close()
+        raise
 
 
 @app.route("/api/sites/<path:site_url>/vector-count", methods=["GET"])
