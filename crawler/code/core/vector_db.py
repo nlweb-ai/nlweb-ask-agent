@@ -8,7 +8,7 @@ import json
 import asyncio
 import hashlib
 from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from azure.search.documents import SearchClient
 from azure.search.documents.indexes import SearchIndexClient
 from azure.search.documents.indexes.models import (
@@ -305,7 +305,7 @@ class VectorDB:
             "site": site,
             "type": obj_type,
             "content": content,  # Empty - full objects in Cosmos DB
-            "timestamp": datetime.utcnow().isoformat() + "Z",  # Add Z for UTC timezone
+            "timestamp": datetime.now(timezone.utc).isoformat(),  # Timezone-aware UTC timestamp
             "embedding": embedding,
         }
 

@@ -1,3 +1,4 @@
+import feedparser
 import logging
 import requests
 import urllib.parse
@@ -8,8 +9,9 @@ import sys
 import threading
 import signal
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import Flask, jsonify
+from rss2schema import _entry_to_schema_article
 from typing import Any
 
 # Add parent directory to path for imports
@@ -29,7 +31,7 @@ logger = logging.getLogger("worker")
 # Global worker status
 worker_status = {
     "worker_id": os.getenv("HOSTNAME", "unknown"),
-    "started_at": datetime.utcnow().isoformat(),
+    "started_at": datetime.now(timezone.utc).isoformat(),
     "current_job": None,
     "total_jobs_processed": 0,
     "total_jobs_failed": 0,
@@ -136,6 +138,37 @@ is_graph = lambda item: (
 
 
 def extract_objects_from_schema_file(content: str, content_type: str | None, file_url: str):
+    ### Check if this is an RSS feed ###
+    if content_type and "rss" in content_type.lower():
+        logger.info(f"Parsing RSS feed content")
+        try:
+            # Parse RSS content directly (no download needed)
+            feed = feedparser.parse(content)
+
+            if not hasattr(feed, 'entries') or not feed.entries:
+                logger.warning(f"No entries found in RSS feed")
+                return [], []
+
+            logger.info(f"Parsed {len(feed.entries)} entries from RSS feed")
+
+            # Convert each entry to schema.org Article (same logic as rss2schema.py)
+            articles = []
+            for entry in feed.entries:
+                article = _entry_to_schema_article(entry, feed)
+                if article:
+                    articles.append(article)
+
+            # Extract IDs
+            ids = [article.get("@id") for article in articles if "@id" in article]
+            logger.info(f"Extracted {len(ids)} articles from RSS feed")
+
+            return ids, articles
+        except Exception as e:
+            logger.error(f"Error parsing RSS feed: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
+            return [], []
+
     ### Maybe each line of the schema file is a tab-separated pair: "URL\tJSON_STRING" ###
 
     if content_type and "tsv" in content_type.lower():
@@ -332,58 +365,117 @@ def process_job(conn, job):
                 f"========== Starting process_file for {job['file_url']} =========="
             )
             logger.info(f"Job details - site: {job.get('site')}, user_id: {user_id}")
-            # Check if the file still exists in the files table for this user
+
+            # Check if the file still exists and get its current hash
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT file_url FROM files WHERE file_url = %s AND user_id = %s",
-                (job["file_url"], user_id),
+                "SELECT file_hash FROM files WHERE file_url = %s",
+                (job["file_url"],),
             )
-            if not cursor.fetchone():
+            result = cursor.fetchone()
+            if not result:
                 logger.info(
                     f"File no longer exists in database, skipping: {job['file_url']}"
                 )
                 return True  # Job completed successfully (file was deleted)
 
-            logger.info(f"File exists in database, proceeding with extraction")
+            stored_hash = result[0]
+            logger.info(f"File exists in database (stored hash: {stored_hash or 'NULL'})")
 
-            # Use existing extract_schema_data_from_url which returns (ids, objects)
-            logger.info(f"Calling extract_schema_data_from_url for {job['file_url']}")
-            extraction_start = time.time()
+            # Download the file content
+            logger.info(f"Downloading file: {job['file_url']}")
             try:
-                ids, objects = extract_schema_data_from_url(
-                    job["file_url"], job.get("content_type")
-                )
-                extraction_time = time.time() - extraction_start
-                logger.info(f"⏱️  Extraction took {extraction_time:.2f}s")
-            except Exception as e:
-                error_msg = f"Failed to extract schema data: {str(e)}"
-                logger.error(f"Error extracting schema data: {error_msg}")
+                response = requests.get(job["file_url"], timeout=30)
+                response.raise_for_status()
+                file_content = response.text
+                content_type = job.get("content_type")
+
+                # For RSS: parse first, then hash the stable schema.org objects
+                # For TSV/JSON: hash raw content (already stable schema.org format)
+                if content_type and "rss" in content_type.lower():
+                    logger.info(f"RSS feed detected - parsing first before hashing")
+                    # Parse RSS to schema.org objects
+                    ids, objects = extract_objects_from_schema_file(file_content, content_type, job["file_url"])
+
+                    # Hash the stable schema.org objects (sorted for consistency)
+                    objects_json = json.dumps(objects, sort_keys=True, ensure_ascii=True)
+                    current_hash = hashlib.sha256(objects_json.encode('utf-8')).hexdigest()
+                    logger.info(f"Calculated hash from {len(objects)} schema.org objects: {current_hash}")
+
+                    # Compare hashes - skip if unchanged
+                    if stored_hash and current_hash == stored_hash:
+                        logger.info(f"RSS articles unchanged (hash match), skipping processing")
+                        return True  # Job completed successfully (no work needed)
+
+                    logger.info(f"RSS articles changed or new file, proceeding with processing")
+                    # Skip extraction below since we already parsed
+                    skip_extraction = True
+                else:
+                    # For TSV/JSON: hash raw content
+                    current_hash = hashlib.sha256(file_content.encode('utf-8')).hexdigest()
+                    logger.info(f"Calculated content hash: {current_hash}")
+
+                    # Compare hashes - skip if unchanged
+                    if stored_hash and current_hash == stored_hash:
+                        logger.info(f"File content unchanged (hash match), skipping processing")
+                        return True  # Job completed successfully (no work needed)
+
+                    logger.info(f"File content changed or new file, proceeding with processing")
+                    skip_extraction = False
+
+            except requests.RequestException as e:
+                error_msg = f"Failed to download file: {str(e)}"
+                logger.error(error_msg)
                 db.log_processing_error(
                     conn,
                     job["file_url"],
                     user_id,
-                    "extraction_failed",
+                    "download_failed",
                     error_msg,
                     str(e.__class__.__name__),
                 )
                 return False
 
+            # Extract entities from file content (skip if already done for RSS)
+            if not skip_extraction:
+                logger.info(f"Extracting entities from file")
+                extraction_start = time.time()
+                try:
+                    ids, objects = extract_objects_from_schema_file(file_content, content_type, job["file_url"])
+                    extraction_time = time.time() - extraction_start
+                    logger.info(f"⏱️  Extraction took {extraction_time:.2f}s")
+                except Exception as e:
+                    error_msg = f"Failed to extract schema data: {str(e)}"
+                    logger.error(f"Error extracting schema data: {error_msg}")
+                    db.log_processing_error(
+                        conn,
+                        job["file_url"],
+                        user_id,
+                        "extraction_failed",
+                        error_msg,
+                        str(e.__class__.__name__),
+                    )
+                    # Continue processing - update hash to prevent retrying
+            else:
+                logger.info(f"Using already extracted entities from RSS parsing ({len(objects)} objects)")
+
             logger.info(
                 f"Extracted {len(ids)} IDs, {len(objects)} objects from {job['file_url']}"
             )
-            # Log if no IDs extracted
-            if len(ids) == 0:
-                error_msg = "No schema.org objects with @id found in file"
+
+            # Log if no entities extracted
+            if len(objects) == 0:
+                error_msg = "No schema.org objects found in file"
                 logger.warning(error_msg)
                 db.log_processing_error(
                     conn,
                     job["file_url"],
                     user_id,
-                    "no_ids_found",
+                    "no_objects_found",
                     error_msg,
-                    f"Objects: {len(objects)}",
+                    "",
                 )
-                # Continue processing - this might not be an error for some files
+                # Continue processing - update hash to prevent retrying
 
             if len(ids) > 0:
                 logger.debug(f"Sample IDs: {list(ids)[:3]}")
@@ -392,112 +484,77 @@ def process_job(conn, job):
                     f"Sample object @type: {objects[0].get('@type', 'unknown')}"
                 )
 
-            # Update database state with the extracted IDs
-            # NOTE: This happens within a transaction that will be rolled back if Vector DB or Cosmos DB fails
-            logger.info(f"Updating file_ids in database...")
-            db_update_start = time.time()
-            added_ids, removed_ids = db.update_file_ids(
-                conn, job["file_url"], user_id, set(ids)
-            )
-            db_update_time = time.time() - db_update_start
-
-            logger.info(
-                f"DB update: {len(added_ids)} added, {len(removed_ids)} removed (took {db_update_time:.2f}s)"
-            )
-            if len(added_ids) > 0:
-                logger.debug(f"Sample added IDs: {list(added_ids)[:3]}")
-
-            # Collect items to batch add to vector DB
-            ref_count_start = time.time()
+            # Prepare items to upsert to Vector/Cosmos DBs
+            # No reference counting - just upsert everything
+            logger.info(f"Preparing {len(objects)} objects for upsert")
+            prep_start = time.time()
             items_to_add = []
-            skipped_existing = 0
             skipped_breadcrumbs = 0
 
-            # Batch query all ref counts at once instead of N queries
-            batch_query_start = time.time()
-            ref_counts = db.batch_count_id_references(conn, list(added_ids), user_id)
-            batch_query_time = time.time() - batch_query_start
-            logger.info(f"  → Batch ref count query took {batch_query_time:.2f}s")
+            for obj in objects:
+                # Skip BreadcrumbList items
+                obj_type = obj.get("@type", "")
+                if obj_type == "BreadcrumbList" or (
+                    isinstance(obj_type, list) and "BreadcrumbList" in obj_type
+                ):
+                    skipped_breadcrumbs += 1
+                    logger.debug(f"Skipping BreadcrumbList item: {obj.get('@id')}")
+                    continue
 
-            # Build a dictionary for O(1) object lookups instead of O(N) linear search
-            dict_build_start = time.time()
-            objects_by_id = {obj["@id"]: obj for obj in objects if "@id" in obj}
-            dict_build_time = time.time() - dict_build_start
-            logger.info(f"  → Building objects dictionary took {dict_build_time:.2f}s ({len(objects_by_id)} objects)")
+                complete_obj = augment_object(obj)
+                items_to_add.append((obj["@id"], job["site"], complete_obj))
 
-            loop_start = time.time()
-            for id in added_ids:
-                ref_count = ref_counts.get(id, 0)
-                if ref_count == 1:
-                    # First occurrence of this ID - prepare for batch add to vector DB
-                    obj = objects_by_id.get(id)
-                    if obj:
-                        # Skip BreadcrumbList items
-                        obj_type = obj.get("@type", "")
-                        if obj_type == "BreadcrumbList" or (
-                            isinstance(obj_type, list) and "BreadcrumbList" in obj_type
-                        ):
-                            skipped_breadcrumbs += 1
-                            logger.info(f"Skipping BreadcrumbList item: {id}")
-                            continue
-                        complete_obj = augment_object(obj)
-                        items_to_add.append((id, job["site"], complete_obj))
-                    else:
-                        logger.warning(f"Could not find object for ID {id}")
-                else:
-                    skipped_existing += 1
+            prep_time = time.time() - prep_start
+            logger.info(f"  → Prepared {len(items_to_add)} items in {prep_time:.2f}s")
 
-            loop_time = time.time() - loop_start
-            logger.info(f"  → Processing loop took {loop_time:.2f}s")
-
-            if skipped_existing > 0:
-                logger.info(
-                    f"Skipped {skipped_existing} IDs that already exist in other files"
-                )
             if skipped_breadcrumbs > 0:
                 logger.info(f"Skipped {skipped_breadcrumbs} BreadcrumbList items")
 
-            ref_count_time = time.time() - ref_count_start
-            logger.info(f"⏱️  Ref count checking took {ref_count_time:.2f}s")
+            # Update file metadata in database (hash, item count, and content_type)
+            logger.info(f"Updating file metadata (hash, item count, and content_type)")
+            cursor.execute(
+                """UPDATE files
+                   SET last_read_time = GETUTCDATE(),
+                       number_of_items = %s,
+                       file_hash = %s,
+                       content_type = %s
+                   WHERE file_url = %s""",
+                (len(objects), current_hash, job.get("content_type"), job["file_url"]),
+            )
 
             # Commit SQL changes BEFORE Cosmos/Vector operations
-            # This reduces SQL transaction time from 60-70s to ~5s
             # Trade-off: If Cosmos/Vector fail, SQL is already committed (eventual consistency)
             conn.commit()
-            logger.info("Committed SQL changes (IDs table updated)")
+            logger.info("Committed SQL changes (file metadata updated)")
 
             # CRITICAL: Close connection immediately after commit to free up connection pool
-            # Connection was holding for ~60s during Cosmos/Vector operations
-            # Now connection holds for only ~5s (just SQL operations)
             conn.close()
             logger.info("Closed database connection after SQL commit")
             conn = None
 
-            # Batch add to Cosmos DB first, then Vector DB
-            # Order matters: Cosmos first ensures search results are always enrichable
-            # If Vector fails after Cosmos succeeds: item not searchable (invisible) ✓
-            # If Cosmos fails before Vector: neither operation happens ✓
+            # Upsert to Cosmos DB and Vector DB (merge/overwrite mode)
+            # No reference counting - entities are simply upserted by @id
             if items_to_add:
                 logger.info(
-                    f"Preparing to batch add {len(items_to_add)} items to Cosmos DB and Vector DB"
+                    f"Upserting {len(items_to_add)} items to Cosmos DB and Vector DB"
                 )
                 logger.debug(
-                    f"Sample items to add: {[(id, site) for id, site, _ in items_to_add[:3]]}"
+                    f"Sample items: {[(id, site) for id, site, _ in items_to_add[:3]]}"
                 )
 
-                # Step 1: Add to Cosmos DB (full objects) - SOURCE OF TRUTH
-                logger.info(f"Calling cosmos_db_batch_add...")
+                # Step 1: Upsert to Cosmos DB (full objects) - SOURCE OF TRUTH
+                logger.info(f"Calling cosmos_db_batch_add (upsert mode)...")
                 cosmos_db_start = time.time()
                 try:
                     # Extract just the objects from items_to_add
-                    objects_to_add = [obj for _, _, obj in items_to_add]
-                    cosmos_db_batch_add(objects_to_add)
+                    objects_to_upsert = [obj for _, _, obj in items_to_add]
+                    cosmos_db_batch_add(objects_to_upsert)
                     cosmos_db_time = time.time() - cosmos_db_start
                     logger.info(
-                        f"⏱️  Cosmos DB batch add completed for {len(objects_to_add)} items in {cosmos_db_time:.2f}s"
+                        f"⏱️  Cosmos DB upsert completed for {len(objects_to_upsert)} items in {cosmos_db_time:.2f}s"
                     )
                 except Exception as e:
-                    error_msg = f"Failed to add items to Cosmos DB: {str(e)}"
+                    error_msg = f"Failed to upsert items to Cosmos DB: {str(e)}"
                     logger.error(error_msg)
                     import traceback
 
@@ -509,7 +566,7 @@ def process_job(conn, job):
                             error_conn,
                             job["file_url"],
                             user_id,
-                            "cosmos_db_add_failed",
+                            "cosmos_db_upsert_failed",
                             error_msg,
                             str(e.__class__.__name__),
                         )
@@ -517,26 +574,22 @@ def process_job(conn, job):
                         error_conn.close()
                     except Exception as log_err:
                         logger.error(f"Failed to log error to database: {log_err}")
-                    # SQL already committed - cannot rollback
-                    # Data inconsistency: SQL has IDs but Cosmos DB doesn't have objects
-                    logger.warning(
-                        f"Cosmos DB write failed but SQL already committed - data may be inconsistent"
-                    )
-                    return False  # Fail the job - manual reconciliation may be needed
+                    logger.warning(f"Cosmos DB upsert failed - hash updated but objects not stored")
+                    return False
 
-                # Step 2: Add to Vector DB (searchable index)
+                # Step 2: Upsert to Vector DB (searchable index)
                 from vector_db import vector_db_batch_add
 
-                logger.info(f"Calling vector_db_batch_add...")
+                logger.info(f"Calling vector_db_batch_add (upsert mode)...")
                 vector_db_start = time.time()
                 try:
                     vector_db_batch_add(items_to_add)
                     vector_db_time = time.time() - vector_db_start
                     logger.info(
-                        f"⏱️  Vector DB batch add completed for {len(items_to_add)} items in {vector_db_time:.2f}s"
+                        f"⏱️  Vector DB upsert completed for {len(items_to_add)} items in {vector_db_time:.2f}s"
                     )
                 except Exception as e:
-                    error_msg = f"Failed to add items to vector DB: {str(e)}"
+                    error_msg = f"Failed to upsert items to Vector DB: {str(e)}"
                     logger.error(error_msg)
                     import traceback
 
@@ -548,7 +601,7 @@ def process_job(conn, job):
                             error_conn,
                             job["file_url"],
                             user_id,
-                            "vector_db_add_failed",
+                            "vector_db_upsert_failed",
                             error_msg,
                             error_details,
                         )
@@ -556,110 +609,12 @@ def process_job(conn, job):
                         error_conn.close()
                     except Exception as log_err:
                         logger.error(f"Failed to log error to database: {log_err}")
-                    # SQL and Cosmos already committed - cannot rollback
-                    # Data inconsistency: Items in SQL+Cosmos but not in Vector DB (not searchable)
-                    # This is acceptable - items exist but aren't discoverable yet
-                    logger.warning(
-                        f"Vector DB write failed but SQL+Cosmos already committed - items not searchable"
-                    )
-                    return False  # Fail the job - can re-index from Cosmos later
+                    logger.warning(f"Vector DB upsert failed - items in Cosmos but not searchable")
+                    return False
             else:
-                logger.info(
-                    f"No new items to add to vector DB and Cosmos DB (all IDs already exist)"
-                )
+                logger.info(f"No items to upsert (all were BreadcrumbList or invalid)")
 
-            # Collect IDs to batch delete from vector DB
-            ids_to_delete = []
-            if removed_ids:
-                # Open fresh connection for ref count check (read-only operation)
-                ref_count_conn = db.get_connection()
-                try:
-                    # Batch query all ref counts at once
-                    removal_ref_counts = db.batch_count_id_references(ref_count_conn, list(removed_ids), user_id)
-                    for id in removed_ids:
-                        ref_count = removal_ref_counts.get(id, 0)
-                        if ref_count == 0:
-                            # ID no longer exists in any file - prepare for batch delete
-                            ids_to_delete.append(id)
-                finally:
-                    ref_count_conn.close()
-                    logger.info("Closed database connection after ref count check")
-
-            # Batch delete from vector DB and Cosmos DB
-            if ids_to_delete:
-                logger.info(
-                    f"Batch deleting {len(ids_to_delete)} items from vector DB and Cosmos DB"
-                )
-                from vector_db import vector_db_batch_delete
-
-                try:
-                    vector_db_batch_delete(ids_to_delete)
-                    logger.info(
-                        f"Successfully deleted {len(ids_to_delete)} items from vector DB"
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to delete items from vector DB: {e}")
-                    import traceback
-
-                    traceback.print_exc()
-                    # Open fresh connection only for error logging
-                    try:
-                        error_conn = db.get_connection()
-                        db.log_processing_error(
-                            error_conn,
-                            job["file_url"],
-                            user_id,
-                            "vector_db_delete_failed",
-                            str(e),
-                            str(e.__class__.__name__),
-                        )
-                        error_conn.commit()
-                        error_conn.close()
-                    except Exception as log_err:
-                        logger.error(f"Failed to log error to database: {log_err}")
-                    # SQL already committed - cannot rollback
-                    # Data inconsistency: IDs removed from SQL but still in Vector DB (ghost search results)
-                    logger.warning(
-                        f"Vector DB delete failed but SQL already committed - ghost search results may exist"
-                    )
-                    return False  # Fail the job - manual cleanup may be needed
-
-                # Delete from Cosmos DB
-                logger.info(f"Calling cosmos_db_batch_delete...")
-                try:
-                    cosmos_db_batch_delete(ids_to_delete)
-                    logger.info(
-                        f"Successfully completed cosmos_db_batch_delete for {len(ids_to_delete)} items"
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to delete items from Cosmos DB: {e}")
-                    import traceback
-
-                    traceback.print_exc()
-                    # Open fresh connection only for error logging
-                    try:
-                        error_conn = db.get_connection()
-                        db.log_processing_error(
-                            error_conn,
-                            job["file_url"],
-                            user_id,
-                            "cosmos_db_delete_failed",
-                            str(e),
-                            str(e.__class__.__name__),
-                        )
-                        error_conn.commit()
-                        error_conn.close()
-                    except Exception as log_err:
-                        logger.error(f"Failed to log error to database: {log_err}")
-                    # SQL and Vector already processed - cannot rollback
-                    # Data inconsistency: IDs removed from SQL/Vector but still in Cosmos (orphaned storage)
-                    logger.warning(
-                        f"Cosmos DB delete failed but SQL already committed - orphaned Cosmos records may exist"
-                    )
-                    return False  # Fail the job - manual cleanup may be needed
-
-            # SQL transaction already committed earlier (no-op if called again)
-            # All Vector/Cosmos operations completed
+            # No deletion tracking - orphaned entities will be cleaned up by batch job
 
             # Update the site's last_processed timestamp (Note: may need user_id in future)
             logger.info(f"Updating site last_processed timestamp for {job['site']}")
@@ -669,7 +624,7 @@ def process_job(conn, job):
             # Open fresh connection for this final cleanup operation
             try:
                 cleanup_conn = db.get_connection()
-                db.clear_file_errors(cleanup_conn, job["file_url"], user_id)
+                db.clear_file_errors(cleanup_conn, job["file_url"])
                 cleanup_conn.commit()
                 cleanup_conn.close()
             except Exception as e:
@@ -686,60 +641,92 @@ def process_job(conn, job):
             logger.info(f"Processing removal: {job['file_url']}")
             cursor = conn.cursor()
 
-            # Get all IDs for this file (across ALL users)
+            # Get site_url for domain matching
             cursor.execute(
-                "SELECT DISTINCT id FROM ids WHERE file_url = %s", (job["file_url"],)
+                "SELECT site_url FROM files WHERE file_url = %s",
+                (job["file_url"],)
             )
-            ids = {row[0] for row in cursor.fetchall()}
-            logger.info(f"Found {len(ids)} IDs to check for removal")
+            result = cursor.fetchone()
+            if not result:
+                logger.info(f"File not found in database: {job['file_url']}")
+                return True  # Already deleted
 
-            # Remove all ID mappings for this file (for ALL users)
-            cursor.execute("DELETE FROM ids WHERE file_url = %s", (job["file_url"],))
+            site_url = result[0]
+            logger.info(f"Deleting entities for site: {site_url}")
 
-            # Check each ID to see if it's gone globally (across ALL users)
+            # Try to download and extract entities from the file
+            # Use the same extraction logic as insertion (auto-detects format)
+            # If file is dead, we accept orphaned data (cleanup job will handle)
             ids_to_delete = []
-            for id in ids:
-                cursor.execute("SELECT COUNT(*) FROM ids WHERE id = %s", (id,))
-                ref_count = cursor.fetchone()[0]
-                if ref_count == 0:
-                    # ID no longer exists in any file - will remove from Vector DB and Cosmos DB
-                    ids_to_delete.append(id)
+            try:
+                logger.info(f"Attempting to extract entities from file")
+                # Use extract_schema_data_from_url (same as insertion)
+                # It auto-detects TSV/JSON/RSS format
+                ids, objects = extract_schema_data_from_url(job["file_url"], job.get("content_type"))
+                logger.info(f"Extracted {len(ids)} entities from file")
 
-            # Delete the file from the files table (for ALL users)
+                # Filter entities by domain match using simple substring check
+                ids_skipped = []
+                site_url_lower = site_url.lower()
+
+                for entity_id in ids:
+                    entity_id_lower = entity_id.lower()
+
+                    # Check if entity_id contains the site domain with proper URL delimiters
+                    # Handles both with and without www prefix
+                    if any([
+                        f"://{site_url_lower}/" in entity_id_lower,
+                        f"://www.{site_url_lower}/" in entity_id_lower,
+                        f"://{site_url_lower}?" in entity_id_lower,
+                        f"://www.{site_url_lower}?" in entity_id_lower,
+                        f"://{site_url_lower}#" in entity_id_lower,
+                        f"://www.{site_url_lower}#" in entity_id_lower,
+                    ]):
+                        ids_to_delete.append(entity_id)
+                        logger.debug(f"Will delete: {entity_id} (domain match)")
+                    else:
+                        ids_skipped.append(entity_id)
+                        logger.debug(f"Skipping: {entity_id} (different domain)")
+
+                logger.info(f"Will delete {len(ids_to_delete)} entities matching domain {site_url}")
+                if ids_skipped:
+                    logger.info(f"Skipped {len(ids_skipped)} IDs with different domains")
+
+            except requests.RequestException as e:
+                logger.warning(f"Could not download file (URL dead?): {e}")
+                logger.warning(f"Accepting orphaned data - cleanup job will handle")
+                # Continue to delete file record even if entities can't be removed
+            except Exception as e:
+                logger.error(f"Error extracting entities: {e}")
+                import traceback
+                traceback.print_exc()
+                # Continue anyway
+
+            # Delete the file record from files table
             cursor.execute("DELETE FROM files WHERE file_url = %s", (job["file_url"],))
 
             # Commit SQL changes BEFORE external operations (eventual consistency)
-            # This reduces SQL transaction time from ~60s to ~5s
-            # Trade-off: If Vector/Cosmos fail, SQL is already committed (eventual consistency)
             conn.commit()
-            logger.info(f"Committed SQL changes (IDs and file deleted)")
+            logger.info(f"Committed SQL changes (file record deleted)")
 
-            # Close connection immediately after commit to free up connection pool
+            # Close connection immediately after commit
             conn.close()
             logger.info("Closed database connection after SQL commit")
             conn = None
 
-            # Delete from Vector DB first (make unsearchable), then Cosmos DB (remove storage)
-            # Order matters: Vector first ensures items become unsearchable immediately
-            # If Vector fails: items invisible in search but still in Cosmos (just wasted storage)
-            # If Cosmos fails after Vector: items removed from search but orphaned in storage
+            # Delete entities from Vector DB and Cosmos DB (best effort)
             if ids_to_delete:
-                logger.info(
-                    f"Preparing to remove {len(ids_to_delete)} items from Vector DB and Cosmos DB"
-                )
+                logger.info(f"Deleting {len(ids_to_delete)} entities from Vector DB and Cosmos DB")
 
                 # Step 1: Delete from Vector DB (make unsearchable)
                 from vector_db import vector_db_batch_delete
 
                 try:
                     vector_db_batch_delete(ids_to_delete)
-                    logger.info(
-                        f"Successfully deleted {len(ids_to_delete)} items from Vector DB"
-                    )
+                    logger.info(f"Successfully deleted {len(ids_to_delete)} items from Vector DB")
                 except Exception as e:
                     logger.error(f"Failed to delete from Vector DB: {e}")
                     import traceback
-
                     traceback.print_exc()
                     # Open fresh connection only for error logging
                     try:
@@ -757,22 +744,16 @@ def process_job(conn, job):
                     except Exception as log_err:
                         logger.error(f"Failed to log error to database: {log_err}")
                     # SQL already committed - cannot rollback
-                    # Data inconsistency: IDs removed from SQL but still in Vector DB (ghost search results)
-                    logger.warning(
-                        f"Vector DB delete failed but SQL already committed - ghost search results may exist"
-                    )
-                    return False  # Fail the job - can run cleanup later
+                    logger.warning(f"Vector DB delete failed - orphaned search results may exist")
+                    return False  # Fail the job - cleanup later
 
                 # Step 2: Delete from Cosmos DB (remove storage)
                 try:
                     cosmos_db_batch_delete(ids_to_delete)
-                    logger.info(
-                        f"Successfully removed {len(ids_to_delete)} items from Cosmos DB"
-                    )
+                    logger.info(f"Successfully deleted {len(ids_to_delete)} items from Cosmos DB")
                 except Exception as e:
                     logger.error(f"Failed to delete from Cosmos DB: {e}")
                     import traceback
-
                     traceback.print_exc()
                     # Open fresh connection only for error logging
                     try:
@@ -789,16 +770,12 @@ def process_job(conn, job):
                         error_conn.close()
                     except Exception as log_err:
                         logger.error(f"Failed to log error to database: {log_err}")
-                    # SQL and Vector already committed - cannot rollback
-                    # Data inconsistency: IDs removed from SQL/Vector but still in Cosmos (orphaned storage)
-                    logger.warning(
-                        f"Cosmos DB delete failed but SQL/Vector already committed - orphaned Cosmos records may exist"
-                    )
-                    return False  # Fail the job - can run cleanup later
+                    logger.warning(f"Cosmos DB delete failed - orphaned storage may exist")
+                    return False  # Fail the job - cleanup later
 
-                logger.info(
-                    f"Removed {len(ids_to_delete)} items from Vector DB and Cosmos DB"
-                )
+                logger.info(f"Successfully removed {len(ids_to_delete)} entities")
+            else:
+                logger.info(f"No entities to delete (file was dead or no matching entities)")
 
             return True
 
@@ -947,7 +924,7 @@ def worker_loop():
                     success = False
 
                 # Update status
-                worker_status["last_job_at"] = datetime.utcnow().isoformat()
+                worker_status["last_job_at"] = datetime.now(timezone.utc).isoformat()
                 worker_status["last_job_status"] = "success" if success else "failed"
                 worker_status["current_job"] = None
 

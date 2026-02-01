@@ -7,7 +7,7 @@ import os
 import json
 import abc
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, Callable
 
 import log
@@ -64,7 +64,7 @@ class FileQueue(QueueInterface):
     def send_message(self, message: Dict[Any, Any]) -> bool:
         """Write a job file to the queue directory"""
         try:
-            job_id = f"job-{datetime.utcnow().strftime('%Y%m%d-%H%M%S-%f')}.json"
+            job_id = f"job-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')}.json"
             temp_path = os.path.join(self.queue_dir, f".tmp-{job_id}")
             final_path = os.path.join(self.queue_dir, job_id)
 

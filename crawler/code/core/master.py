@@ -3,7 +3,7 @@ from urllib.parse import urljoin, urlparse
 import os
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
 import config  # Load environment variables
 import db
@@ -25,7 +25,7 @@ def log_queue_operation(operation_type, job_data, success=True, error=None):
         os.makedirs(os.path.dirname(QUEUE_LOG_FILE), exist_ok=True)
 
         log_entry = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "operation": operation_type,
             "job": job_data,
             "success": success,
@@ -241,12 +241,14 @@ def add_schema_map_to_site(site_url, user_id, schema_map_url):
         }
         logger.debug(f"Content type map: {content_type_map}")
 
-        # Queue jobs for NEW files only
+        # Queue jobs for ALL files from XML (not just new ones)
+        # Worker will check file_hash and skip if unchanged
+        all_file_urls = [url_tuple[0] for url_tuple in json_file_url_tuples]
         queue = get_queue()
         queued_count = 0
-        logger.info(f"Starting to queue {len(added_files)} jobs...")
+        logger.info(f"Starting to queue {len(all_file_urls)} jobs (including existing files for hash check)...")
 
-        for file_url in added_files:
+        for file_url in all_file_urls:
             try:
                 content_type = content_type_map.get(file_url)
 
@@ -256,7 +258,7 @@ def add_schema_map_to_site(site_url, user_id, schema_map_url):
                     "site": site_url,
                     "file_url": file_url,
                     "schema_map": schema_map_url,
-                    "queued_at": datetime.utcnow().isoformat(),
+                    "queued_at": datetime.now(timezone.utc).isoformat(),
                 }
 
                 # Add content_type if available
@@ -276,7 +278,7 @@ def add_schema_map_to_site(site_url, user_id, schema_map_url):
             except Exception as e:
                 log_queue_operation("queue_file", job, success=False, error=e)
 
-        logger.info(f"Queued {queued_count} process_file jobs")
+        logger.info(f"Queued {queued_count} process_file jobs (worker will skip unchanged files via hash check)")
 
         # Queue jobs for REMOVED files
         for file_url in removed_files:
@@ -286,7 +288,7 @@ def add_schema_map_to_site(site_url, user_id, schema_map_url):
                     "user_id": user_id,  # Add user_id to job
                     "site": site_url,
                     "file_url": file_url,
-                    "queued_at": datetime.utcnow().isoformat(),
+                    "queued_at": datetime.now(timezone.utc).isoformat(),
                 }
                 success = queue.send_message(job)
                 if success:
@@ -301,6 +303,9 @@ def add_schema_map_to_site(site_url, user_id, schema_map_url):
             except Exception as e:
                 log_queue_operation("queue_removed_file", job, success=False, error=e)
 
+        # Return: (new files discovered, total jobs queued)
+        # Note: queued_count may be greater than len(added_files) because we queue ALL files
+        # for hash-based change detection, not just new ones
         return (len(added_files), queued_count)
 
     except Exception as e:
