@@ -6,7 +6,7 @@ from master import process_site
 import asyncio
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from get_queue import get_queue
 import logging
@@ -24,7 +24,7 @@ scheduler_running = False
 event_loop = None
 
 # Track when master started
-master_started_at = datetime.utcnow()
+master_started_at = datetime.now(timezone.utc)
 
 log.configure(os.environ)
 # This is simply the API setup around the master, so use same logger.
@@ -230,28 +230,30 @@ def _delete_schema_map_internal(conn, site_url, schema_map_url):
     """Internal function to delete files for a schema_map and queue removal jobs (across all users)"""
     cursor = conn.cursor()
 
-    # Get all files for this schema_map before deleting
+    # Get all files for this schema_map before deleting (include content_type)
     cursor.execute(
         """
-        SELECT file_url FROM files
+        SELECT file_url, content_type FROM files
         WHERE site_url = %s AND schema_map = %s
     """,
         (site_url, schema_map_url),
     )
-    files = [row[0] for row in cursor.fetchall()]
+    files = cursor.fetchall()
 
     # Queue removal jobs for each file so workers can:
     # 1. Remove IDs from ids table
     # 2. Remove from vector DB
     # 3. Delete from files table
     queue = get_queue()
-    for file_url in files:
+    for file_url, content_type in files:
         job = {
             "type": "process_removed_file",
             "site": site_url,
             "file_url": file_url,
             "user_id": DEFAULT_USER_ID,
         }
+        if content_type:
+            job["content_type"] = content_type
         queue.send_message(job)
 
     # NOTE: Do NOT delete from files or ids tables here - workers will do that when they process the jobs
@@ -280,7 +282,7 @@ def add_schema_file(site_url):
             site_url, DEFAULT_USER_ID, schema_map_url
         )
 
-        if files_added == 0:
+        if files_queued == 0:
             return (
                 jsonify(
                     {"error": "No schema files found or failed to fetch schema_map"}
@@ -293,7 +295,8 @@ def add_schema_file(site_url):
                 "success": True,
                 "site_url": site_url,
                 "schema_map_url": schema_map_url,
-                "files_added": files_added,
+                "files_discovered": files_added,  # New files discovered
+                "files_queued": files_queued,  # Total files queued for processing
                 "files_queued": files_queued,
             }
         )
@@ -382,7 +385,7 @@ def get_status():
             {
                 "master_started_at": master_started_at.isoformat(),
                 "master_uptime_seconds": (
-                    datetime.utcnow() - master_started_at
+                    datetime.now(timezone.utc) - master_started_at
                 ).total_seconds(),
                 "sites": sites_status,
             }
@@ -1037,7 +1040,7 @@ async def scheduler_loop():
                     last_processed,
                 ) in sites_to_process:
                     if last_processed:
-                        time_since = datetime.utcnow() - last_processed
+                        time_since = datetime.now(timezone.utc) - last_processed
                         logger_scheduler.info(
                             f"Processing {site_url} for user {user_id} (last processed {time_since} ago)"
                         )

@@ -100,6 +100,8 @@ def create_tables(conn: pymssql.Connection):
         number_of_items INT,
         is_manual BIT DEFAULT 0,
         is_active BIT DEFAULT 1,
+        file_hash VARCHAR(64),
+        content_type VARCHAR(100),
         PRIMARY KEY (file_url, user_id)
     )
     """
@@ -242,15 +244,15 @@ def get_file_errors(conn: pymssql.Connection, file_url, user_id=None, limit=50):
     return cursor.fetchall()
 
 
-def clear_file_errors(conn: pymssql.Connection, file_url: str, user_id: str):
+def clear_file_errors(conn: pymssql.Connection, file_url: str):
     """Clear all errors for a file (called when file successfully processes)"""
     cursor = conn.cursor()
     cursor.execute(
         """
         DELETE FROM processing_errors
-        WHERE file_url = %s AND user_id = %s
+        WHERE file_url = %s
     """,
-        (file_url, user_id),
+        (file_url,),
     )
     conn.commit()
 

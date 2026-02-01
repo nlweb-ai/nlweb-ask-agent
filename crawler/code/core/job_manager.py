@@ -4,7 +4,7 @@ Job queue management with timeout and recovery mechanisms
 import os
 import json
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import glob
 
 class JobManager:
@@ -39,7 +39,7 @@ class JobManager:
     def cleanup_stale_jobs(self):
         """Find and reset stale processing jobs"""
         stale_count = 0
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
 
         # Find all .processing files
         processing_files = glob.glob(os.path.join(self.queue_dir, '*.processing'))
@@ -158,14 +158,14 @@ class JobManager:
 
             # Add error information
             job['last_error'] = error_msg
-            job['failed_at'] = datetime.utcnow().isoformat()
+            job['failed_at'] = datetime.now(timezone.utc).isoformat()
 
             # Write to errors directory
             error_dir = os.path.join(self.queue_dir, 'errors')
             os.makedirs(error_dir, exist_ok=True)
 
             # Generate error filename
-            timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+            timestamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')
             error_filename = f"failed-{timestamp}-{os.path.basename(processing_path).replace('.processing', '')}"
             error_path = os.path.join(error_dir, error_filename)
 
