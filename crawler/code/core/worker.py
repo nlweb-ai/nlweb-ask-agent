@@ -109,13 +109,32 @@ def normalize_object_id(obj: dict, file_url: str) -> dict:
         Modified object with @id field
     """
     if "@id" in obj:
-        # Already has @id, use it as-is
-        return obj
+        # Already has @id, but ensure it's a string (not a list)
+        if isinstance(obj["@id"], list):
+            if obj["@id"]:  # Non-empty list
+                obj["@id"] = obj["@id"][0]
+                logger.debug(f"Converted @id from list to string: {obj['@id']}")
+            else:
+                # Empty list, remove @id and fall through to generate one
+                del obj["@id"]
+        else:
+            return obj
 
     if "url" in obj:
         # Has url field, use it as @id
-        obj["@id"] = obj["url"]
-        return obj
+        url_value = obj["url"]
+        if isinstance(url_value, list):
+            if url_value:  # Non-empty list
+                obj["@id"] = url_value[0]
+                logger.debug(f"Converted url from list to string for @id: {obj['@id']}")
+            else:
+                # Empty list, fall through to generate @id
+                pass
+        else:
+            obj["@id"] = url_value
+
+        if "@id" in obj:
+            return obj
 
     # No @id or url - generate one from file_url + content hash
     # Create stable hash of object content
@@ -447,6 +466,8 @@ def process_job(conn, job):
                 except Exception as e:
                     error_msg = f"Failed to extract schema data: {str(e)}"
                     logger.error(f"Error extracting schema data: {error_msg}")
+                    import traceback
+                    traceback.print_exc()
                     db.log_processing_error(
                         conn,
                         job["file_url"],
@@ -455,7 +476,7 @@ def process_job(conn, job):
                         error_msg,
                         str(e.__class__.__name__),
                     )
-                    # Continue processing - update hash to prevent retrying
+                    return False  # Fail the job - cannot process without entities
             else:
                 logger.info(f"Using already extracted entities from RSS parsing ({len(objects)} objects)")
 
