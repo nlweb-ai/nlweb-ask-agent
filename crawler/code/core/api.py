@@ -1055,7 +1055,9 @@ async def scheduler_loop():
                     last_processed,
                 ) in sites_to_process:
                     if last_processed:
-                        time_since = datetime.now(timezone.utc) - last_processed
+                        # Make last_processed timezone-aware (SQL Server returns naive datetime)
+                        last_processed_utc = last_processed.replace(tzinfo=timezone.utc)
+                        time_since = datetime.now(timezone.utc) - last_processed_utc
                         logger_scheduler.info(
                             f"Processing {site_url} for user {user_id} (last processed {time_since} ago)"
                         )
