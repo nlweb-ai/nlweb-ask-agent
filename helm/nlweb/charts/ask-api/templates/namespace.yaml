@@ -1,3 +1,4 @@
+{{- if .Values.createNamespace }}
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -6,3 +7,4 @@ metadata:
     app: ask-api
     gateway-access: "true"
     {{- include "ask-api.labels" . | nindent 4 }}
+{{- end }}
