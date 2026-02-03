@@ -1,7 +1,6 @@
 import requests
 from urllib.parse import urljoin, urlparse
 import os
-import json
 import logging
 from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
@@ -10,32 +9,9 @@ import db
 from get_queue import get_queue
 import log
 
-# Queue history log file
-QUEUE_LOG_FILE = "/app/data/queue_history.jsonl"
-
 log.configure(os.environ)
 logger = logging.getLogger("master")
 logger.setLevel(log.level(os.environ))
-
-
-def log_queue_operation(operation_type, job_data, success=True, error=None):
-    """Log queue operations to a local JSONL file"""
-    try:
-        # Ensure directory exists
-        os.makedirs(os.path.dirname(QUEUE_LOG_FILE), exist_ok=True)
-
-        log_entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "operation": operation_type,
-            "job": job_data,
-            "success": success,
-            "error": str(error) if error else None,
-        }
-
-        with open(QUEUE_LOG_FILE, "a") as f:
-            f.write(json.dumps(log_entry) + "\n")
-    except Exception as e:
-        logger.error(f"Error logging queue operation: {e}")
 
 
 def parse_schema_map_xml(xml_content, base_url):
@@ -281,17 +257,9 @@ def add_schema_map_to_site(site_url, user_id="system", schema_map_url=None, refr
                     job["content_type"] = content_type
                 success = queue.send_message(job)
                 if success:
-                    log_queue_operation("queue_file", job, success=True)
                     queued_count += 1
-                else:
-                    log_queue_operation(
-                        "queue_file",
-                        job,
-                        success=False,
-                        error="send_message returned False",
-                    )
             except Exception as e:
-                log_queue_operation("queue_file", job, success=False, error=e)
+                logger.error(f"Error queuing file {file_url}: {e}")
 
         if refresh_mode == "full":
             logger.info(f"Queued {queued_count} process_file jobs in FULL mode (worker will skip unchanged via hash)")
@@ -308,18 +276,9 @@ def add_schema_map_to_site(site_url, user_id="system", schema_map_url=None, refr
                     "file_url": file_url,
                     "queued_at": datetime.now(timezone.utc).isoformat(),
                 }
-                success = queue.send_message(job)
-                if success:
-                    log_queue_operation("queue_removed_file", job, success=True)
-                else:
-                    log_queue_operation(
-                        "queue_removed_file",
-                        job,
-                        success=False,
-                        error="send_message returned False",
-                    )
+                queue.send_message(job)
             except Exception as e:
-                log_queue_operation("queue_removed_file", job, success=False, error=e)
+                logger.error(f"Error queuing removal for {file_url}: {e}")
 
         # Return: (new files discovered, total jobs queued)
         # Note: queued_count may be greater than len(added_files) because we queue ALL files
