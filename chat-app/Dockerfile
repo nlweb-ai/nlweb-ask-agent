@@ -9,7 +9,8 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 # Copy package files
 COPY package.json pnpm-lock.yaml .npmrc ./
 
-# Install dependencies
+# Install dependencies (requires GIT_TOKEN at build time for GitHub Packages)
+ARG GIT_TOKEN
 RUN pnpm install --frozen-lockfile
 
 # Copy source and build

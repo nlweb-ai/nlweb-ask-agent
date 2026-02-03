@@ -33,10 +33,16 @@ az acr build \
 sleep 5
 echo ""
 echo "=== Building chat-app image ==="
+if [ -z "$GIT_TOKEN" ]; then
+    echo "Warning: GIT_TOKEN not set. Required for GitHub Packages auth."
+    echo "Set GIT_TOKEN environment variable before building chat-app."
+    exit 1
+fi
 az acr build \
     --registry "$ACR_NAME" \
     --image chat-app:latest \
     --file "$REPO_ROOT/chat-app/Dockerfile" \
+    --build-arg GIT_TOKEN="$GIT_TOKEN" \
     "$REPO_ROOT/chat-app"
 
 echo ""
