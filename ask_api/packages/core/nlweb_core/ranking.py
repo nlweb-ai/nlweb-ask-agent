@@ -40,6 +40,7 @@ class Ranking:
         item_type: str,
         max_results: int,
         min_score: int,
+        start_num: int = 0
     ) -> list[dict]:
         """
         Rank retrieved items by relevance to the query.
@@ -56,7 +57,7 @@ class Ranking:
         """
         if not items:
             return []
-
+        
         # Build ScoringContext objects directly
         contexts = [
             ScoringContext(
@@ -119,4 +120,6 @@ class Ranking:
         ranked = sorted(filtered, key=lambda x: x.score, reverse=True)
 
         # Convert to dicts for consumer compatibility
-        return [r.to_dict() for r in ranked[:max_results]]
+        last_index = start_num + max_results
+        # Handle pagination
+        return [r.to_dict() for r in ranked[start_num:last_index]]

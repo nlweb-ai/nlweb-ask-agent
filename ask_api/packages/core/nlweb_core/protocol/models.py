@@ -137,6 +137,11 @@ class Meta(BaseModel):
         None,
         description="Whether to remember this interaction in conversation history (optional)",
     )
+    start_num: Optional[int] = Field(
+        None,
+        description="The starting item number used for pagination"
+    )
+
 
 
 class AskRequest(BaseModel):

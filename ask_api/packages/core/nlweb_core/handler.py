@@ -71,18 +71,25 @@ class NLWebHandler:
         final_ranked_answers = await self.runQueryBody(site_config)
         await self.postResults(final_ranked_answers)
 
+    def _get_start_number(self) -> int:
+        start_num = 0
+        if self.request.meta and self.request.meta.start_num:
+            start_num = self.request.meta.start_num
+        return start_num
+    
     async def runQueryBody(self, site_config: dict) -> list[dict]:
         """Execute the query body by retrieving and ranking items."""
         from nlweb_core.retriever import get_item_retriever
         from nlweb_core.item_retriever import RetrievalParams
         from nlweb_core.ranking import Ranking
-
+        start_num = self._get_start_number()
+        results_to_retrieve = start_num + self.request.query.num_results
         retriever = get_item_retriever()
         retrieved_items = await retriever.retrieve(
             RetrievalParams(
                 query_text=self.request.query.effective_query,
                 site=self.request.query.site,
-                num_results=self.request.query.num_results,
+                num_results=results_to_retrieve,
             )
         )
 
@@ -92,6 +99,7 @@ class NLWebHandler:
             item_type=site_config["item_type"],
             max_results=self.request.query.num_results,
             min_score=self.request.query.min_score,
+            start_num=start_num
         )
 
         await self.send_results(final_ranked_answers)
@@ -254,6 +262,7 @@ class NLWebHandler:
                 for m in (prefer.mode if prefer and prefer.mode else "list").split(",")
             ],
             send_results=self.send_results,
+            start_num=self._get_start_number()
         )
 
         await ConversationSaver().save(self.request, final_ranked_answers)
