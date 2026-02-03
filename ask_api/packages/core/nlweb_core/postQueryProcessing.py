@@ -11,20 +11,33 @@ Backwards compatibility is not guaranteed at this time.
 
 from typing import Awaitable, Callable, Optional
 
-from nlweb_core.summarizer import ResultsSummarizer, create_default_summarizer
+from nlweb_core.summarizer import (
+    ResultsSummarizer,
+    create_default_summarizer,
+    create_hindi_summarizer,
+)
 
 
 class PostQueryProcessing:
     """Post-processing after ranking is complete."""
 
-    def __init__(self, summarizer: Optional[ResultsSummarizer] = None):
+    def __init__(
+        self, summarizer: Optional[ResultsSummarizer] = None, site: Optional[str] = None
+    ):
         """Initialize post-query processing.
 
         Args:
             summarizer: Optional ResultsSummarizer instance. If not provided,
-                       a default summarizer using ask_llm will be created.
+                       a site-appropriate summarizer will be created.
+            site: Site domain (e.g., 'aajtak.in'). Used to select language-specific
+                 summarizer if no custom summarizer is provided.
         """
-        self._summarizer = summarizer or create_default_summarizer()
+        if summarizer:
+            self._summarizer = summarizer
+        elif site == "aajtak.in":
+            self._summarizer = create_hindi_summarizer()
+        else:
+            self._summarizer = create_default_summarizer()
 
     async def process(
         self,

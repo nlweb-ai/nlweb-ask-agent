@@ -61,6 +61,11 @@ class ResultsSummarizer:
 Results:
 {results}"""
 
+    HINDI_PROMPT_TEMPLATE = """Summarize the following AI results in 2-3 sentences in Hindi. *Your output MUST be in Hindi.* (*DO NOT mention 'search results' or 'results' in your output*) Highlight the key information that answers the user's question: {query}
+
+Results:
+{results}"""
+
     # Pydantic model for type-safe schema
     SCHEMA: Type[SummaryResponse] = SummaryResponse
 
@@ -155,3 +160,15 @@ def create_default_summarizer() -> ResultsSummarizer:
 
     llm = partial(ask_llm, level="high", timeout=20)
     return ResultsSummarizer(llm=llm)
+
+
+def create_hindi_summarizer() -> ResultsSummarizer:
+    """Factory function to create a Hindi summarizer with the default ask_llm.
+
+    Returns:
+        ResultsSummarizer configured with Hindi prompt template.
+    """
+    from nlweb_core.llm import ask_llm
+
+    llm = partial(ask_llm, level="high", timeout=20)
+    return ResultsSummarizer(llm=llm, prompt_template=ResultsSummarizer.HINDI_PROMPT_TEMPLATE)
