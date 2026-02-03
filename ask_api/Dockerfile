@@ -10,8 +10,12 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
+# Build argument for config file (defaults to config.yaml)
+ARG CONFIG_FILE=config.yaml
+
 # Copy all necessary files
-COPY pyproject.toml uv.lock .python-version config.yaml run_server.py logging_config.py ./
+COPY pyproject.toml uv.lock .python-version run_server.py logging_config.py ./
+COPY ${CONFIG_FILE} config.yaml
 COPY packages/ packages/
 
 RUN uv sync --frozen

@@ -1,9 +1,11 @@
 # Ask API subchart default values
 namespace: ask-api
+createNamespace: true  # Set to false when deploying to existing namespace
 
 # Service Account
 serviceAccount:
   name: ""  # Override service account name (default: <release>-ask-api-sa)
+createServiceAccount: true  # Set to false when using existing service account
 
 # Workload Identity
 workloadIdentity:

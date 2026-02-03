@@ -12,6 +12,23 @@ spec:
       sectionName: apis
   rules:
     # API endpoints - more specific paths take precedence over chat-app catch-all
+    {{- if ne .Values.routing.pathPrefix "/" }}
+    # When using a custom path prefix, match on the prefix and rewrite
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ .Values.routing.pathPrefix }}
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: {{ .Values.routing.rewritePath }}
+      backendRefs:
+        - name: {{ include "ask-api.fullname" . }}-service
+          port: {{ .Values.service.port }}
+    {{- else }}
+    # When using root path, match specific API endpoints
     - matches:
         - path:
             type: PathPrefix
@@ -40,3 +57,4 @@ spec:
       backendRefs:
         - name: {{ include "ask-api.fullname" . }}-service
           port: {{ .Values.service.port }}
+    {{- end }}
