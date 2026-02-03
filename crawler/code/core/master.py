@@ -174,12 +174,19 @@ def get_schema_urls_from_robots(site_url):
     return []
 
 
-def add_schema_map_to_site(site_url, user_id, schema_map_url):
+def add_schema_map_to_site(site_url, user_id="system", schema_map_url=None, refresh_mode="diff"):
     """
     Add a schema map to a site (Level 2 logic):
     1. Fetch and parse the schema_map XML
     2. Add all JSON files to database
-    3. Queue all files for processing
+    3. Queue files for processing based on refresh_mode
+
+    Args:
+        site_url: Site URL
+        user_id: User ID
+        schema_map_url: URL to schema map XML
+        refresh_mode: "diff" (only queue new files) or "full" (queue all files)
+
     Returns: (files_added_count, files_queued_count)
     """
     conn = None
@@ -193,12 +200,12 @@ def add_schema_map_to_site(site_url, user_id, schema_map_url):
             (site_url, user_id),
         )
         if not cursor.fetchone():
-            db.add_site(conn, site_url, user_id, schema_map_url=schema_map_url)
+            db.add_site(conn, site_url, user_id, schema_map_url=schema_map_url, refresh_mode=refresh_mode)
         else:
-            # Site exists - update schema_map_url if not set
+            # Site exists - update schema_map_url and refresh_mode
             cursor.execute(
-                "UPDATE sites SET schema_map_url = %s WHERE site_url = %s AND user_id = %s AND schema_map_url IS NULL",
-                (schema_map_url, site_url, user_id)
+                "UPDATE sites SET schema_map_url = %s, refresh_mode = %s WHERE site_url = %s AND user_id = %s",
+                (schema_map_url, refresh_mode, site_url, user_id)
             )
 
         # Fetch and parse the schema_map to get all JSON file URLs
@@ -241,14 +248,22 @@ def add_schema_map_to_site(site_url, user_id, schema_map_url):
         }
         logger.debug(f"Content type map: {content_type_map}")
 
-        # Queue jobs for ALL files from XML (not just new ones)
-        # Worker will check file_hash and skip if unchanged
-        all_file_urls = [url_tuple[0] for url_tuple in json_file_url_tuples]
+        # Determine which files to queue based on refresh_mode
+        if refresh_mode == "full":
+            # Queue ALL files from XML (current behavior)
+            # Worker will check file_hash and skip if unchanged
+            files_to_queue = [url_tuple[0] for url_tuple in json_file_url_tuples]
+            logger.info(f"Refresh mode: FULL - queuing {len(files_to_queue)} files (worker will check hashes)")
+        else:
+            # Queue only NEW files (diff mode)
+            # Workers won't encounter existing files at all
+            files_to_queue = added_files
+            logger.info(f"Refresh mode: DIFF - queuing {len(files_to_queue)} new files only")
+
         queue = get_queue()
         queued_count = 0
-        logger.info(f"Starting to queue {len(all_file_urls)} jobs (including existing files for hash check)...")
 
-        for file_url in all_file_urls:
+        for file_url in files_to_queue:
             try:
                 content_type = content_type_map.get(file_url)
 
@@ -278,7 +293,10 @@ def add_schema_map_to_site(site_url, user_id, schema_map_url):
             except Exception as e:
                 log_queue_operation("queue_file", job, success=False, error=e)
 
-        logger.info(f"Queued {queued_count} process_file jobs (worker will skip unchanged files via hash check)")
+        if refresh_mode == "full":
+            logger.info(f"Queued {queued_count} process_file jobs in FULL mode (worker will skip unchanged via hash)")
+        else:
+            logger.info(f"Queued {queued_count} new files in DIFF mode (existing files not queued)")
 
         # Queue jobs for REMOVED files
         for file_url in removed_files:
@@ -321,32 +339,37 @@ def add_schema_map_to_site(site_url, user_id, schema_map_url):
                 pass
 
 
-def process_site(site_url, user_id):
+def process_site(site_url, user_id="system"):
     """
     Process a site (Level 1 logic):
     1. Check database for stored schema_map_url first
     2. If not found, discover schema maps from robots.txt
     3. For each schema map, call add_schema_map_to_site (Level 2)
+
+    Returns: Number of files queued (int), or None on error
     """
     try:
         logger.debug(f"Processing site: {site_url}")
 
-        # First, check if site has a stored schema_map_url in database
+        # First, check if site has a stored schema_map_url and refresh_mode in database
         conn = db.get_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT schema_map_url FROM sites WHERE site_url = %s AND user_id = %s",
+            "SELECT schema_map_url, refresh_mode FROM sites WHERE site_url = %s AND user_id = %s",
             (site_url, user_id)
         )
         result = cursor.fetchone()
         conn.close()
 
         schema_map_urls = []
+        refresh_mode = "diff"  # Default
 
         if result and result[0]:
-            # Use stored schema_map_url from database
+            # Use stored schema_map_url and refresh_mode from database
             stored_schema_map = result[0]
-            logger.info(f"Using stored schema_map: {stored_schema_map}")
+            stored_refresh_mode = result[1] if result[1] else "diff"
+            refresh_mode = stored_refresh_mode
+            logger.info(f"Using stored schema_map: {stored_schema_map}, refresh_mode: {refresh_mode}")
             schema_map_urls = [stored_schema_map]
         else:
             # No stored schema_map, try discovery from robots.txt
@@ -358,7 +381,7 @@ def process_site(site_url, user_id):
 
         if not schema_map_urls:
             logger.debug(f"No schema maps found for {site_url}")
-            return False
+            return 0  # No schema maps = no files queued
 
         logger.debug(
             f"Found {len(schema_map_urls)} schema map(s) for {site_url}"
@@ -370,7 +393,7 @@ def process_site(site_url, user_id):
         for schema_map_url in schema_map_urls:
             logger.debug(f"Processing schema map: {schema_map_url}")
             files_added, files_queued = add_schema_map_to_site(
-                site_url, user_id, schema_map_url
+                site_url, user_id, schema_map_url, refresh_mode=refresh_mode
             )
             total_files += files_added
             total_queued += files_queued
@@ -378,11 +401,11 @@ def process_site(site_url, user_id):
         logger.info(
             f"Processed {site_url}: {total_files} files added, {total_queued} queued"
         )
-        return True
+        return total_queued
 
     except Exception as e:
         logger.exception(f"Unexpected error processing {site_url}: {e}")
-        return False
+        return None
 
 
 # write_job function removed - now using queue interface
