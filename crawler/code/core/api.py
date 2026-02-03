@@ -1084,9 +1084,10 @@ async def scheduler_loop():
                             logger_scheduler.error(
                                 f"Failed to process site {site_url}"
                             )
-                        elif result == 0:
-                            # Successfully processed but 0 files queued
-                            # Update last_processed since no workers will run
+                        else:
+                            # Successfully processed (result >= 0)
+                            # Always update last_processed to prevent re-queueing within interval
+                            # even if workers skip all files due to hash match
                             try:
                                 update_conn = db.get_connection()
                                 update_cursor = update_conn.cursor()
@@ -1096,13 +1097,12 @@ async def scheduler_loop():
                                 )
                                 update_conn.commit()
                                 update_conn.close()
-                                logger_scheduler.info(f"Updated last_processed for {site_url} (0 files queued, no workers will run)")
+                                if result == 0:
+                                    logger_scheduler.info(f"Updated last_processed for {site_url} (0 files queued)")
+                                else:
+                                    logger_scheduler.info(f"Updated last_processed for {site_url} ({result} files queued)")
                             except Exception as e:
                                 logger_scheduler.error(f"Failed to update last_processed for {site_url}: {e}")
-                        else:
-                            # Successfully queued files (result > 0)
-                            # Workers will update last_processed as they process files
-                            logger_scheduler.info(f"Queued {result} files for {site_url} - workers will update last_processed")
 
         except Exception as e:
             logger_scheduler.error(f"Error in scheduler loop: {e}")
