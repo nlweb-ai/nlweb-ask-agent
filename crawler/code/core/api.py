@@ -90,16 +90,21 @@ def add_site():
         data = request.json
         site_url = data.get("site_url")
         interval_hours = data.get("interval_hours", 720)
+        refresh_mode = data.get("refresh_mode", "diff")
 
         if not site_url:
             return jsonify({"error": "site_url is required"}), 400
+
+        # Validate refresh_mode
+        if refresh_mode not in ["diff", "full"]:
+            return jsonify({"error": "refresh_mode must be 'diff' or 'full'"}), 400
 
         # Normalize site URL
         site_url = db.normalize_site_url(site_url)
 
         conn = db.get_connection()
         try:
-            db.add_site(conn, site_url, DEFAULT_USER_ID, interval_hours)
+            db.add_site(conn, site_url, DEFAULT_USER_ID, interval_hours, refresh_mode=refresh_mode)
             # Process site immediately in background
             if event_loop:
                 try:
@@ -272,14 +277,19 @@ def add_schema_file(site_url):
 
     data = request.json
     schema_map_url = data.get("schema_map_url")
+    refresh_mode = data.get("refresh_mode", "diff")  # Default to 'diff' mode
 
     if not schema_map_url:
         return jsonify({"error": "schema_map_url is required"}), 400
 
+    # Validate refresh_mode
+    if refresh_mode not in ["diff", "full"]:
+        return jsonify({"error": "refresh_mode must be 'diff' or 'full'"}), 400
+
     try:
         # Use the Level 2 logic from master.py
         files_added, files_queued = add_schema_map_to_site(
-            site_url, DEFAULT_USER_ID, schema_map_url
+            site_url, DEFAULT_USER_ID, schema_map_url, refresh_mode=refresh_mode
         )
 
         if files_queued == 0:
@@ -574,7 +584,7 @@ def get_scheduler_status():
 
     is_running = scheduler_running and scheduler_task and not scheduler_task.done()
 
-    return jsonify({"running": is_running, "check_interval_seconds": 60})
+    return jsonify({"running": is_running, "check_interval_seconds": 300})
 
 
 @app.route("/api/scheduler/start", methods=["POST"])
@@ -987,14 +997,19 @@ def get_workers():
 
 
 async def process_site_async(site_url, user_id):
-    """Async wrapper for process_site function"""
+    """Async wrapper for process_site function
+
+    Returns: Number of files queued (int), or None on error
+    """
     try:
         # Run process_site in a thread pool to avoid blocking the event loop
-        await asyncio.get_event_loop().run_in_executor(
+        files_queued = await asyncio.get_event_loop().run_in_executor(
             None, process_site, site_url, user_id
         )
+        return files_queued
     except Exception as e:
         logger.error(f"Error processing site {site_url}: {e}")
+        return None
 
 
 async def scheduler_loop():
@@ -1057,10 +1072,35 @@ async def scheduler_loop():
                     # Use return_exceptions=True to prevent one site error from killing all
                     results = await asyncio.gather(*tasks, return_exceptions=True)
                     for i, result in enumerate(results):
+                        site_url, user_id = sites_to_process[i][0], sites_to_process[i][1]
                         if isinstance(result, Exception):
                             logger_scheduler.error(
-                                f"Error processing site {sites_to_process[i][0]}: {result}"
+                                f"Error processing site {site_url}: {result}"
                             )
+                        elif result is None:
+                            # Error occurred (process_site returned None)
+                            logger_scheduler.error(
+                                f"Failed to process site {site_url}"
+                            )
+                        elif result == 0:
+                            # Successfully processed but 0 files queued
+                            # Update last_processed since no workers will run
+                            try:
+                                update_conn = db.get_connection()
+                                update_cursor = update_conn.cursor()
+                                update_cursor.execute(
+                                    "UPDATE sites SET last_processed = GETUTCDATE() WHERE site_url = %s AND user_id = %s",
+                                    (site_url, user_id)
+                                )
+                                update_conn.commit()
+                                update_conn.close()
+                                logger_scheduler.info(f"Updated last_processed for {site_url} (0 files queued, no workers will run)")
+                            except Exception as e:
+                                logger_scheduler.error(f"Failed to update last_processed for {site_url}: {e}")
+                        else:
+                            # Successfully queued files (result > 0)
+                            # Workers will update last_processed as they process files
+                            logger_scheduler.info(f"Queued {result} files for {site_url} - workers will update last_processed")
 
         except Exception as e:
             logger_scheduler.error(f"Error in scheduler loop: {e}")
@@ -1071,8 +1111,8 @@ async def scheduler_loop():
             except:
                 pass
 
-        # Sleep for 60 seconds between checks
-        await asyncio.sleep(60)
+        # Sleep for 5 minutes between checks
+        await asyncio.sleep(300)
 
     logger_scheduler.info("Scheduler stopped")
 

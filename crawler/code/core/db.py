@@ -83,6 +83,7 @@ def create_tables(conn: pymssql.Connection):
         is_active BIT DEFAULT 1,
         created_at DATETIME DEFAULT GETUTCDATE(),
         schema_map_url NVARCHAR(2000) NULL,
+        refresh_mode VARCHAR(10) DEFAULT 'diff',
         PRIMARY KEY (site_url, user_id)
     )
     """
@@ -539,7 +540,7 @@ def get_all_sites(conn: pymssql.Connection, user_id: str = None):
 
 
 def add_site(
-    conn: pymssql.Connection, site_url: str, user_id: str, interval_hours: int = 720, schema_map_url: str = None
+    conn: pymssql.Connection, site_url: str, user_id: str, interval_hours: int = 720, schema_map_url: str = None, refresh_mode: str = "diff"
 ):
     """Add a new site to monitor"""
     # Normalize site URL
@@ -558,19 +559,19 @@ def add_site(
             cursor.execute(
                 """
                 UPDATE sites
-                SET process_interval_hours = %s, is_active = 1, schema_map_url = %s
+                SET process_interval_hours = %s, is_active = 1, schema_map_url = %s, refresh_mode = %s
                 WHERE site_url = %s AND user_id = %s
             """,
-                (interval_hours, schema_map_url, site_url, user_id),
+                (interval_hours, schema_map_url, refresh_mode, site_url, user_id),
             )
         else:
             cursor.execute(
                 """
                 UPDATE sites
-                SET process_interval_hours = %s, is_active = 1
+                SET process_interval_hours = %s, is_active = 1, refresh_mode = %s
                 WHERE site_url = %s AND user_id = %s
             """,
-                (interval_hours, site_url, user_id),
+                (interval_hours, refresh_mode, site_url, user_id),
             )
         logger.info("Site %s already exists - updated settings", site_url)
     else:
@@ -578,18 +579,18 @@ def add_site(
         if schema_map_url:
             cursor.execute(
                 """
-                INSERT INTO sites (site_url, user_id, process_interval_hours, schema_map_url)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO sites (site_url, user_id, process_interval_hours, schema_map_url, refresh_mode)
+                VALUES (%s, %s, %s, %s, %s)
             """,
-                (site_url, user_id, interval_hours, schema_map_url),
+                (site_url, user_id, interval_hours, schema_map_url, refresh_mode),
             )
         else:
             cursor.execute(
                 """
-                INSERT INTO sites (site_url, user_id, process_interval_hours)
-                VALUES (%s, %s, %s)
+                INSERT INTO sites (site_url, user_id, process_interval_hours, refresh_mode)
+                VALUES (%s, %s, %s, %s)
             """,
-                (site_url, user_id, interval_hours),
+                (site_url, user_id, interval_hours, refresh_mode),
             )
         logger.info("Site %s added successfully", site_url)
 
