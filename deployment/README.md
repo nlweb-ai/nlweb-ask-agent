@@ -18,8 +18,29 @@ Bicep templates for Azure infrastructure required by ask_api and crawler.
 ## Prerequisites
 
 - [Azure CLI](https://docs.microsoft.com/cli/azure/install-azure-cli) (2.50+)
+- [GitHub CLI](https://cli.github.com/) (for npm authentication)
 - Azure subscription with OpenAI access enabled
 - `PI_LABS_ENDPOINT` and `PI_LABS_KEY` environment variables
+
+### GitHub Packages Authentication
+
+The chat-app depends on `@nlweb-ai/search-components` from GitHub Packages, which requires authentication even for public packages.
+
+**One-time setup using the GitHub CLI:**
+
+```bash
+# Login to GitHub if not already authenticated
+gh auth login
+
+# Configure pnpm/npm to use your GitHub token
+pnpm config set //npm.pkg.github.com/:_authToken $(gh auth token)
+```
+
+**For Docker builds**, set `GIT_TOKEN` before running `make build-images`:
+
+```bash
+export GIT_TOKEN=$(gh auth token)
+```
 
 ## Bringing Up a New Environment
 
