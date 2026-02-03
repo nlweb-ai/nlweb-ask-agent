@@ -23,8 +23,6 @@ services:
     build:
       context: ./chat-app
       dockerfile: Dockerfile.dev
-      args:
-        - GIT_TOKEN=${GIT_TOKEN}
     ports:
       - "5173:5173"
     volumes:

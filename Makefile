@@ -27,7 +27,6 @@ help:
 	@echo ""
 	@echo "Environment options:"
 	@echo "  ENV_NAME=<name>   # Target environment (default: $(ENV_NAME))"
-	@echo "  GIT_TOKEN=<token> # GitHub token for chat-app npm packages"
 	@echo "  REFRESH=true|false # Use local search-components (default: true)"
 
 # Local development with Docker Compose

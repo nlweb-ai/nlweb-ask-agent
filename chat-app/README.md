@@ -6,14 +6,12 @@ React frontend for NLWeb semantic search.
 
 **Via Docker Compose (from repo root):**
 ```bash
-export GIT_TOKEN=<github-classic-pat-with-read:packages>
 make frontend
 ```
 Open http://localhost:5173
 
 **Native:**
 ```bash
-export GIT_TOKEN=<your-token>
 pnpm install
 pnpm dev
 ```

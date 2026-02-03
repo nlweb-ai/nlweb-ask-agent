@@ -20,7 +20,6 @@ cd ask_api && make init_environment && cd ..
 cd crawler && make init_environment && cd ..
 
 # Start frontend (ask-api + chat-app)
-export GIT_TOKEN=<github-classic-pat-with-read:packages>
 make frontend
 ```
 
@@ -41,5 +40,4 @@ make frontend
 ## Requirements
 
 - Docker & Docker Compose
-- GitHub PAT with `read:packages` scope (for `@nlweb-ai/search-components`)
 - Azure CLI (for `init_environment` and AKS deployment)
