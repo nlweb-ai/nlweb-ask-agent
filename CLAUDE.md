@@ -20,7 +20,6 @@ cd ask_api && make init_environment && cd ..
 cd crawler && make init_environment && cd ..
 
 # Start frontend with local search-components (default, requires peer directory)
-export GIT_TOKEN=<github-classic-pat-with-read:packages>
 make frontend
 
 # Start frontend with published npm package (no peer directory needed)
