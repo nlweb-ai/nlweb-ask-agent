@@ -19,11 +19,20 @@
       <promptString>
         The user is querying the site {request.site}.
 
-        IMPORTANT: If the query is in romanized Hindi (Hinglish - Hindi words written in English/Latin script), transliterate it to Devanagari. Examples:
-        - "Mumbai mein barish" → "मुंबई में बारिश"
-        - "aaj ka news" → "आज का news"
-        - "cricket score dekhna hai" → "cricket score देखना है"
-        VERY IMPORTANT: Keep purely English queries in English. Keep Devanagari queries unchanged.
+        IMPORTANT: Convert the query to English. Translate Hindi/Devanagari queries to English.
+        - If the query is in Devanagari (Hindi script), translate it to English
+        - If the query is in Hinglish (romanized Hindi), translate it to English
+        - If the query is already in English, keep it as is
+        - Keep proper nouns (names of people, places, trains, missions, campaigns) in their standard romanized form - do NOT translate them
+
+        Examples:
+        - "ट्रम्प ने मोदी की तारीफ की" → "Trump praised Modi"
+        - "निर्मला सीतारमण" → "Nirmala Sitharaman"
+        - "वंदे भारत ट्रेन" → "Vande Bharat train"
+        - "स्वच्छ भारत मिशन" → "Swachh Bharat mission"
+        - "mumbai mein barish" → "rain in Mumbai"
+        - "nirmala sitharaman budget" → "Nirmala Sitharaman budget" (keep as is)
+        - "swachh bharat" → "Swachh Bharat" (keep as is - mission name)
 
         The user's query is: {request.rawQuery}.
       </promptString>
@@ -90,13 +99,21 @@
       <promptString>
         The user is querying a Hindi news site that uses Hindi content.
 
-        STEP 1 (Transliteration): If the query is in romanized Hindi (Hinglish - Hindi words written in English/Latin script), transliterate it to Devanagari. Examples:
-        - "Mumbai mein barish" → "मुंबई में बारिश"
-        - "aaj ka news" → "आज का news"
-        - "cricket score dekhna hai" → "cricket score देखना है"
-        IMPORTANT: Keep purely English queries in English. Keep Devanagari queries unchanged.
+        IMPORTANT: Output the decontextualized query in English. Translate Hindi/Devanagari to English.
+        - If the query is in Devanagari (Hindi script), translate it to English
+        - If the query is in Hinglish (romanized Hindi), translate it to English
+        - Keep proper nouns (names of people, places, trains, missions, campaigns) in their standard romanized form - do NOT translate them
 
-        STEP 2 (Decontextualization): Rewrite the query, incorporating the context of the previous queries and answers.
+        Examples:
+        - "ट्रम्प ने मोदी की तारीफ की" → "Trump praised Modi"
+        - "निर्मला सीतारमण" → "Nirmala Sitharaman"
+        - "वंदे भारत ट्रेन" → "Vande Bharat train"
+        - "स्वच्छ भारत मिशन" → "Swachh Bharat mission"
+        - "mumbai mein barish" → "rain in Mumbai"
+        - "nirmala sitharaman budget" → "Nirmala Sitharaman budget" (keep as is)
+        - "swachh bharat" → "Swachh Bharat" (keep as is - mission name)
+
+        Rewrite the query, incorporating the context of the previous queries and answers.
         Keep the decontextualized query short and do not reference the site.
 
         If the query very clearly does not reference earlier queries,
@@ -115,13 +132,21 @@
       <promptString>
         The user is querying a Hindi news site that uses Hindi content.
 
-        STEP 1 (Transliteration): If the query is in romanized Hindi (Hinglish - Hindi words written in English/Latin script), transliterate it to Devanagari. Examples:
-        - "Mumbai mein barish" → "मुंबई में बारिश"
-        - "aaj ka news" → "आज का news"
-        - "cricket score dekhna hai" → "cricket score देखना है"
-        IMPORTANT: Keep purely English queries in English. Keep Devanagari queries unchanged.
+        IMPORTANT: Output the decontextualized query in English. Translate Hindi/Devanagari to English.
+        - If the query is in Devanagari (Hindi script), translate it to English
+        - If the query is in Hinglish (romanized Hindi), translate it to English
+        - Keep proper nouns (names of people, places, trains, missions, campaigns) in their standard romanized form - do NOT translate them
 
-        STEP 2 (Decontextualization): Rewrite the query, incorporating the context and previous queries.
+        Examples:
+        - "ट्रम्प ने मोदी की तारीफ की" → "Trump praised Modi"
+        - "निर्मला सीतारमण" → "Nirmala Sitharaman"
+        - "वंदे भारत ट्रेन" → "Vande Bharat train"
+        - "स्वच्छ भारत मिशन" → "Swachh Bharat mission"
+        - "mumbai mein barish" → "rain in Mumbai"
+        - "nirmala sitharaman budget" → "Nirmala Sitharaman budget" (keep as is)
+        - "swachh bharat" → "Swachh Bharat" (keep as is - mission name)
+
+        Rewrite the query, incorporating the context and previous queries.
         Keep the decontextualized query short and do not reference the site.
 
         If the query very clearly does not reference earlier queries,

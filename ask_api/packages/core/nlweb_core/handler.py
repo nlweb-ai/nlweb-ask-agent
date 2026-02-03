@@ -246,7 +246,7 @@ class NLWebHandler:
         from nlweb_core.postQueryProcessing import PostQueryProcessing
 
         prefer = self.request.prefer
-        await PostQueryProcessing().process(
+        await PostQueryProcessing(site=self.request.query.site).process(
             final_ranked_answers=final_ranked_answers,
             query_text=self.request.query.effective_query,
             modes=[
