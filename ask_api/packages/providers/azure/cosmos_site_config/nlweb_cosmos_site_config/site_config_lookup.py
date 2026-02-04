@@ -40,18 +40,25 @@ class SiteConfigLookup:
     Uses native async client for proper connection pooling.
     """
 
-    def __init__(self):
+    def __init__(self, provider_name: str):
         """
         Initialize Cosmos DB configuration. Client is created lazily on first use.
 
-        Uses get_config().site_config for all connection parameters.
-        endpoint and database_name must be configured.
+        Args:
+            provider_name: Name of the site config provider in config.
+
+        Uses get_config().get_site_config_provider(provider_name) for all connection parameters.
         """
         config = get_config()
-        if not config.site_config or not config.site_config.enabled:
-            raise ValueError("Site config is not enabled in configuration")
+        site_cfg = config.get_site_config_provider(provider_name)
 
-        self._site_cfg = config.site_config
+        if not site_cfg:
+            raise ValueError(
+                f"Site config provider '{provider_name}' is not configured"
+            )
+
+        self._site_cfg = site_cfg
+        self._provider_name = provider_name
 
         # Get endpoint and database from site_config
         if not self._site_cfg.endpoint:

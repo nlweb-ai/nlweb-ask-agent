@@ -66,7 +66,7 @@ class DefaultAskHandler(AskHandler):
         4. Post-process results
         """
         # Build site_config with item_type for use throughout the query
-        site_config_lookup = get_site_config_lookup()
+        site_config_lookup = get_site_config_lookup("default")
         if site_config_lookup:
             item_type = await site_config_lookup.get_item_type_for_ranking(
                 ask_request.query.site
@@ -82,14 +82,20 @@ class DefaultAskHandler(AskHandler):
         )
 
         if (elicitation_data := await self._check_elicitation(ask_request)) is not None:
-            await self._send_meta(output_method, "Elicitation", ask_request.query.effective_query)
+            await self._send_meta(
+                output_method, "Elicitation", ask_request.query.effective_query
+            )
             if output_method:
                 await output_method({"elicitation": elicitation_data})
             return
 
         # Intentionally passing decontextualized query, or None if not.
-        await self._send_meta(output_method, "Answer", ask_request.query.decontextualized_query)
-        final_ranked_answers = await self._run_query_body(ask_request, output_method, site_config)
+        await self._send_meta(
+            output_method, "Answer", ask_request.query.decontextualized_query
+        )
+        final_ranked_answers = await self._run_query_body(
+            ask_request, output_method, site_config
+        )
         await self._post_results(ask_request, output_method, final_ranked_answers)
 
     async def _run_query_body(
@@ -226,7 +232,7 @@ class DefaultAskHandler(AskHandler):
         Returns:
             Elicitation data dict if elicitation is needed, None otherwise.
         """
-        site_config_lookup = get_site_config_lookup()
+        site_config_lookup = get_site_config_lookup("default")
         if not site_config_lookup:
             return None
 
