@@ -9,6 +9,7 @@ Implements MCP protocol using JSON-RPC 2.0 over standard HTTP.
 
 import json
 from typing import Awaitable, Callable, Dict, Any
+from nlweb_core.handler import AskHandler
 from nlweb_core.protocol.models import AskRequest
 
 
@@ -28,9 +29,9 @@ class MCPHandler:
     SERVER_NAME = "nlweb-mcp-server"
     SERVER_VERSION = "0.5.0"
 
-    def __init__(self, nlweb_handler_class: Any):
-        self.nlweb_handler_class = nlweb_handler_class
-        self.responses = []
+    def __init__(self, ask_handler_class: type[AskHandler]) -> None:
+        self.ask_handler_class = ask_handler_class
+        self.responses: list[Dict[str, Any]] = []
 
     def build_initialize_response(self, request_id: Any) -> Dict[str, Any]:
         """
@@ -233,8 +234,8 @@ class MCPHandler:
                 output_method = self.create_collector_output_method()
 
                 # Create and run handler
-                handler = self.nlweb_handler_class(ask_request, output_method)
-                await handler.runQuery()
+                handler = self.ask_handler_class()
+                await handler.do(ask_request, output_method)
 
                 # Build NLWeb result from collected responses
                 nlweb_result = self.build_json_response(self.get_collected_responses())

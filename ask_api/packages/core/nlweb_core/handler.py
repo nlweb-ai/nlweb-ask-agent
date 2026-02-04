@@ -2,16 +2,16 @@
 # Licensed under the MIT License
 
 """
-This file contains the NLWebHandler class for query processing.
+This file contains the AskHandler ABC and DefaultAskHandler implementation.
 
 WARNING: This code is under development and may undergo changes in future releases.
 Backwards compatibility is not guaranteed at this time.
 """
 import logging
+from abc import ABC, abstractmethod
 from typing import Callable, Awaitable
 from nlweb_core.query_analysis.query_analysis import (
     DefaultQueryAnalysisHandler,
-    QueryAnalysisHandler,
     query_analysis_tree,
 )
 from nlweb_core.protocol.models import AskRequest
@@ -20,20 +20,45 @@ from nlweb_core.site_config import get_site_config_lookup, get_elicitation_handl
 
 logger = logging.getLogger(__name__)
 
+# Type alias for the output method callback
+OutputMethod = Callable[[dict], Awaitable[None]] | None
 
-class NLWebHandler:
 
-    def __init__(
+class AskHandler(ABC):
+    """Abstract base class for Ask handlers."""
+
+    @abstractmethod
+    def __init__(self, **kwargs) -> None:
+        """Initialize the handler with configuration."""
+        pass
+
+    @abstractmethod
+    async def do(
         self,
         ask_request: AskRequest,
-        output_method: Callable[[dict], Awaitable[None]] | None,
-    ):
-        self.request_id = set_request_id()
-        self.output_method = output_method
-        self.request = ask_request
+        output_method: OutputMethod,
+    ) -> None:
+        """Process an ask request and send results via the output method."""
+        pass
 
-    async def runQuery(self):
+
+class DefaultAskHandler(AskHandler):
+    """Default implementation of AskHandler using NLWeb RAG pipeline."""
+
+    request_id: str
+
+    def __init__(self, **kwargs) -> None:
+        """Initialize the handler with a unique request ID."""
+        self.request_id = set_request_id()
+
+    async def do(
+        self,
+        ask_request: AskRequest,
+        output_method: OutputMethod,
+    ) -> None:
         """
+        Process the ask request using the NLWeb RAG pipeline.
+
         Main query execution flow:
         1. Prepare query (decontextualization, analysis, elicitation check)
         2. Send metadata (with correct response_type)
@@ -44,34 +69,35 @@ class NLWebHandler:
         site_config_lookup = get_site_config_lookup()
         if site_config_lookup:
             item_type = await site_config_lookup.get_item_type_for_ranking(
-                self.request.query.site
+                ask_request.query.site
             )
         else:
             item_type = None
 
-        site_config = {"item_type": item_type if item_type else "item"}
+        site_config: dict[str, str] = {"item_type": item_type if item_type else "item"}
 
         # Prepare first to determine if elicitation is needed
-        self.request.query.decontextualized_query = await self.decontextualize_query(
-            site_config
+        ask_request.query.decontextualized_query = await self._decontextualize_query(
+            ask_request, site_config
         )
-        # Note: query_analysis_results is not in use yet
-        # so it is commented out to avoid unnecessary processing.
-        # query_analysis_results = (
-        #    await QueryAnalysisHandler(self.request, site_config=site_config).do() or {}
-        # )
-        if (elicitation_data := await self._check_elicitation()) is not None:
-            await self.send_meta("Elicitation", self.request.query.effective_query)
-            if self.output_method:
-                await self.output_method({"elicitation": elicitation_data})
+
+        if (elicitation_data := await self._check_elicitation(ask_request)) is not None:
+            await self._send_meta(output_method, "Elicitation", ask_request.query.effective_query)
+            if output_method:
+                await output_method({"elicitation": elicitation_data})
             return
 
         # Intentionally passing decontextualized query, or None if not.
-        await self.send_meta("Answer", self.request.query.decontextualized_query)
-        final_ranked_answers = await self.runQueryBody(site_config)
-        await self.postResults(final_ranked_answers)
+        await self._send_meta(output_method, "Answer", ask_request.query.decontextualized_query)
+        final_ranked_answers = await self._run_query_body(ask_request, output_method, site_config)
+        await self._post_results(ask_request, output_method, final_ranked_answers)
 
-    async def runQueryBody(self, site_config: dict) -> list[dict]:
+    async def _run_query_body(
+        self,
+        request: AskRequest,
+        output_method: OutputMethod,
+        site_config: dict[str, str],
+    ) -> list[dict]:
         """Execute the query body by retrieving and ranking items."""
         from nlweb_core.retriever import get_item_retriever
         from nlweb_core.item_retriever import RetrievalParams
@@ -80,28 +106,33 @@ class NLWebHandler:
         retriever = get_item_retriever()
         retrieved_items = await retriever.retrieve(
             RetrievalParams(
-                query_text=self.request.query.effective_query,
-                site=self.request.query.site,
-                num_results=self.request.query.num_results,
+                query_text=request.query.effective_query,
+                site=request.query.site,
+                num_results=request.query.num_results,
             )
         )
 
         final_ranked_answers = await Ranking().rank(
             items=retrieved_items,
-            query_text=self.request.query.effective_query,
+            query_text=request.query.effective_query,
             item_type=site_config["item_type"],
-            max_results=self.request.query.num_results,
-            min_score=self.request.query.min_score,
+            max_results=request.query.num_results,
+            min_score=request.query.min_score,
         )
 
-        await self.send_results(final_ranked_answers)
+        await self._send_results(output_method, final_ranked_answers)
         return final_ranked_answers
 
-    async def decontextualize_query(self, site_config: dict) -> str | None:
+    async def _decontextualize_query(
+        self,
+        request: AskRequest,
+        site_config: dict[str, str],
+    ) -> str | None:
         """
         Decontextualize the query using conversation context.
 
         Args:
+            request: The ask request containing query and context.
             site_config: Site configuration dict with 'item_type' key.
 
         Returns:
@@ -109,11 +140,11 @@ class NLWebHandler:
         """
         # TODO: Handle transliteration via site configuration
         # Route to language-specific decontextualization if needed
-        if self.request.query.site == "aajtak.in":
-            return await self._decontextualize_query_hindi(site_config)
+        if request.query.site == "aajtak.in":
+            return await self._decontextualize_query_hindi(request, site_config)
 
         # Standard decontextualization for non-transliteration sites
-        context = self.request.context
+        context = request.context
         prev_queries = (context.prev or []) if context else []
         context_text = context.text if context else None
 
@@ -121,7 +152,7 @@ class NLWebHandler:
             return None
         elif prev_queries and context_text is None:
             result = await DefaultQueryAnalysisHandler(
-                self.request,
+                request,
                 prompt_ref="PrevQueryDecontextualizer",
                 root_node=query_analysis_tree,
                 site_config=site_config,
@@ -129,32 +160,37 @@ class NLWebHandler:
             return result.get("decontextualized_query") if result else None
         else:
             result = await DefaultQueryAnalysisHandler(
-                self.request,
+                request,
                 prompt_ref="FullContextDecontextualizer",
                 root_node=query_analysis_tree,
                 site_config=site_config,
             ).do()
             return result.get("decontextualized_query") if result else None
 
-    async def _decontextualize_query_hindi(self, site_config: dict) -> str | None:
+    async def _decontextualize_query_hindi(
+        self,
+        request: AskRequest,
+        site_config: dict[str, str],
+    ) -> str | None:
         """
         Decontextualize query for Hindi sites with Hinglish transliteration.
         Uses Hindi-specific prompts that handle romanized Hindi (Hinglish) conversion.
 
         Args:
+            request: The ask request containing query and context.
             site_config: Site configuration dict with 'item_type' key.
 
         Returns:
             The decontextualized query string (transliterated if needed), or None if no context.
         """
-        context = self.request.context
+        context = request.context
         prev_queries = (context.prev or []) if context else []
         context_text = context.text if context else None
 
         if not prev_queries and context_text is None:
             # No context - just transliterate
             result = await DefaultQueryAnalysisHandler(
-                self.request,
+                request,
                 prompt_ref="NoContextTransliterator",
                 root_node=query_analysis_tree,
                 site_config=site_config,
@@ -163,7 +199,7 @@ class NLWebHandler:
         elif prev_queries and context_text is None:
             # Decontextualize with prev queries + transliteration
             result = await DefaultQueryAnalysisHandler(
-                self.request,
+                request,
                 prompt_ref="PrevQueryDecontextualizerHindi",
                 root_node=query_analysis_tree,
                 site_config=site_config,
@@ -172,17 +208,20 @@ class NLWebHandler:
         else:
             # Decontextualize with full context + transliteration
             result = await DefaultQueryAnalysisHandler(
-                self.request,
+                request,
                 prompt_ref="FullContextDecontextualizerHindi",
                 root_node=query_analysis_tree,
                 site_config=site_config,
             ).do()
             return result.get("decontextualized_query") if result else None
 
-    async def _check_elicitation(self) -> dict | None:
+    async def _check_elicitation(self, request: AskRequest) -> dict | None:
         """
         Check if elicitation is needed for this query.
         This is called after decontextualization and query analysis.
+
+        Args:
+            request: The ask request to check.
 
         Returns:
             Elicitation data dict if elicitation is needed, None otherwise.
@@ -192,7 +231,7 @@ class NLWebHandler:
             return None
 
         site_config = await site_config_lookup.get_config_for_site_filter(
-            self.request.query.site
+            request.query.site
         )
         if not site_config:
             return None
@@ -204,7 +243,7 @@ class NLWebHandler:
 
         try:
             elicitation_prompt = await elicitation_handler.evaluate_query(
-                query_text=self.request.query.effective_query,
+                query_text=request.query.effective_query,
                 site_config=site_config,
             )
             if elicitation_prompt:
@@ -216,44 +255,57 @@ class NLWebHandler:
 
         return None
 
-    async def send_meta(
-        self, response_type: str, decontextualized_query: str | None = None
-    ):
+    async def _send_meta(
+        self,
+        output_method: OutputMethod,
+        response_type: str,
+        decontextualized_query: str | None = None,
+    ) -> None:
         """Send the metadata object via the output method."""
-        if self.output_method:
-            meta = {
+        if output_method:
+            meta: dict[str, str] = {
                 "version": "0.54",
                 "response_type": response_type,
                 "request_id": self.request_id,
             }
             if decontextualized_query:
                 meta["decontextualized_query"] = decontextualized_query
-            await self.output_method({"_meta": meta})
+            await output_method({"_meta": meta})
 
-    async def send_results(self, results: list):
+    async def _send_results(
+        self,
+        output_method: OutputMethod,
+        results: list[dict],
+    ) -> None:
         """
         Send v0.54 compliant results array.
 
         Args:
+            output_method: The callback for sending results.
             results: List of result objects (dicts with @type, name, etc.)
         """
-        if self.output_method:
-            await self.output_method({"results": results})
+        if output_method:
+            await output_method({"results": results})
 
-    async def postResults(self, final_ranked_answers: list[dict]):
+    async def _post_results(
+        self,
+        request: AskRequest,
+        output_method: OutputMethod,
+        final_ranked_answers: list[dict],
+    ) -> None:
         """Execute post-query processing (summarization, conversation storage, etc.)."""
         from nlweb_core.conversation_saver import ConversationSaver
         from nlweb_core.postQueryProcessing import PostQueryProcessing
 
-        prefer = self.request.prefer
-        await PostQueryProcessing(site=self.request.query.site).process(
+        prefer = request.prefer
+        await PostQueryProcessing(site=request.query.site).process(
             final_ranked_answers=final_ranked_answers,
-            query_text=self.request.query.effective_query,
+            query_text=request.query.effective_query,
             modes=[
                 m.strip()
                 for m in (prefer.mode if prefer and prefer.mode else "list").split(",")
             ],
-            send_results=self.send_results,
+            send_results=lambda results: self._send_results(output_method, results),
         )
 
-        await ConversationSaver().save(self.request, final_ranked_answers)
+        await ConversationSaver().save(request, final_ranked_answers)
