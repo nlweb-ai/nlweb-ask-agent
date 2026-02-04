@@ -150,6 +150,36 @@ def get_schema_urls_from_robots(site_url):
     return []
 
 
+def is_aajtak_recent_file(url):
+    """
+    Check if a URL should be processed for aajtak.in.
+    Returns True if the URL matches:
+    - "latest" in URL (latest news feed)
+    - Today's date in URL
+    - Yesterday's date in URL
+    """
+    from datetime import date, timedelta
+
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+
+    return ("latest" in url.lower() or
+            f"yyyy={today.year}&mm={today.month:02d}&dd={today.day:02d}" in url or
+            f"yyyy={yesterday.year}&mm={yesterday.month:02d}&dd={yesterday.day:02d}" in url)
+
+
+def filter_aajtak_recent_files(file_url_tuples):
+    """
+    Hack: Only process recent files for aajtak.in to avoid checking 1,500+ historical files.
+    Keeps files matching recent date criteria.
+
+    Result: ~3 files instead of 1,500
+    """
+    recent_files = [url_tuple for url_tuple in file_url_tuples if is_aajtak_recent_file(url_tuple[0])]
+    logger.info(f"aajtak.in filter: {len(file_url_tuples)} files → {len(recent_files)} recent files")
+    return recent_files
+
+
 def add_schema_map_to_site(site_url, user_id="system", schema_map_url=None, refresh_mode="diff"):
     """
     Add a schema map to a site (Level 2 logic):
@@ -235,6 +265,14 @@ def add_schema_map_to_site(site_url, user_id="system", schema_map_url=None, refr
             # Workers won't encounter existing files at all
             files_to_queue = added_files
             logger.info(f"Refresh mode: DIFF - queuing {len(files_to_queue)} new files only")
+
+        # HACK: For aajtak.in, override files_to_queue to only recent files
+        # This avoids checking 1,500+ historical files that never change
+        # We do this AFTER all normal logic, so database has all files but we only queue recent ones
+        if site_url == "aajtak.in":
+            recent_tuples = filter_aajtak_recent_files(json_file_url_tuples)
+            files_to_queue = [url_tuple[0] for url_tuple in recent_tuples]
+            logger.info(f"aajtak.in override: queuing {len(files_to_queue)} recent files (ignoring mode)")
 
         queue = get_queue()
         queued_count = 0
