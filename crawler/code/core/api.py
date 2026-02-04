@@ -292,22 +292,17 @@ def add_schema_file(site_url):
             site_url, DEFAULT_USER_ID, schema_map_url, refresh_mode=refresh_mode
         )
 
-        if files_queued == 0:
-            return (
-                jsonify(
-                    {"error": "No schema files found or failed to fetch schema_map"}
-                ),
-                400,
-            )
-
+        # files_queued=0 is valid (no new files in diff mode, or schema_map was empty)
+        # Return success with appropriate message
         return jsonify(
             {
                 "success": True,
                 "site_url": site_url,
                 "schema_map_url": schema_map_url,
+                "refresh_mode": refresh_mode,
                 "files_discovered": files_added,  # New files discovered
                 "files_queued": files_queued,  # Total files queued for processing
-                "files_queued": files_queued,
+                "message": f"Processed successfully. {files_added} new files discovered, {files_queued} files queued for processing."
             }
         )
 
