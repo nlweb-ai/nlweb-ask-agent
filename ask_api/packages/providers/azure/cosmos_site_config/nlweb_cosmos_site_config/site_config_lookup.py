@@ -14,7 +14,6 @@ from urllib.parse import urlparse
 from azure.cosmos.aio import CosmosClient
 from azure.cosmos import exceptions
 
-from nlweb_core.config import get_config
 from nlweb_core.azure_credentials import get_azure_credential
 from nlweb_core.site_config import SiteConfigLookup
 
@@ -41,69 +40,61 @@ class CosmosSiteConfigLookup(SiteConfigLookup):
     Uses native async client for proper connection pooling.
     """
 
-    def __init__(self, provider_name: str):
+    def __init__(
+        self,
+        *,
+        provider_name: str,
+        endpoint: str,
+        database_name: str,
+        container_name: str,
+        cache_ttl: int,
+        **kwargs: Any,
+    ):
         """
         Initialize Cosmos DB configuration. Client is created lazily on first use.
 
         Args:
-            provider_name: Name of the site config provider in config.
-
-        Uses get_config().get_site_config_provider(provider_name) for all connection parameters.
+            provider_name: Name of the site config provider.
+            endpoint: Cosmos DB endpoint URL.
+            database_name: Cosmos DB database name.
+            container_name: Cosmos DB container name.
+            cache_ttl: Cache TTL in seconds.
         """
-        config = get_config()
-        site_cfg = config.get_site_config_provider(provider_name)
-
-        if not site_cfg:
-            raise ValueError(
-                f"Site config provider '{provider_name}' is not configured"
+        if kwargs:
+            raise TypeError(
+                f"CosmosSiteConfigLookup received unexpected arguments: {list(kwargs.keys())}"
             )
 
-        self._site_cfg = site_cfg
         self._provider_name = provider_name
-
-        # Get endpoint and database from site_config
-        if not self._site_cfg.endpoint:
-            raise ValueError(
-                "Site config endpoint not configured. "
-                "Set endpoint_env in config.yaml site_config section."
-            )
-        if not self._site_cfg.database_name:
-            raise ValueError(
-                "Site config database_name not configured. "
-                "Set database_name_env in config.yaml site_config section."
-            )
+        self._endpoint = endpoint
+        self._database_name = database_name
+        self._container_name = container_name
+        self.cache_ttl = cache_ttl
 
         # Client initialized lazily on first use
         self._client: Optional[CosmosClient] = None
         self._container = None
 
         # Initialize cache
-        self.cache_ttl = self._site_cfg.cache_ttl
         self.cache: Dict[str, Dict[str, Any]] = {}
 
         logger.info(
-            f"CosmosSiteConfigLookup initialized: endpoint={self._site_cfg.endpoint}, "
-            f"database={self._site_cfg.database_name}, "
-            f"container={self._site_cfg.container_name}, "
+            f"CosmosSiteConfigLookup initialized: endpoint={self._endpoint}, "
+            f"database={self._database_name}, "
+            f"container={self._container_name}, "
             f"cache_ttl={self.cache_ttl}s"
         )
 
     async def _ensure_client(self):
         """Create client if not already initialized."""
         if self._client is None:
-            assert self._site_cfg.endpoint is not None
-            assert self._site_cfg.database_name is not None
-            assert self._site_cfg.container_name is not None
-
             credential = await get_azure_credential()
             self._client = CosmosClient(
-                self._site_cfg.endpoint,
+                self._endpoint,
                 credential=credential,
             )
-            database = self._client.get_database_client(self._site_cfg.database_name)
-            self._container = database.get_container_client(
-                self._site_cfg.container_name
-            )
+            database = self._client.get_database_client(self._database_name)
+            self._container = database.get_container_client(self._container_name)
 
     async def get_config(self, domain: str) -> Optional[Dict[str, Any]]:
         """

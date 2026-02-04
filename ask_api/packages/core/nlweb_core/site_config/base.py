@@ -4,16 +4,22 @@ Base class for site configuration lookup providers.
 
 import importlib
 import logging
+import threading
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 
-from nlweb_core.config import SiteConfigStorageConfig
+from nlweb_core.config import SiteConfigStorageConfig, get_config
 
 logger = logging.getLogger(__name__)
 
 
 class SiteConfigLookup(ABC):
     """Abstract base class defining the interface for site configuration lookup providers."""
+
+    @abstractmethod
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialize the site config lookup provider."""
+        ...
 
     @abstractmethod
     async def get_config(self, domain: str) -> Optional[dict[str, Any]]:
@@ -61,68 +67,73 @@ class SiteConfigLookup(ABC):
 
 # Module-level cache for site config services
 _site_config_lookups: dict[str, SiteConfigLookup] = {}
+_site_config_lock = threading.Lock()
 
 
-def get_site_config_lookup(name: str) -> SiteConfigLookup | None:
-    """Get the cached site config lookup instance by name.
+def get_site_config_lookup(name: str) -> SiteConfigLookup:
+    """Get site config lookup instance by name, creating it lazily if needed.
 
     Args:
         name: Provider name.
+
+    Returns:
+        SiteConfigLookup instance.
+
+    Raises:
+        ValueError: If provider is not configured.
     """
-    if name in _site_config_lookups:
-        return _site_config_lookups[name]
-    return None
+    with _site_config_lock:
+        if name in _site_config_lookups:
+            return _site_config_lookups[name]
+
+        config = get_config()
+        provider_config = config.get_site_config_provider(name)
+        if provider_config is None:
+            raise ValueError(f"Site config provider '{name}' is not configured")
+
+        try:
+            module = importlib.import_module(provider_config.import_path)
+            provider_class: type[SiteConfigLookup] = getattr(
+                module, provider_config.class_name
+            )
+            lookup = provider_class(provider_name=name, **provider_config.options)
+
+            logger.info(
+                f"SiteConfigLookup '{name}' initialized via provider: "
+                f"{provider_config.import_path}.{provider_config.class_name}"
+            )
+
+            _site_config_lookups[name] = lookup
+            return lookup
+        except Exception as e:
+            logger.error(
+                f"Failed to initialize SiteConfigLookup '{name}': {e}",
+                exc_info=True,
+            )
+            raise
 
 
 async def close_site_config_lookup() -> None:
     """Close all site config lookup clients and release resources."""
-    global _site_config_lookups
-    for name, lookup in list(_site_config_lookups.items()):
-        try:
-            await lookup.close()
-        except Exception as e:
-            logger.warning(f"Error closing site config lookup '{name}': {e}")
-    _site_config_lookups.clear()
+    with _site_config_lock:
+        for name, lookup in list(_site_config_lookups.items()):
+            try:
+                await lookup.close()
+            except Exception as e:
+                logger.warning(f"Error closing site config lookup '{name}': {e}")
+        _site_config_lookups.clear()
 
 
 def initialize_site_config(
     site_config_providers: dict[str, SiteConfigStorageConfig],
 ) -> None:
     """
-    Initialize site config lookups from provider configs.
+    Pre-initialize all configured site config lookups.
 
-    This should be called during server startup.
+    This should be called during server startup to eagerly populate the cache.
 
     Args:
         site_config_providers: Mapping of site config provider names to configs.
     """
-    for provider_name, provider_config in site_config_providers.items():
-        if not provider_config.endpoint:
-            raise ValueError(
-                f"Site config provider '{provider_name}' missing endpoint configuration"
-            )
-
-        if not provider_config.database_name:
-            raise ValueError(
-                f"Site config provider '{provider_name}' missing database_name configuration"
-            )
-
-        try:
-            module = importlib.import_module(provider_config.import_path)
-            provider_class = getattr(module, provider_config.class_name)
-
-            site_config_lookup = provider_class(provider_name=provider_name)
-
-            logger.info(
-                f"SiteConfigLookup '{provider_name}' initialized via provider: "
-                f"{provider_config.import_path}.{provider_config.class_name}"
-            )
-
-            _site_config_lookups[provider_name] = site_config_lookup
-
-        except Exception as e:
-            logger.error(
-                f"Failed to initialize SiteConfigLookup '{provider_name}': {e}",
-                exc_info=True,
-            )
-            raise
+    for provider_name in site_config_providers:
+        get_site_config_lookup(provider_name)

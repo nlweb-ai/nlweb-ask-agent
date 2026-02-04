@@ -156,10 +156,7 @@ class ObjectLookupConfig:
 class SiteConfigStorageConfig:
     import_path: str
     class_name: str
-    endpoint: str | None = None
-    database_name: str | None = None
-    container_name: str = "site_configs"
-    cache_ttl: int = 300
+    options: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -620,21 +617,22 @@ def _load_site_config_storage(data: dict) -> dict[str, SiteConfigStorageConfig]:
                 f"site_config provider '{provider_name}' must specify import_path and class_name"
             )
 
+        # Build options dict from all config except import_path and class_name
+        options: dict[str, Any] = {}
+        for key, value in provider_cfg.items():
+            if key in ("import_path", "class_name"):
+                continue
+            # Handle _env suffix keys by resolving environment variables
+            if key.endswith("_env"):
+                resolved_key = key[:-4]  # Remove _env suffix
+                options[resolved_key] = _get_config_value(value)
+            else:
+                options[key] = value
+
         providers[provider_name] = SiteConfigStorageConfig(
-            endpoint=(
-                _get_config_value(provider_cfg.get("endpoint_env"))
-                if "endpoint_env" in provider_cfg
-                else provider_cfg.get("endpoint")
-            ),
-            database_name=(
-                _get_config_value(provider_cfg.get("database_name_env"))
-                if "database_name_env" in provider_cfg
-                else provider_cfg.get("database_name")
-            ),
-            container_name=provider_cfg.get("container_name", "site_configs"),
-            cache_ttl=provider_cfg.get("cache_ttl", 300),
             import_path=import_path,
             class_name=class_name,
+            options=options,
         )
 
     return providers
