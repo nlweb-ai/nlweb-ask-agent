@@ -14,8 +14,6 @@ export default defineConfig({
       'react',
       'react-dom',
       'react/jsx-runtime',
-      'use-sync-external-store',
-      'use-sync-external-store/with-selector',
     ],
   },
   resolve: {

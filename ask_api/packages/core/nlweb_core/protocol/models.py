@@ -137,9 +137,13 @@ class Meta(BaseModel):
         None,
         description="Whether to remember this interaction in conversation history (optional)",
     )
-    start_num: Optional[int] = Field(
-        None,
-        description="The starting item number used for pagination"
+    page: Optional[int] = Field(
+        0,
+        description="The page number to return results from"
+    )
+    pages:Optional[int] = Field(
+        1,
+        description="The number of pages to support"
     )
 
 

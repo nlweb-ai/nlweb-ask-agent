@@ -70,40 +70,51 @@ class NLWebHandler:
         await self.send_meta("Answer", self.request.query.decontextualized_query)
         final_ranked_answers = await self.runQueryBody(site_config)
         await self.postResults(final_ranked_answers)
-
-    def _get_start_number(self) -> int:
-        start_num = 0
-        if self.request.meta and self.request.meta.start_num:
-            start_num = self.request.meta.start_num
-        return start_num
+    
+    def _get_page(self) -> int:
+        if self.request.meta and self.request.meta.page:
+            return self.request.meta.page
+        return 0
+    
+    def _get_pages(self) -> int:
+        if self.request.meta and self.request.meta.pages:
+            return self.request.meta.pages
+        return 1
     
     async def runQueryBody(self, site_config: dict) -> list[dict]:
         """Execute the query body by retrieving and ranking items."""
         from nlweb_core.retriever import get_item_retriever
         from nlweb_core.item_retriever import RetrievalParams
         from nlweb_core.ranking import Ranking
-        start_num = self._get_start_number()
-        results_to_retrieve = start_num + self.request.query.num_results
         retriever = get_item_retriever()
-        retrieved_items = await retriever.retrieve(
-            RetrievalParams(
-                query_text=self.request.query.effective_query,
-                site=self.request.query.site,
-                num_results=results_to_retrieve,
+        # hanlde pagination
+        num_pages_to_support = self._get_pages()
+        target_page = self._get_page()
+        results_per_page =  self.request.query.num_results
+        results_to_retrieve = num_pages_to_support * results_per_page
+        start_index = target_page * results_per_page
+        if target_page < num_pages_to_support:
+            retrieved_items = await retriever.retrieve(
+                RetrievalParams(
+                    query_text=self.request.query.effective_query,
+                    site=self.request.query.site,
+                    num_results=results_to_retrieve,
+                )
             )
-        )
+            print("Retrieved", len(retrieved_items))
+            print("Returning ranked results from page", target_page)
+            final_ranked_answers = await Ranking().rank(
+                items=retrieved_items,
+                query_text=self.request.query.effective_query,
+                item_type=site_config["item_type"],
+                max_results=self.request.query.num_results,
+                min_score=self.request.query.min_score,
+                start_num=start_index
+            )
 
-        final_ranked_answers = await Ranking().rank(
-            items=retrieved_items,
-            query_text=self.request.query.effective_query,
-            item_type=site_config["item_type"],
-            max_results=self.request.query.num_results,
-            min_score=self.request.query.min_score,
-            start_num=start_num
-        )
-
-        await self.send_results(final_ranked_answers)
-        return final_ranked_answers
+            await self.send_results(final_ranked_answers)
+            return final_ranked_answers
+        raise Exception(f"Page {target_page} exceeds max pages of {num_pages_to_support}")
 
     async def decontextualize_query(self, site_config: dict) -> str | None:
         """
@@ -254,6 +265,7 @@ class NLWebHandler:
         from nlweb_core.postQueryProcessing import PostQueryProcessing
 
         prefer = self.request.prefer
+        start_num = self.request.query.num_results * self._get_page()
         await PostQueryProcessing(site=self.request.query.site).process(
             final_ranked_answers=final_ranked_answers,
             query_text=self.request.query.effective_query,
@@ -262,7 +274,7 @@ class NLWebHandler:
                 for m in (prefer.mode if prefer and prefer.mode else "list").split(",")
             ],
             send_results=self.send_results,
-            start_num=self._get_start_number()
+            start_num=start_num
         )
 
         await ConversationSaver().save(self.request, final_ranked_answers)

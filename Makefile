@@ -35,16 +35,17 @@ help:
 # Use 'pnpm link' in chat-app for local search-components development
 
 frontend:
-	@echo "Starting ask-api in Docker..."
-	docker-compose -f docker-compose.yml up --build -d ask-api
+	@echo "Starting ask-api and chat-app..."
+	@echo "Ask API: http://localhost:8000"
+	@echo "Chat App: http://localhost:5173"
 	@echo ""
-	@echo "Starting chat-app with pnpm dev..."
-	@echo "Ask API available at: http://localhost:8000"
-	@echo "Chat App will be available at: http://localhost:5173"
+	@echo "Press Ctrl+C to stop all services"
 	@echo ""
-	@echo "Tip: Use 'pnpm link' for local search-components development"
-	@echo ""
-	cd chat-app && VITE_ASK_API_URL=http://localhost:8000 pnpm dev
+	@trap 'echo "\nStopping services..."; docker-compose -f docker-compose.yml down; exit' INT TERM; \
+	docker-compose -f docker-compose.yml up --build ask-api & \
+	sleep 3; \
+	cd chat-app && VITE_ASK_API_URL=http://localhost:8000 pnpm dev; \
+	docker-compose -f docker-compose.yml down
 
 fullstack:
 	docker-compose -f docker-compose.yml up --build

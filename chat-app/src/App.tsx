@@ -1,4 +1,4 @@
-import {ChatSearch, useNlWeb, DebugTool, SiteDropdown, useSearchSession, useSearchSessions, HistorySidebar} from '@nlweb-ai/search-components';
+import {ChatSearch, useNlWeb, DebugTool, SiteDropdown, useSearchSession, useSearchSessions, HistorySidebar, type SearchSession} from '@nlweb-ai/search-components';
 import { useState } from 'react';
 
 const SITES = [
@@ -109,6 +109,7 @@ const SITES = [
   {url: 'ambitiouskitchen.com'},
 ];
 
+const PAGES = 3;
 function App() {
   const [site, setSite] = useState(SITES[0]);
     // Append URL query parameters to the endpoint for config overrides
@@ -118,25 +119,30 @@ function App() {
     const nlweb = useNlWeb({
       endpoint: endpoint,
       site: site.url,
-      maxResults: 50
+      maxResults: 9,
+      pages: PAGES
     });
     const localSessions = useSearchSessions();
     const [sessionId, setSessionId] = useState<string>(crypto.randomUUID());
-    const [sessionResults, setSessionResults] = useSearchSession(sessionId);
-    //@ts-ignore
-    function startSearch(firstResult) {
+    const [sessionResults, addResult] = useSearchSession(sessionId);
+     async function startSearch(query: string) {
+      nlweb.clearResults();
       const newId = localSessions.sessions.some(s => s.sessionId === sessionId) ? crypto.randomUUID() : sessionId ;
-      localSessions.startSession(newId, firstResult, {
+      await localSessions.startSession(newId, query, {
         site: site.url,
         endpoint: endpoint
       })
       setSessionId(newId);
+      return newId;
     }
     function endSearch() {
       setSessionId(crypto.randomUUID());
+      nlweb.clearResults();
+      nlweb.cancelSearch();
     }
-    //@ts-ignore
     function selectSession(session: SearchSession) {
+      nlweb.clearResults();
+      nlweb.cancelSearch();
       setSessionId(session.sessionId);
       setSite(SITES.find(s => s.url == session.backend.site) || {
         url: session.backend.site
@@ -153,12 +159,13 @@ function App() {
         <div className='p-8 flex-1'>
           <div className='max-w-3xl mx-auto'>
             <ChatSearch
-              key={sessionId}
+              sessionId={sessionId}
               startSession={startSearch}
               endSession={endSearch}
               results={sessionResults}
-              setResults={setSessionResults}
+              addResult={addResult}
               nlweb={nlweb}
+              maxPages={PAGES}
               sidebar={<HistorySidebar
                 sessions={localSessions.sessions}
                 onSelect={selectSession}

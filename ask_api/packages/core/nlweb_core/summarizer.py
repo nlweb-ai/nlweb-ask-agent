@@ -117,7 +117,7 @@ Results:
         # If some constraints on query, ie pagination, make sure summary aware of it.
         query_constraints = ""
         if start_num:
-            query_constraints = f"The query was issued again for more results, starting at the {start_num} entry. Indicate these results were found afer searching for more items."
+            query_constraints = f"The query was issued again for more results, starting at the {start_num} entry. Start of the summary by indicating these items were retrieved after looking for additional items."
         return self._prompt_template.format(
             query=query, 
             results=results_text,

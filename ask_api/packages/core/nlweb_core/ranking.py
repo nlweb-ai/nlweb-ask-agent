@@ -121,5 +121,6 @@ class Ranking:
 
         # Convert to dicts for consumer compatibility
         last_index = start_num + max_results
+        print("Start number is", start_num)
         # Handle pagination
         return [r.to_dict() for r in ranked[start_num:last_index]]
