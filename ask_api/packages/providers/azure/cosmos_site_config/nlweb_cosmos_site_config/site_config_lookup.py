@@ -16,6 +16,7 @@ from azure.cosmos import exceptions
 
 from nlweb_core.config import get_config
 from nlweb_core.azure_credentials import get_azure_credential
+from nlweb_core.site_config import SiteConfigLookup
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ def generate_config_id(domain: str) -> str:
     return hashlib.sha256(normalized.encode()).hexdigest()
 
 
-class SiteConfigLookup:
+class CosmosSiteConfigLookup(SiteConfigLookup):
     """
     Azure Cosmos DB implementation for site configuration lookup.
     Uses native async client for proper connection pooling.
@@ -81,7 +82,7 @@ class SiteConfigLookup:
         self.cache: Dict[str, Dict[str, Any]] = {}
 
         logger.info(
-            f"SiteConfigLookup initialized: endpoint={self._site_cfg.endpoint}, "
+            f"CosmosSiteConfigLookup initialized: endpoint={self._site_cfg.endpoint}, "
             f"database={self._site_cfg.database_name}, "
             f"container={self._site_cfg.container_name}, "
             f"cache_ttl={self.cache_ttl}s"

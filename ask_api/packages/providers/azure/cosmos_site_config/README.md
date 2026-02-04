@@ -33,10 +33,10 @@ site_config:
 The provider is automatically initialized when site_config is configured:
 
 ```python
-from nlweb_cosmos_site_config import SiteConfigLookup
+from nlweb_cosmos_site_config import CosmosSiteConfigLookup
 
 # Initialized automatically from CONFIG
-lookup = SiteConfigLookup(provider_name="default")
+lookup = CosmosSiteConfigLookup(provider_name="default")
 
 # Get config for a domain
 config = lookup.get_config("yelp.com")

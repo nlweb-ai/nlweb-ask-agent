@@ -83,7 +83,7 @@ site_config:
     container_name: site_configs
     cache_ttl: 300  # Cache TTL in seconds (5 minutes)
     import_path: nlweb_cosmos_site_config.site_config_lookup
-    class_name: SiteConfigLookup
+    class_name: CosmosSiteConfigLookup
 
 server:
   host: 0.0.0.0
