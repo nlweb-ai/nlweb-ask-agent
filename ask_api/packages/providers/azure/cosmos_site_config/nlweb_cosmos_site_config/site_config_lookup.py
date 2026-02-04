@@ -274,7 +274,7 @@ class CosmosSiteConfigLookup(SiteConfigLookup):
 
     async def get_config_type(
         self, domain: str, config_type: str
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[Any]:
         """
         Retrieve a specific config type for a domain.
 
