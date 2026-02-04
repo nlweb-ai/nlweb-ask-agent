@@ -34,6 +34,38 @@ def generate_config_id(domain: str) -> str:
     return hashlib.sha256(normalized.encode()).hexdigest()
 
 
+def normalize_domain(domain_or_url: str) -> str:
+    """
+    Normalize a domain or URL to a canonical domain name.
+
+    Handles URLs by extracting the netloc, then lowercases, strips whitespace,
+    and removes the www. prefix.
+
+    Args:
+        domain_or_url: Domain or URL (e.g., "https://www.yelp.com/biz", "WWW.Yelp.com ")
+
+    Returns:
+        Normalized domain (e.g., "yelp.com")
+
+    Raises:
+        ValueError: If URL parsing fails
+    """
+    value = domain_or_url.strip().lower()
+
+    if value.startswith(("http://", "https://")):
+        try:
+            parsed = urlparse(value)
+            value = parsed.netloc
+        except Exception as e:
+            logger.warning(f"Failed to parse as URL: {domain_or_url} - {e}")
+            raise ValueError(f"Invalid URL: {domain_or_url}") from e
+
+    if value.startswith("www."):
+        value = value[4:]
+
+    return value
+
+
 class CosmosSiteConfigLookup(SiteConfigLookup):
     """
     Azure Cosmos DB implementation for site configuration lookup.
@@ -106,12 +138,7 @@ class CosmosSiteConfigLookup(SiteConfigLookup):
         Returns:
             Configuration dict or None if not found
         """
-        # Normalize domain
-        normalized_domain = domain.lower().strip()
-
-        # Remove www. prefix if present (treat www.example.com same as example.com)
-        if normalized_domain.startswith("www."):
-            normalized_domain = normalized_domain[4:]
+        normalized_domain = normalize_domain(domain)
 
         # Check cache
         cache_key = normalized_domain
@@ -195,21 +222,7 @@ class CosmosSiteConfigLookup(SiteConfigLookup):
         if not site_filter:
             return None
 
-        site_filter = site_filter.strip().lower()
-
-        # If it looks like a URL, parse it to extract domain
-        if site_filter.startswith(("http://", "https://")):
-            try:
-                parsed = urlparse(site_filter)
-                domain = parsed.netloc
-            except Exception as e:
-                logger.warning(
-                    f"Failed to parse site filter as URL: {site_filter} - {e}"
-                )
-                raise
-        else:
-            domain = site_filter
-
+        domain = normalize_domain(site_filter)
         return await self.get_config(domain)
 
     async def get_item_type_for_ranking(self, site_filter: str | None) -> str | None:
@@ -228,25 +241,7 @@ class CosmosSiteConfigLookup(SiteConfigLookup):
         if not site_filter:
             return None
 
-        site_filter = site_filter.strip().lower()
-
-        # Extract domain from URL if needed
-        if site_filter.startswith(("http://", "https://")):
-            try:
-                parsed = urlparse(site_filter)
-                domain = parsed.netloc
-            except Exception as e:
-                logger.warning(
-                    f"Failed to parse site filter as URL: {site_filter} - {e}"
-                )
-                raise
-        else:
-            domain = site_filter
-
-        # Normalize domain
-        normalized_domain = domain.lower().strip()
-        if normalized_domain.startswith("www."):
-            normalized_domain = normalized_domain[4:]
+        normalized_domain = normalize_domain(site_filter)
 
         # Get item_types from config
         item_types = await self.get_config_type(normalized_domain, "item_types")
@@ -264,10 +259,7 @@ class CosmosSiteConfigLookup(SiteConfigLookup):
             domain: Domain to invalidate (None = invalidate all)
         """
         if domain:
-            normalized_domain = domain.lower().strip()
-            if normalized_domain.startswith("www."):
-                normalized_domain = normalized_domain[4:]
-
+            normalized_domain = normalize_domain(domain)
             if normalized_domain in self.cache:
                 del self.cache[normalized_domain]
                 logger.info(f"Cache invalidated for domain: {normalized_domain}")
@@ -303,10 +295,7 @@ class CosmosSiteConfigLookup(SiteConfigLookup):
         Returns:
             Full document dict or None if not found
         """
-        # Normalize domain
-        normalized_domain = domain.lower().strip()
-        if normalized_domain.startswith("www."):
-            normalized_domain = normalized_domain[4:]
+        normalized_domain = normalize_domain(domain)
 
         await self._ensure_client()
         assert self._container is not None
@@ -351,15 +340,11 @@ class CosmosSiteConfigLookup(SiteConfigLookup):
         Returns:
             Config type dict or None if not found
         """
-        # Normalize domain
-        normalized_domain = domain.lower().strip()
-        if normalized_domain.startswith("www."):
-            normalized_domain = normalized_domain[4:]
+        normalized_domain = normalize_domain(domain)
 
         await self._ensure_client()
         assert self._container is not None
 
-        # Generate config ID
         config_id = generate_config_id(normalized_domain)
 
         try:
@@ -410,15 +395,11 @@ class CosmosSiteConfigLookup(SiteConfigLookup):
         Returns:
             Result dict with 'created' flag and 'id'
         """
-        # Normalize domain
-        normalized_domain = domain.lower().strip()
-        if normalized_domain.startswith("www."):
-            normalized_domain = normalized_domain[4:]
+        normalized_domain = normalize_domain(domain)
 
         await self._ensure_client()
         assert self._container is not None
 
-        # Generate config ID
         config_id = generate_config_id(normalized_domain)
 
         try:
@@ -483,15 +464,11 @@ class CosmosSiteConfigLookup(SiteConfigLookup):
         Returns:
             Result dict with 'domain_deleted' flag, or None if not found
         """
-        # Normalize domain
-        normalized_domain = domain.lower().strip()
-        if normalized_domain.startswith("www."):
-            normalized_domain = normalized_domain[4:]
+        normalized_domain = normalize_domain(domain)
 
         await self._ensure_client()
         assert self._container is not None
 
-        # Generate config ID
         config_id = generate_config_id(normalized_domain)
 
         try:
@@ -559,15 +536,11 @@ class CosmosSiteConfigLookup(SiteConfigLookup):
         Returns:
             True if deleted, False if not found
         """
-        # Normalize domain
-        normalized_domain = domain.lower().strip()
-        if normalized_domain.startswith("www."):
-            normalized_domain = normalized_domain[4:]
+        normalized_domain = normalize_domain(domain)
 
         await self._ensure_client()
         assert self._container is not None
 
-        # Generate config ID
         config_id = generate_config_id(normalized_domain)
 
         try:
