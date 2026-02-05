@@ -17,7 +17,8 @@ from nlweb_core.query_analysis.query_analysis import (
 )
 from nlweb_core.protocol.models import AskRequest
 from nlweb_core.request_context import set_request_id
-from nlweb_core.site_config import get_site_config_lookup, get_elicitation_handler
+from nlweb_core.config import get_config
+from nlweb_core.site_config import get_elicitation_handler
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ class DefaultAskHandler(AskHandler):
         4. Post-process results
         """
         # Build site_config with item_type for use throughout the query
-        site_config_lookup = get_site_config_lookup("default")
+        site_config_lookup = get_config().get_site_config_lookup("default")
         item_type = None
         if site_config_lookup and ask_request.query.site:
             item_types = await site_config_lookup.get_config_type(
@@ -181,7 +182,7 @@ class DefaultAskHandler(AskHandler):
         Returns:
             Elicitation data dict if elicitation is needed, None otherwise.
         """
-        site_config_lookup = get_site_config_lookup("default")
+        site_config_lookup = get_config().get_site_config_lookup("default")
         if not site_config_lookup or not request.query.site:
             return None
 
@@ -326,7 +327,7 @@ class SiteSelectingHandler(AskHandler):
 
         # Try to get the handler config lookup
         try:
-            lookup = get_site_config_lookup("handler")
+            lookup = get_config().get_site_config_lookup("handler")
         except ValueError:
             # 'handler' provider not configured - use default
             logger.debug(

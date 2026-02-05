@@ -353,18 +353,25 @@ async def init_app(app):
 
             traceback.print_exc()
 
-    # Initialize site config and elicitation handler if any provider is configured
+    # Eagerly initialize all provider instances (generative, scoring, site config)
+    try:
+        from nlweb_core.config import initialize_providers
+
+        initialize_providers(config)
+    except Exception as e:
+        print(f"Failed to initialize providers: {e}")
+        import traceback
+
+        traceback.print_exc()
+
+    # Initialize elicitation handler if site config providers are configured
     if config.site_config_providers:
         try:
-            from nlweb_core.site_config import (
-                initialize_site_config,
-                initialize_elicitation_handler,
-            )
+            from nlweb_core.site_config import initialize_elicitation_handler
 
-            initialize_site_config(config.site_config_providers)
             initialize_elicitation_handler()
         except Exception as e:
-            print(f"Failed to initialize site config: {e}")
+            print(f"Failed to initialize elicitation handler: {e}")
             import traceback
 
             traceback.print_exc()
@@ -398,14 +405,14 @@ async def cleanup_app(app):
     except Exception as e:
         print(f"Error closing vector database clients: {e}")
 
-    # Cleanup site config lookup client (Cosmos DB)
+    # Cleanup all provider instances (generative, scoring, site config)
     try:
-        from nlweb_core.site_config import close_site_config_lookup
+        from nlweb_core.config import close_all_providers
 
-        await close_site_config_lookup()
-        print("Site config lookup client closed")
+        await close_all_providers()
+        print("All provider instances closed")
     except Exception as e:
-        print(f"Error closing site config lookup client: {e}")
+        print(f"Error closing provider instances: {e}")
 
 
 def create_app():

@@ -7,7 +7,6 @@ Scoring provider interface and orchestration.
 This module provides:
 1. ScoringLLMProvider abstract base class for providers that return numeric scores
 2. ScoringContext dataclass for passing structured context to scoring operations
-3. get_scoring_provider() factory function for loading configured scoring providers
 
 WARNING: This code is under development and may undergo changes in future releases.
 Backwards compatibility is not guaranteed at this time.
@@ -18,8 +17,6 @@ from dataclasses import dataclass
 import asyncio
 import logging
 
-from nlweb_core.config import get_config
-from nlweb_core.provider_map import ProviderMap
 
 logger = logging.getLogger(__name__)
 
@@ -140,26 +137,3 @@ class ScoringLLMProvider(ABC):
         pass
 
 
-# Provider map for scoring LLM providers
-_scoring_provider_map: ProviderMap[ScoringLLMProvider] = ProviderMap(
-    config_getter=lambda name: get_config().get_scoring_model_provider(name),
-    error_prefix="Scoring model provider",
-)
-
-
-def get_scoring_provider(name: str) -> ScoringLLMProvider:
-    """
-    Get the configured scoring provider by name via dynamic import.
-
-    Uses get_config().get_scoring_model_provider(name) to load the appropriate provider.
-
-    Args:
-        name: Provider name
-
-    Returns:
-        The configured ScoringLLMProvider instance
-
-    Raises:
-        ValueError: If no scoring provider with the given name is configured
-    """
-    return _scoring_provider_map.get(name)

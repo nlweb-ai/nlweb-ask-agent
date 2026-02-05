@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional
 from nlweb_core.config import get_config
 from nlweb_core.llm import ask_llm_parallel
 from nlweb_core.llm_models import QuestionResponse
-from nlweb_core.scoring import get_scoring_provider, ScoringContext
+from nlweb_core.scoring import ScoringContext
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +128,7 @@ class ElicitationChecker:
         # Call scoring provider in batch with standard question
         scoring_question = "Does the query contain the required information?"
         try:
-            provider = get_scoring_provider("default")
+            provider = get_config().get_scoring_provider("default")
             results = await provider.score_batch(
                 [scoring_question],
                 contexts,

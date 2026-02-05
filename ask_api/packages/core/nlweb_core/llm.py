@@ -23,7 +23,6 @@ from nlweb_core.llm_exceptions import (
     LLMValidationError,
     classify_llm_error,
 )
-from nlweb_core.provider_map import ProviderMap
 from pydantic import BaseModel, ValidationError
 import asyncio
 import logging
@@ -118,31 +117,6 @@ class GenerativeLLMProvider(ABC):
         pass
 
 
-# Provider map for generative LLM providers
-_generative_provider_map: ProviderMap[GenerativeLLMProvider] = ProviderMap(
-    config_getter=lambda name: get_config().get_generative_model_provider(name),
-    error_prefix="Generative model provider",
-)
-
-
-def get_generative_provider(name: str) -> GenerativeLLMProvider:
-    """
-    Get the configured generative provider by name via dynamic import.
-
-    Uses get_config().get_generative_model_provider(name) to load the appropriate provider.
-
-    Args:
-        name: Provider name (e.g., "high", "low")
-
-    Returns:
-        The configured GenerativeLLMProvider instance
-
-    Raises:
-        ValueError: If no generative provider with the given name is configured
-    """
-    return _generative_provider_map.get(name)
-
-
 async def ask_llm_parallel(
     prompts: list[str],
     schema: Type[T],
@@ -177,7 +151,7 @@ async def ask_llm_parallel(
     try:
         # Get the provider instance via factory
         try:
-            provider_instance = get_generative_provider(level)
+            provider_instance = get_config().get_generative_provider(level)
         except ValueError:
             logger.warning(f"No generative provider configured for level '{level}'")
             return []
@@ -260,7 +234,7 @@ async def ask_llm(
 
     try:
         # Get the provider instance via factory
-        provider_instance = get_generative_provider(level)
+        provider_instance = get_config().get_generative_provider(level)
 
         logger.debug(f"Calling LLM provider {provider_instance} at level {level}")
 

@@ -6,12 +6,7 @@ This module provides intent-based elicitation for domain-specific queries.
 
 import logging
 
-from .base import (
-    SiteConfigLookup,
-    close_site_config_lookup,
-    get_site_config_lookup,
-    initialize_site_config,
-)
+from .base import SiteConfigLookup
 from .elicitation_checker import ElicitationChecker
 from .elicitation_handler import ElicitationHandler
 from .intent_detector import IntentDetector
@@ -40,10 +35,7 @@ __all__ = [
     "ElicitationHandler",
     "SiteConfigLookup",
     "StaticSiteConfigLookup",
-    "initialize_site_config",
-    "get_site_config_lookup",
     "get_elicitation_handler",
-    "close_site_config_lookup",
 ]
 
 

@@ -5,7 +5,7 @@ Intent detection for site-specific queries using LLM scoring.
 import logging
 from typing import List, Dict, Any
 from nlweb_core.config import get_config
-from nlweb_core.scoring import get_scoring_provider, ScoringContext
+from nlweb_core.scoring import ScoringContext
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ class IntentDetector:
             # Call scoring provider in batch with standard question
             scoring_question = "Does the query match this intent?"
             try:
-                provider = get_scoring_provider("default")
+                provider = get_config().get_scoring_provider("default")
                 results = await provider.score_batch(
                     [scoring_question],
                     contexts,

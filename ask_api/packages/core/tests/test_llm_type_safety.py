@@ -16,21 +16,18 @@ class TestAskLLMParallelValidation:
     """Tests for validation behavior in ask_llm_parallel."""
 
     @pytest.fixture
-    def mock_config(self):
-        """Create a mock config object with generative model providers."""
-        config = MagicMock()
-        # Set up mock generative model config
-        mock_model_config = MagicMock()
-        mock_model_config.options = {"model": "test-model"}
-        config.get_generative_model_provider = MagicMock(return_value=mock_model_config)
-        return config
-
-    @pytest.fixture
     def mock_provider(self):
         """Create a mock LLM provider."""
         provider = MagicMock()
         provider.get_completions = AsyncMock()
         return provider
+
+    @pytest.fixture
+    def mock_config(self, mock_provider):
+        """Create a mock config that returns the mock provider."""
+        config = MagicMock()
+        config.get_generative_provider = MagicMock(return_value=mock_provider)
+        return config
 
     @pytest.mark.asyncio
     async def test_validates_pydantic_model_results(self, mock_config, mock_provider):
@@ -40,8 +37,7 @@ class TestAskLLMParallelValidation:
             {"score": 70, "description": "Another item"},
         ]
 
-        with patch("nlweb_core.llm.get_config", return_value=mock_config), \
-             patch("nlweb_core.llm.get_generative_provider", return_value=mock_provider):
+        with patch("nlweb_core.llm.get_config", return_value=mock_config):
 
             results = await ask_llm_parallel(
                 prompts=["prompt1", "prompt2"],
@@ -64,8 +60,7 @@ class TestAskLLMParallelValidation:
             {"score": "not_a_number", "description": "Invalid"},  # Invalid score type
         ]
 
-        with patch("nlweb_core.llm.get_config", return_value=mock_config), \
-             patch("nlweb_core.llm.get_generative_provider", return_value=mock_provider):
+        with patch("nlweb_core.llm.get_config", return_value=mock_config):
 
             results = await ask_llm_parallel(
                 prompts=["prompt1", "prompt2"],
@@ -85,8 +80,7 @@ class TestAskLLMParallelValidation:
             {"score": 85},  # Missing description
         ]
 
-        with patch("nlweb_core.llm.get_config", return_value=mock_config), \
-             patch("nlweb_core.llm.get_generative_provider", return_value=mock_provider):
+        with patch("nlweb_core.llm.get_config", return_value=mock_config):
 
             results = await ask_llm_parallel(
                 prompts=["prompt1"],
@@ -107,8 +101,7 @@ class TestAskLLMParallelValidation:
             test_exception,
         ]
 
-        with patch("nlweb_core.llm.get_config", return_value=mock_config), \
-             patch("nlweb_core.llm.get_generative_provider", return_value=mock_provider):
+        with patch("nlweb_core.llm.get_config", return_value=mock_config):
 
             results = await ask_llm_parallel(
                 prompts=["prompt1", "prompt2"],
@@ -128,8 +121,7 @@ class TestAskLLMParallelValidation:
             {"score": -20, "description": "Under 0"},
         ]
 
-        with patch("nlweb_core.llm.get_config", return_value=mock_config), \
-             patch("nlweb_core.llm.get_generative_provider", return_value=mock_provider):
+        with patch("nlweb_core.llm.get_config", return_value=mock_config):
 
             results = await ask_llm_parallel(
                 prompts=["prompt1", "prompt2"],

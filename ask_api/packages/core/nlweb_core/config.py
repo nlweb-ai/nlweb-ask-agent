@@ -8,6 +8,8 @@ WARNING: This code is under development and may undergo changes in future releas
 Backwards compatibility is not guaranteed at this time.
 """
 
+from __future__ import annotations
+
 import copy
 import os
 import yaml
@@ -15,7 +17,14 @@ import logging
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from dotenv import load_dotenv
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+from nlweb_core.provider_map import ProviderMap
+
+if TYPE_CHECKING:
+    from nlweb_core.llm import GenerativeLLMProvider
+    from nlweb_core.scoring import ScoringLLMProvider
+    from nlweb_core.site_config.base import SiteConfigLookup
 
 logger = logging.getLogger(__name__)
 
@@ -265,23 +274,25 @@ class AppConfig:
             return self.embedding_providers[self.preferred_embedding_provider]
         return None
 
-    def get_site_config_provider(
-        self, provider_name: str
-    ) -> SiteConfigStorageConfig | None:
-        """Get the specified site config provider by name."""
-        return self.site_config_providers.get(provider_name)
+    # Provider instance accessors (delegate to module-level ProviderMaps)
 
-    def get_scoring_model_provider(
-        self, provider_name: str
-    ) -> ScoringModelConfig | None:
-        """Get the specified scoring model provider by name."""
-        return self.scoring_model_providers.get(provider_name)
+    def get_generative_provider(self, name: str) -> GenerativeLLMProvider:
+        """Get a cached generative LLM provider instance by name."""
+        if _generative_provider_map is None:
+            raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+        return _generative_provider_map.get(name)
 
-    def get_generative_model_provider(
-        self, provider_name: str
-    ) -> GenerativeModelConfig | None:
-        """Get the specified generative model provider by name."""
-        return self.generative_model_providers.get(provider_name)
+    def get_scoring_provider(self, name: str) -> ScoringLLMProvider:
+        """Get a cached scoring LLM provider instance by name."""
+        if _scoring_provider_map is None:
+            raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+        return _scoring_provider_map.get(name)
+
+    def get_site_config_lookup(self, name: str) -> SiteConfigLookup:
+        """Get a cached site config lookup instance by name."""
+        if _site_config_provider_map is None:
+            raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+        return _site_config_provider_map.get(name)
 
 
 # =============================================================================
@@ -970,3 +981,39 @@ def reset_config() -> None:
             _config_var.reset(token)
     except LookupError:
         pass  # Already not set
+
+
+# =============================================================================
+# Provider Maps (module-level, initialized by initialize_providers() at startup)
+# =============================================================================
+
+_generative_provider_map: ProviderMap | None = None
+_scoring_provider_map: ProviderMap | None = None
+_site_config_provider_map: ProviderMap | None = None
+
+
+def initialize_providers(config: AppConfig) -> None:
+    """Eagerly create all provider instances from config. Call at server startup."""
+    global _generative_provider_map, _scoring_provider_map, _site_config_provider_map
+    _generative_provider_map = ProviderMap(
+        config=config.generative_model_providers,
+        error_prefix="Generative model provider",
+    )
+    _scoring_provider_map = ProviderMap(
+        config=config.scoring_model_providers,
+        error_prefix="Scoring model provider",
+    )
+    _site_config_provider_map = ProviderMap(
+        config=config.site_config_providers,
+        error_prefix="Site config provider",
+    )
+
+
+async def close_all_providers() -> None:
+    """Close all cached provider instances. Call at server shutdown."""
+    if _generative_provider_map is not None:
+        await _generative_provider_map.close()
+    if _scoring_provider_map is not None:
+        await _scoring_provider_map.close()
+    if _site_config_provider_map is not None:
+        await _site_config_provider_map.close()

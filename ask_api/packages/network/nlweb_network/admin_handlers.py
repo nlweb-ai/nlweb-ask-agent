@@ -48,9 +48,9 @@ async def get_site_config_handler(request):
         domain = normalize_domain(domain)
 
         # Get site config lookup
-        from nlweb_core.site_config import get_site_config_lookup
+        from nlweb_core.config import get_config
 
-        lookup = get_site_config_lookup("default")
+        lookup = get_config().get_site_config_lookup("default")
 
         if not lookup:
             return web.json_response(
@@ -93,9 +93,9 @@ async def get_config_type_handler(request):
         domain = normalize_domain(domain)
 
         # Get site config lookup
-        from nlweb_core.site_config import get_site_config_lookup
+        from nlweb_core.config import get_config
 
-        lookup = get_site_config_lookup("default")
+        lookup = get_config().get_site_config_lookup("default")
 
         if not lookup:
             return web.json_response(
@@ -180,9 +180,9 @@ async def update_config_type_handler(request):
             )
 
         # Get site config lookup
-        from nlweb_core.site_config import get_site_config_lookup
+        from nlweb_core.config import get_config
 
-        lookup = get_site_config_lookup("default")
+        lookup = get_config().get_site_config_lookup("default")
 
         if not lookup:
             return web.json_response(
@@ -240,9 +240,9 @@ async def delete_config_type_handler(request):
         domain = normalize_domain(domain)
 
         # Get site config lookup
-        from nlweb_core.site_config import get_site_config_lookup
+        from nlweb_core.config import get_config
 
-        lookup = get_site_config_lookup("default")
+        lookup = get_config().get_site_config_lookup("default")
 
         if not lookup:
             return web.json_response(
@@ -305,9 +305,9 @@ async def delete_site_config_handler(request):
         domain = normalize_domain(domain)
 
         # Get site config lookup
-        from nlweb_core.site_config import get_site_config_lookup
+        from nlweb_core.config import get_config
 
-        lookup = get_site_config_lookup("default")
+        lookup = get_config().get_site_config_lookup("default")
 
         if not lookup:
             return web.json_response(
