@@ -58,7 +58,7 @@ async def get_site_config_handler(request):
             )
 
         # Get full config
-        result = await lookup.get_full_config(domain)
+        result = await lookup.get_config(domain)
 
         if not result:
             return web.json_response(

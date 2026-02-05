@@ -67,12 +67,13 @@ class DefaultAskHandler(AskHandler):
         """
         # Build site_config with item_type for use throughout the query
         site_config_lookup = get_site_config_lookup("default")
-        if site_config_lookup:
-            item_type = await site_config_lookup.get_item_type_for_ranking(
-                ask_request.query.site
+        item_type = None
+        if site_config_lookup and ask_request.query.site:
+            item_types = await site_config_lookup.get_config_type(
+                ask_request.query.site, "item_types"
             )
-        else:
-            item_type = None
+            if item_types and isinstance(item_types, list) and len(item_types) > 0:
+                item_type = item_types[0]
 
         site_config: dict[str, str] = {"item_type": item_type if item_type else "item"}
 
@@ -234,11 +235,11 @@ class DefaultAskHandler(AskHandler):
             Elicitation data dict if elicitation is needed, None otherwise.
         """
         site_config_lookup = get_site_config_lookup("default")
-        if not site_config_lookup:
+        if not site_config_lookup or not request.query.site:
             return None
 
-        site_config = await site_config_lookup.get_config_for_site_filter(
-            request.query.site
+        site_config = await site_config_lookup.get_config_type(
+            request.query.site, "elicitation"
         )
         if not site_config:
             return None

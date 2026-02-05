@@ -9,7 +9,7 @@ Uses native async client for proper async/await support.
 import hashlib
 import time
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from urllib.parse import urlparse
 from azure.cosmos.aio import CosmosClient
 from azure.cosmos import exceptions
@@ -128,26 +128,24 @@ class CosmosSiteConfigLookup(SiteConfigLookup):
             database = self._client.get_database_client(self._database_name)
             self._container = database.get_container_client(self._container_name)
 
-    async def _read_document(
-        self, domain: str
-    ) -> tuple[str, Optional[Dict[str, Any]]]:
+    async def _read_config(self, site: str) -> Optional[Dict[str, Any]]:
         """
-        Read config document for a domain from Cosmos DB with caching.
+        Read config for a site from Cosmos DB with caching.
 
         Args:
-            domain: Domain name or URL
+            site: Site filter (URL or domain)
 
         Returns:
-            Tuple of (config_id, document or None if not found)
+            Config dict or None if not found
         """
-        normalized = normalize_domain(domain)
+        normalized = normalize_domain(site)
         config_id = generate_config_id(normalized)
 
         # Check cache
         if normalized in self.cache:
             entry = self.cache[normalized]
             if time.time() - entry["timestamp"] < self.cache_ttl:
-                return config_id, entry["document"]
+                return entry["config"]
             del self.cache[normalized]
 
         await self._ensure_client()
@@ -157,153 +155,119 @@ class CosmosSiteConfigLookup(SiteConfigLookup):
             item = await self._container.read_item(
                 item=config_id, partition_key=normalized
             )
-            self.cache[normalized] = {"document": item, "timestamp": time.time()}
-            return config_id, item
+            config = item.get("config", {})
+            self.cache[normalized] = {"config": config, "timestamp": time.time()}
+            return config
         except exceptions.CosmosResourceNotFoundError:
-            self.cache[normalized] = {"document": None, "timestamp": time.time()}
-            return config_id, None
-
-    async def get_config(self, domain: str) -> Optional[Dict[str, Any]]:
-        """
-        Retrieve elicitation config for a domain.
-
-        Args:
-            domain: Domain name (e.g., "yelp.com", "www.yelp.com")
-
-        Returns:
-            Elicitation config dict or None if not found
-        """
-        _, item = await self._read_document(domain)
-
-        if not item:
+            self.cache[normalized] = {"config": None, "timestamp": time.time()}
             return None
 
-        config = item.get("config", {})
-        return config.get("elicitation")
-
-    async def get_config_for_site_filter(
-        self, site_filter: Optional[str]
-    ) -> Optional[Dict[str, Any]]:
+    async def get_config(self, site: str) -> Optional[Dict[str, Any]]:
         """
-        Retrieve site configuration for a site filter (URL or domain).
+        Retrieve full config for a site (all config types).
 
         Args:
-            site_filter: Site filter from query (e.g., "yelp.com", "https://www.yelp.com")
+            site: Site filter (URL or domain, e.g., "yelp.com", "https://www.yelp.com")
 
         Returns:
-            Configuration dict or None if not found
+            Config dict with all config types, or None if not found
         """
-        if not site_filter:
-            return None
+        return await self._read_config(site)
 
-        domain = normalize_domain(site_filter)
-        return await self.get_config(domain)
-
-    async def get_item_type_for_ranking(self, site_filter: str | None) -> str | None:
+    def _invalidate_cache(self, site: Optional[str] = None):
         """
-        Get the primary item type for ranking purposes.
-
-        This is a convenience method that returns the first configured item_type
-        for a site, or the default value if not configured.
+        Invalidate cache for a specific site or entire cache.
 
         Args:
-            site_filter: Site filter from query (e.g., "yelp.com", "https://www.yelp.com")
-
-        Returns:
-            First item_type from config, or None
+            site: Site to invalidate (None = invalidate all)
         """
-        if not site_filter:
-            return None
-
-        normalized_domain = normalize_domain(site_filter)
-
-        # Get item_types from config
-        item_types = await self.get_config_type(normalized_domain, "item_types")
-
-        if item_types and isinstance(item_types, list) and len(item_types) > 0:
-            return item_types[0]
-
-        return None
-
-    def invalidate_cache(self, domain: Optional[str] = None):
-        """
-        Invalidate cache for a specific domain or entire cache.
-
-        Args:
-            domain: Domain to invalidate (None = invalidate all)
-        """
-        if domain:
-            normalized_domain = normalize_domain(domain)
-            if normalized_domain in self.cache:
-                del self.cache[normalized_domain]
-                logger.info(f"Cache invalidated for domain: {normalized_domain}")
+        if site:
+            normalized = normalize_domain(site)
+            if normalized in self.cache:
+                del self.cache[normalized]
+                logger.info(f"Cache invalidated for site: {normalized}")
         else:
             self.cache.clear()
             logger.info("Entire cache invalidated")
 
-    async def prewarm_cache(self, domains: List[str]):
-        """
-        Pre-load configurations for popular domains on startup.
-
-        Args:
-            domains: List of domain names to pre-load
-        """
-        logger.info(f"Pre-warming cache for {len(domains)} domains")
-
-        for domain in domains:
-            try:
-                await self.get_config(domain)
-            except Exception as e:
-                logger.warning(f"Failed to prewarm cache for {domain}: {e}")
-                raise
-
-        logger.info(f"Cache pre-warming complete: {len(self.cache)} configs loaded")
-
-    async def get_full_config(self, domain: str) -> Optional[Dict[str, Any]]:
-        """
-        Retrieve full config document for a domain (all config types).
-
-        Args:
-            domain: Domain name (e.g., "yelp.com", "www.yelp.com")
-
-        Returns:
-            Full document dict or None if not found
-        """
-        _, item = await self._read_document(domain)
-        return item
-
     async def get_config_type(
-        self, domain: str, config_type: str
+        self, site: str, config_type: str
     ) -> Optional[Any]:
         """
-        Retrieve a specific config type for a domain.
+        Retrieve a specific config type for a site.
 
         Args:
-            domain: Domain name (e.g., "yelp.com")
+            site: Site filter (URL or domain, e.g., "yelp.com", "https://www.yelp.com")
             config_type: Config type name (e.g., "elicitation", "scoring_specs")
 
         Returns:
             Config type dict or None if not found
         """
-        _, item = await self._read_document(domain)
-
-        if not item:
+        config = await self._read_config(site)
+        if not config:
             return None
-
-        config = item.get("config", {})
         return config.get(config_type)
+
+    async def _delete_config(self, site: str) -> bool:
+        """
+        Delete a config document from Cosmos DB.
+
+        Args:
+            site: Site filter (URL or domain)
+
+        Returns:
+            True if deleted, False if not found
+        """
+        normalized = normalize_domain(site)
+        config_id = generate_config_id(normalized)
+
+        await self._ensure_client()
+        assert self._container is not None
+
+        try:
+            await self._container.delete_item(item=config_id, partition_key=normalized)
+            self._invalidate_cache(site)
+            return True
+        except exceptions.CosmosResourceNotFoundError:
+            return False
+
+    async def _write_config(self, site: str, config: Dict[str, Any]) -> str:
+        """
+        Write a config document to Cosmos DB.
+
+        Args:
+            site: Site filter (URL or domain)
+            config: Config dict with all config types
+
+        Returns:
+            The config_id of the written document
+        """
+        normalized = normalize_domain(site)
+        config_id = generate_config_id(normalized)
+
+        item = {
+            "id": config_id,
+            "domain": normalized,
+            "config": config,
+        }
+
+        await self._ensure_client()
+        assert self._container is not None
+        await self._container.upsert_item(item)
+        self._invalidate_cache(site)
+        return config_id
 
     async def update_config_type(
         self,
-        domain: str,
+        site: str,
         config_type: Optional[str],
         config_data: Optional[Dict[str, Any]],
     ) -> Optional[Dict[str, Any]]:
         """
-        Create, update, or delete config for a domain.
+        Create, update, or delete config for a site.
 
         Args:
-            domain: Domain name
+            site: Site filter (URL or domain)
             config_type: Config type name, or None to delete entire document
             config_data: Config data to write, or None to delete
 
@@ -311,64 +275,45 @@ class CosmosSiteConfigLookup(SiteConfigLookup):
             For writes: dict with 'created' flag and 'id'
             For deletes: dict with 'deleted' flag, or None if not found
         """
-        normalized = normalize_domain(domain)
-        config_id, item = await self._read_document(domain)
-        assert self._container is not None
+        config = await self._read_config(site)
 
         # Delete entire document
         if config_type is None:
-            if not item:
+            if config is None:
                 return None
-            await self._container.delete_item(item=config_id, partition_key=normalized)
-            self.invalidate_cache(normalized)
+            await self._delete_config(site)
             return {"deleted": True}
 
         # Delete specific config type
         if config_data is None:
-            if not item:
+            if config is None:
                 return None
-            config = item.get("config", {})
             if config_type not in config:
                 return None
             del config[config_type]
             if not config:
-                await self._container.delete_item(
-                    item=config_id, partition_key=normalized
-                )
-                self.invalidate_cache(normalized)
+                await self._delete_config(site)
                 return {"deleted": True, "domain_deleted": True}
-            item["config"] = config
-            await self._container.upsert_item(item)
-            self.invalidate_cache(normalized)
+            await self._write_config(site, config)
             return {"deleted": True, "domain_deleted": False}
 
         # Write operation
-        if item:
-            if "config" not in item:
-                item["config"] = {}
-            item["config"][config_type] = config_data
-            created = False
-        else:
-            item = {
-                "id": config_id,
-                "domain": normalized,
-                "config": {config_type: config_data},
-            }
-            created = True
-
-        await self._container.upsert_item(item)
-        self.invalidate_cache(normalized)
+        created = config is None
+        if config is None:
+            config = {}
+        config[config_type] = config_data
+        config_id = await self._write_config(site, config)
         return {"created": created, "id": config_id}
 
     async def delete_config_type(
-        self, domain: str, config_type: str
+        self, site: str, config_type: str
     ) -> Optional[Dict[str, Any]]:
-        """Delete a specific config type for a domain."""
-        return await self.update_config_type(domain, config_type, None)
+        """Delete a specific config type for a site."""
+        return await self.update_config_type(site, config_type, None)
 
-    async def delete_full_config(self, domain: str) -> bool:
-        """Delete entire config document for a domain."""
-        result = await self.update_config_type(domain, None, None)
+    async def delete_full_config(self, site: str) -> bool:
+        """Delete entire config document for a site."""
+        result = await self.update_config_type(site, None, None)
         return result is not None
 
     async def close(self):

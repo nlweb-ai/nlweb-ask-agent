@@ -22,11 +22,11 @@ class SiteConfigLookup(ABC):
         ...
 
     @abstractmethod
-    async def get_config(self, domain: str) -> Optional[dict[str, Any]]:
-        """Retrieve site configuration for a domain with caching.
+    async def get_config(self, site: str) -> Optional[dict[str, Any]]:
+        """Retrieve site configuration with caching.
 
         Args:
-            domain: Domain name (e.g., "yelp.com", "www.yelp.com")
+            site: Site filter (URL or domain, e.g., "yelp.com", "https://www.yelp.com")
 
         Returns:
             Configuration dict or None if not found
@@ -34,28 +34,15 @@ class SiteConfigLookup(ABC):
         ...
 
     @abstractmethod
-    async def get_config_for_site_filter(
-        self, site_filter: Optional[str]
-    ) -> Optional[dict[str, Any]]:
-        """Retrieve site configuration for a site filter (URL or domain).
+    async def get_config_type(self, site: str, config_type: str) -> Optional[Any]:
+        """Retrieve a specific config type for a site.
 
         Args:
-            site_filter: Site filter from query (e.g., "yelp.com", "https://www.yelp.com")
+            site: Site filter (URL or domain, e.g., "yelp.com", "https://www.yelp.com")
+            config_type: Config type name (e.g., "elicitation", "item_types")
 
         Returns:
-            Configuration dict or None if not found
-        """
-        ...
-
-    @abstractmethod
-    async def get_item_type_for_ranking(self, site_filter: Optional[str]) -> str | None:
-        """Get the primary item type for ranking purposes.
-
-        Args:
-            site_filter: Site filter from query (e.g., "yelp.com", "https://www.yelp.com")
-
-        Returns:
-            First item_type from config, or None
+            Configuration value or None if not found
         """
         ...
 

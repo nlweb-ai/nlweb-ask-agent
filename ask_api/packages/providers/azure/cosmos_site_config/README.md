@@ -38,10 +38,11 @@ from nlweb_cosmos_site_config import CosmosSiteConfigLookup
 # Initialized automatically from CONFIG
 lookup = CosmosSiteConfigLookup(provider_name="default")
 
-# Get config for a domain
-config = lookup.get_config("yelp.com")
-if config:
-    intent_elicitations = config.get("intent_elicitations", [])
+# Get full config for a domain (all config types)
+config = await lookup.get_config("yelp.com")
+
+# Get a specific config type
+elicitation = await lookup.get_config_type("yelp.com", "elicitation")
 ```
 
 ## Installation
