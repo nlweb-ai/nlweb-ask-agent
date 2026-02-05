@@ -375,13 +375,31 @@ class AzureOpenAIScoringProvider(ScoringLLMProvider):
         if context.item_description and context.item_type:
             # Item ranking mode - use the NLWeb ranking prompt template
             item_type = context.item_type or "item"
+
+            # Build base prompt
             prompt = f"""Assign a score between 0 and 100 to the following {item_type} based on how relevant it is to the user's question. Use your knowledge from other sources, about the item, to make a judgement.
 
 If the score is above 50, provide a short description of the item highlighting the relevance to the user's question, without mentioning the user's question.
 
 Provide an explanation of the relevance of the item to the user's question, without mentioning the user's question or the score or explicitly mentioning the term relevance.
 
-If the score is below 75, in the description, include the reason why it is still relevant.
+If the score is below 75, in the description, include the reason why it is still relevant."""
+
+            # Add freshness context if available
+            if context.publication_date and context.age_days is not None:
+                prompt += f"""
+
+FRESHNESS CONTEXT:
+- Publication date: {context.publication_date}
+- Age: {context.age_days} days old
+
+When considering relevance, factor in the item's freshness based on the query intent:
+- For queries asking for "latest", "recent", "new", or "today's" content, give higher scores to more recent items
+- For queries about specific events, news, or time-sensitive topics, prioritize fresher content
+- For evergreen topics (recipes, how-to guides, general information), age is less important
+- Very recent items (< 7 days) should get a bonus for time-sensitive queries"""
+
+            prompt += f"""
 
 The user's question is: {context.query}
 

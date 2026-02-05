@@ -124,6 +124,7 @@ class DefaultAskHandler(AskHandler):
             item_type=site_config["item_type"],
             max_results=request.query.num_results,
             min_score=request.query.min_score,
+            site=request.query.site,
         )
 
         await self._send_results(output_method, final_ranked_answers)

@@ -129,8 +129,35 @@ async def update_config_type_handler(request):
     PUT /site-configs/{domain}/{config_type}
 
     Create or update a specific config type for a domain.
-    Replaces the config type entirely (blind write).
-    Other config types remain unchanged.
+
+    **IMPORTANT - Blind Write Behavior:**
+    - Replaces the ENTIRE config_type with provided data
+    - Other config types (elicitation, freshness_config, etc.) are NOT affected
+    - Within this config_type, ALL previous data is REPLACED
+
+    Example: Updating freshness_config
+
+    Existing:
+    {
+      "freshness_config": {
+        "recency_boost": {"enabled": true, "recency_weight": 0.15, "max_age_days": 90}
+      }
+    }
+
+    PUT /site-configs/aajtak.in/freshness_config
+    {
+      "recency_boost": {"enabled": true, "recency_weight": 0.20}
+    }
+
+    Result:
+    {
+      "freshness_config": {
+        "recency_boost": {"enabled": true, "recency_weight": 0.20}
+        # max_age_days is GONE (not merged)
+      }
+    }
+
+    To preserve fields, provide the complete config type in your request.
     """
     try:
         domain = request.match_info.get("domain")
