@@ -92,6 +92,7 @@ class NLWebHandler:
             item_type=site_config["item_type"],
             max_results=self.request.query.num_results,
             min_score=self.request.query.min_score,
+            site=self.request.query.site,
         )
 
         await self.send_results(final_ranked_answers)
