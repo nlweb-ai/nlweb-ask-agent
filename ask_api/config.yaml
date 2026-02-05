@@ -84,6 +84,12 @@ site_config:
     cache_ttl: 300  # Cache TTL in seconds (5 minutes)
     import_path: nlweb_cosmos_site_config.site_config_lookup
     class_name: CosmosSiteConfigLookup
+  handler:
+    import_path: nlweb_core.site_config.static_site_config
+    class_name: StaticSiteConfigLookup
+    sites:
+      aajtak.in:
+        ask_handler_class: AajtakAskHandler
 
 server:
   host: 0.0.0.0

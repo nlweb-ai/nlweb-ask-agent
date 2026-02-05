@@ -15,6 +15,7 @@ from .base import (
 from .elicitation_checker import ElicitationChecker
 from .elicitation_handler import ElicitationHandler
 from .intent_detector import IntentDetector
+from .static_site_config import StaticSiteConfigLookup
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ __all__ = [
     "ElicitationChecker",
     "ElicitationHandler",
     "SiteConfigLookup",
+    "StaticSiteConfigLookup",
     "initialize_site_config",
     "get_site_config_lookup",
     "get_elicitation_handler",
