@@ -30,7 +30,7 @@ class ScoringContext:
     """Context for scoring operations.
 
     This provides structured context for different scoring use cases:
-    - Item ranking: query + item_description + item_type
+    - Item ranking: query + item_description + item_type + publication_date + age_days
     - Intent detection: query + intent
     - Presence checking: query + required_info
     """
@@ -49,6 +49,12 @@ class ScoringContext:
 
     required_info: str | None = None
     """For presence checking: the required information being checked."""
+
+    publication_date: str | None = None
+    """For freshness-aware ranking: ISO format publication date string."""
+
+    age_days: int | None = None
+    """For freshness-aware ranking: Days since publication (calculated from datePublished)."""
 
 
 class ScoringLLMProvider(ABC):

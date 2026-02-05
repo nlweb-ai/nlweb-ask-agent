@@ -197,16 +197,16 @@ def _trim_json_item(obj):
             )
 
             # Recipe-specific: skip certain fields
+            # Note: Keeping datePublished for freshness-aware ranking
             if "Recipe" in obj_type and key in {
-                "datePublished",
                 "dateModified",
                 "author",
             }:
                 continue
 
             # Movie/TVSeries-specific: skip certain fields
+            # Note: Keeping datePublished for freshness-aware ranking
             if ("Movie" in obj_type or "TVSeries" in obj_type) and key in {
-                "datePublished",
                 "dateModified",
                 "author",
                 "trailer",

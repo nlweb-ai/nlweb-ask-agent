@@ -78,7 +78,7 @@ def create_tables(conn: pymssql.Connection):
     CREATE TABLE sites (
         site_url VARCHAR(500),
         user_id VARCHAR(255),
-        process_interval_hours INT DEFAULT 720,
+        process_interval_hours DECIMAL(10,2) DEFAULT 720,
         last_processed DATETIME,
         is_active BIT DEFAULT 1,
         created_at DATETIME DEFAULT GETUTCDATE(),
