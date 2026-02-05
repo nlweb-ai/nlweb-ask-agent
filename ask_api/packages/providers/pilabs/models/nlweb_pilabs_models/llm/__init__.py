@@ -1,5 +1,5 @@
 """Pi Labs LLM providers."""
 
-from nlweb_pilabs_models.llm.pi_labs import PiLabsScoringProvider, PiLabsClient
+from nlweb_pilabs_models.llm.pi_labs import PiLabsScoringProvider
 
-__all__ = ["PiLabsScoringProvider", "PiLabsClient"]
+__all__ = ["PiLabsScoringProvider"]

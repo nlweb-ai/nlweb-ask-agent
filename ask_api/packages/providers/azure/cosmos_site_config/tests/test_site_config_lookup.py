@@ -807,7 +807,6 @@ class TestErrorHandling:
         """__init__ rejects unexpected keyword arguments."""
         with pytest.raises(TypeError) as exc_info:
             CosmosSiteConfigLookup(
-                provider_name="test",
                 endpoint="https://test.cosmos.azure.com",
                 database_name="db",
                 container_name="container",

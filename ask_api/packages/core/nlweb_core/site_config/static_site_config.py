@@ -56,7 +56,6 @@ class StaticSiteConfigLookup(SiteConfigLookup):
     def __init__(
         self,
         *,
-        provider_name: str,
         sites: dict[str, dict[str, Any]],
         **kwargs: Any,
     ):
@@ -64,7 +63,6 @@ class StaticSiteConfigLookup(SiteConfigLookup):
         Initialize static site config lookup.
 
         Args:
-            provider_name: Name of the site config provider.
             sites: Map of domain -> config dict. Keys can be domains or URLs
                    (will be normalized). Values are config dicts with config
                    types as keys (e.g., {"elicitation": {...}, "item_types": [...]}).
@@ -73,8 +71,6 @@ class StaticSiteConfigLookup(SiteConfigLookup):
             raise TypeError(
                 f"StaticSiteConfigLookup received unexpected arguments: {list(kwargs.keys())}"
             )
-
-        self._provider_name = provider_name
 
         # Normalize all site keys at init time for efficient lookups
         self._sites: dict[str, dict[str, Any]] = {}
