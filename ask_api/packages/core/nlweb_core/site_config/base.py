@@ -2,13 +2,12 @@
 Base class for site configuration lookup providers.
 """
 
-import importlib
 import logging
-import threading
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 
 from nlweb_core.config import SiteConfigStorageConfig, get_config
+from nlweb_core.provider_map import ProviderMap
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +51,11 @@ class SiteConfigLookup(ABC):
         ...
 
 
-# Module-level cache for site config services
-_site_config_lookups: dict[str, SiteConfigLookup] = {}
-_site_config_lock = threading.Lock()
+# Provider map for site config lookups
+_site_config_map: ProviderMap[SiteConfigLookup] = ProviderMap(
+    config_getter=lambda name: get_config().get_site_config_provider(name),
+    error_prefix="Site config provider",
+)
 
 
 def get_site_config_lookup(name: str) -> SiteConfigLookup:
@@ -69,46 +70,12 @@ def get_site_config_lookup(name: str) -> SiteConfigLookup:
     Raises:
         ValueError: If provider is not configured.
     """
-    with _site_config_lock:
-        if name in _site_config_lookups:
-            return _site_config_lookups[name]
-
-        config = get_config()
-        provider_config = config.get_site_config_provider(name)
-        if provider_config is None:
-            raise ValueError(f"Site config provider '{name}' is not configured")
-
-        try:
-            module = importlib.import_module(provider_config.import_path)
-            provider_class: type[SiteConfigLookup] = getattr(
-                module, provider_config.class_name
-            )
-            lookup = provider_class(provider_name=name, **provider_config.options)
-
-            logger.info(
-                f"SiteConfigLookup '{name}' initialized via provider: "
-                f"{provider_config.import_path}.{provider_config.class_name}"
-            )
-
-            _site_config_lookups[name] = lookup
-            return lookup
-        except Exception as e:
-            logger.error(
-                f"Failed to initialize SiteConfigLookup '{name}': {e}",
-                exc_info=True,
-            )
-            raise
+    return _site_config_map.get(name)
 
 
 async def close_site_config_lookup() -> None:
     """Close all site config lookup clients and release resources."""
-    with _site_config_lock:
-        for name, lookup in list(_site_config_lookups.items()):
-            try:
-                await lookup.close()
-            except Exception as e:
-                logger.warning(f"Error closing site config lookup '{name}': {e}")
-        _site_config_lookups.clear()
+    await _site_config_map.close()
 
 
 def initialize_site_config(

@@ -15,13 +15,11 @@ Backwards compatibility is not guaranteed at this time.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, cast
 import asyncio
-import importlib
 import logging
-import threading
 
 from nlweb_core.config import get_config
+from nlweb_core.provider_map import ProviderMap
 
 logger = logging.getLogger(__name__)
 
@@ -136,21 +134,17 @@ class ScoringLLMProvider(ABC):
         results = await asyncio.gather(*tasks, return_exceptions=True)
         return list(results)
 
-    @classmethod
     @abstractmethod
-    def get_client(cls) -> Any:
-        """
-        Get or initialize the client for this provider.
-
-        Returns:
-            A client instance configured for the provider
-        """
+    async def close(self) -> None:
+        """Close the provider and release resources."""
         pass
 
 
-# Cache for loaded scoring providers
-_loaded_scoring_providers: dict[str, ScoringLLMProvider] = {}
-_scoring_providers_lock = threading.Lock()
+# Provider map for scoring LLM providers
+_scoring_provider_map: ProviderMap[ScoringLLMProvider] = ProviderMap(
+    config_getter=lambda name: get_config().get_scoring_model_provider(name),
+    error_prefix="Scoring model provider",
+)
 
 
 def get_scoring_provider(name: str) -> ScoringLLMProvider:
@@ -168,27 +162,4 @@ def get_scoring_provider(name: str) -> ScoringLLMProvider:
     Raises:
         ValueError: If no scoring provider with the given name is configured
     """
-    if name in _loaded_scoring_providers:
-        return _loaded_scoring_providers[name]
-
-    with _scoring_providers_lock:
-        # Double-check after acquiring lock
-        if name in _loaded_scoring_providers:
-            return _loaded_scoring_providers[name]
-
-        config = get_config()
-        model_config = config.get_scoring_model_provider(name)
-
-        if model_config is None:
-            raise ValueError(f"Scoring model provider '{name}' is not configured")
-
-        try:
-            module = importlib.import_module(model_config.import_path)
-            provider_class = getattr(module, model_config.class_name)
-            provider = provider_class(**model_config.options)
-            _loaded_scoring_providers[name] = cast(ScoringLLMProvider, provider)
-            logger.debug(f"Loaded scoring provider '{name}': {model_config.class_name}")
-        except (ImportError, AttributeError) as e:
-            raise ValueError(f"Failed to load scoring provider '{name}': {e}")
-
-        return _loaded_scoring_providers[name]
+    return _scoring_provider_map.get(name)

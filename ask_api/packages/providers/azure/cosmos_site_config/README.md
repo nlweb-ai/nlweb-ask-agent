@@ -35,8 +35,14 @@ The provider is automatically initialized when site_config is configured:
 ```python
 from nlweb_cosmos_site_config import CosmosSiteConfigLookup
 
-# Initialized automatically from CONFIG
-lookup = CosmosSiteConfigLookup(provider_name="default")
+# Initialized automatically from config via ProviderMap
+# Direct instantiation example:
+lookup = CosmosSiteConfigLookup(
+    endpoint="https://your-cosmos.documents.azure.com",
+    database_name="your-db",
+    container_name="site_configs",
+    cache_ttl=300,
+)
 
 # Get full config for a domain (all config types)
 config = await lookup.get_config("yelp.com")

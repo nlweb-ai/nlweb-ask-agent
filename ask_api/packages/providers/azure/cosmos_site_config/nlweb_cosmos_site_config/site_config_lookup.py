@@ -75,7 +75,6 @@ class CosmosSiteConfigLookup(SiteConfigLookup):
     def __init__(
         self,
         *,
-        provider_name: str,
         endpoint: str,
         database_name: str,
         container_name: str,
@@ -86,7 +85,6 @@ class CosmosSiteConfigLookup(SiteConfigLookup):
         Initialize Cosmos DB configuration. Client is created lazily on first use.
 
         Args:
-            provider_name: Name of the site config provider.
             endpoint: Cosmos DB endpoint URL.
             database_name: Cosmos DB database name.
             container_name: Cosmos DB container name.
@@ -97,7 +95,6 @@ class CosmosSiteConfigLookup(SiteConfigLookup):
                 f"CosmosSiteConfigLookup received unexpected arguments: {list(kwargs.keys())}"
             )
 
-        self._provider_name = provider_name
         self._endpoint = endpoint
         self._database_name = database_name
         self._container_name = container_name

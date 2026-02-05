@@ -16,18 +16,17 @@ Backwards compatibility is not guaranteed at this time.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, TypeVar, Type, cast
+from typing import Optional, Dict, Any, TypeVar, Type
 from nlweb_core.config import get_config
 from nlweb_core.llm_exceptions import (
     LLMTimeoutError,
     LLMValidationError,
     classify_llm_error,
 )
+from nlweb_core.provider_map import ProviderMap
 from pydantic import BaseModel, ValidationError
 import asyncio
-import importlib
 import logging
-import threading
 
 logger = logging.getLogger(__name__)
 
@@ -113,42 +112,17 @@ class GenerativeLLMProvider(ABC):
         results = await asyncio.gather(*tasks, return_exceptions=True)
         return list(results)
 
-    @classmethod
     @abstractmethod
-    def get_client(cls, **kwargs) -> Any:
-        """
-        Get or initialize the client for this provider.
-        Returns a client instance ready to make API calls.
-
-        Args:
-            **kwargs: Provider-specific configuration (endpoint, api_key, etc.)
-
-        Returns:
-            A client instance configured for the provider
-        """
-        pass
-
-    @classmethod
-    @abstractmethod
-    def clean_response(cls, content: str) -> Dict[str, Any]:
-        """
-        Clean and parse the raw response content into a structured dict.
-
-        Args:
-            content: Raw response content from the LLM
-
-        Returns:
-            Parsed JSON as a Python dictionary
-
-        Raises:
-            ValueError: If the content doesn't contain valid JSON
-        """
+    async def close(self) -> None:
+        """Close the provider and release resources."""
         pass
 
 
-# Cache for loaded generative providers
-_loaded_generative_providers: dict[str, GenerativeLLMProvider] = {}
-_generative_providers_lock = threading.Lock()
+# Provider map for generative LLM providers
+_generative_provider_map: ProviderMap[GenerativeLLMProvider] = ProviderMap(
+    config_getter=lambda name: get_config().get_generative_model_provider(name),
+    error_prefix="Generative model provider",
+)
 
 
 def get_generative_provider(name: str) -> GenerativeLLMProvider:
@@ -166,32 +140,7 @@ def get_generative_provider(name: str) -> GenerativeLLMProvider:
     Raises:
         ValueError: If no generative provider with the given name is configured
     """
-    if name in _loaded_generative_providers:
-        return _loaded_generative_providers[name]
-
-    with _generative_providers_lock:
-        # Double-check after acquiring lock
-        if name in _loaded_generative_providers:
-            return _loaded_generative_providers[name]
-
-        config = get_config()
-        model_config = config.get_generative_model_provider(name)
-
-        if model_config is None:
-            raise ValueError(f"Generative model provider '{name}' is not configured")
-
-        try:
-            module = importlib.import_module(model_config.import_path)
-            provider_class = getattr(module, model_config.class_name)
-            provider = provider_class(**model_config.options)
-            _loaded_generative_providers[name] = cast(GenerativeLLMProvider, provider)
-            logger.debug(
-                f"Loaded generative provider '{name}': {model_config.class_name}"
-            )
-        except (ImportError, AttributeError) as e:
-            raise ValueError(f"Failed to load generative provider '{name}': {e}")
-
-        return _loaded_generative_providers[name]
+    return _generative_provider_map.get(name)
 
 
 async def ask_llm_parallel(

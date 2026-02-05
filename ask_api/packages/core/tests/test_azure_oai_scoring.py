@@ -33,22 +33,13 @@ class TestAzureOpenAIScoringProvider:
         assert provider.api_version == "2024-02-01"
         assert provider.auth_method == "api_key"
 
-    def test_initialization_with_defaults(self):
-        """Test provider initialization with default values."""
-        provider = AzureOpenAIScoringProvider(
-            endpoint="https://test.openai.azure.com",
-            api_key="test-key"
-        )
-
-        # Check defaults
-        assert provider.api_version == "2024-02-01"
-        assert provider.auth_method == "api_key"
-        assert provider.model == "gpt-4.1-mini"
-
     def test_build_item_ranking_prompt(self):
         """Test prompt building for item ranking."""
         provider = AzureOpenAIScoringProvider(
             endpoint="https://test.openai.azure.com",
+            api_version="2024-02-01",
+            auth_method="api_key",
+            model="gpt-4.1-mini",
             api_key="test-key"
         )
 
@@ -72,6 +63,9 @@ class TestAzureOpenAIScoringProvider:
         """Test prompt building for intent detection."""
         provider = AzureOpenAIScoringProvider(
             endpoint="https://test.openai.azure.com",
+            api_version="2024-02-01",
+            auth_method="api_key",
+            model="gpt-4.1-mini",
             api_key="test-key"
         )
 
@@ -91,8 +85,10 @@ class TestAzureOpenAIScoringProvider:
         """Test scoring with a mocked Azure OpenAI client."""
         provider = AzureOpenAIScoringProvider(
             endpoint="https://test.openai.azure.com",
-            api_key="test-key",
-            model="gpt-4.1-mini"
+            api_version="2024-02-01",
+            auth_method="api_key",
+            model="gpt-4.1-mini",
+            api_key="test-key"
         )
 
         # Mock the client and response
@@ -104,27 +100,30 @@ class TestAzureOpenAIScoringProvider:
 
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-        # Patch get_client to return our mock
-        with patch.object(provider, 'get_client', return_value=mock_client):
-            context = ScoringContext(
-                query="best pizza",
-                item_description='{"name": "Pizza Place"}',
-                item_type="Restaurant"
-            )
-            questions = ["Is this relevant?"]
+        # Inject mock client directly
+        provider._client = mock_client
 
-            score = await provider.score(questions, context, timeout=10.0)
+        context = ScoringContext(
+            query="best pizza",
+            item_description='{"name": "Pizza Place"}',
+            item_type="Restaurant"
+        )
+        questions = ["Is this relevant?"]
 
-            assert score == 85.0
-            assert isinstance(score, float)
+        score = await provider.score(questions, context, timeout=10.0)
+
+        assert score == 85.0
+        assert isinstance(score, float)
 
     @pytest.mark.asyncio
     async def test_score_clamps_values(self):
         """Test that scores are clamped to 0-100 range."""
         provider = AzureOpenAIScoringProvider(
             endpoint="https://test.openai.azure.com",
-            api_key="test-key",
-            model="gpt-4.1-mini"
+            api_version="2024-02-01",
+            auth_method="api_key",
+            model="gpt-4.1-mini",
+            api_key="test-key"
         )
 
         # Test score above 100
@@ -136,24 +135,27 @@ class TestAzureOpenAIScoringProvider:
 
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-        with patch.object(provider, 'get_client', return_value=mock_client):
-            context = ScoringContext(query="test", item_description="test")
-            score = await provider.score(["test"], context, timeout=10.0)
-            assert score == 100.0
+        # Inject mock client directly
+        provider._client = mock_client
+
+        context = ScoringContext(query="test", item_description="test")
+        score = await provider.score(["test"], context, timeout=10.0)
+        assert score == 100.0
 
         # Test score below 0
         mock_response.choices[0].message.content = '{"score": -10}'
-        with patch.object(provider, 'get_client', return_value=mock_client):
-            score = await provider.score(["test"], context, timeout=10.0)
-            assert score == 0.0
+        score = await provider.score(["test"], context, timeout=10.0)
+        assert score == 0.0
 
     @pytest.mark.asyncio
     async def test_score_batch(self):
         """Test batch scoring."""
         provider = AzureOpenAIScoringProvider(
             endpoint="https://test.openai.azure.com",
-            api_key="test-key",
-            model="gpt-4.1-mini"
+            api_version="2024-02-01",
+            auth_method="api_key",
+            model="gpt-4.1-mini",
+            api_key="test-key"
         )
 
         # Mock the client to return different scores
@@ -178,18 +180,20 @@ class TestAzureOpenAIScoringProvider:
 
         mock_client.chat.completions.create = mock_create
 
-        with patch.object(provider, 'get_client', return_value=mock_client):
-            contexts = [
-                ScoringContext(query="test1", item_description="item1"),
-                ScoringContext(query="test2", item_description="item2"),
-                ScoringContext(query="test3", item_description="item3"),
-            ]
+        # Inject mock client directly
+        provider._client = mock_client
 
-            results = await provider.score_batch(["Is this relevant?"], contexts, timeout=10.0)
+        contexts = [
+            ScoringContext(query="test1", item_description="item1"),
+            ScoringContext(query="test2", item_description="item2"),
+            ScoringContext(query="test3", item_description="item3"),
+        ]
 
-            assert len(results) == 3
-            assert all(isinstance(r, float) for r in results)
-            assert all(0 <= r <= 100 for r in results)
+        results = await provider.score_batch(["Is this relevant?"], contexts, timeout=10.0)
+
+        assert len(results) == 3
+        assert all(isinstance(r, float) for r in results)
+        assert all(0 <= r <= 100 for r in results)
 
 
 if __name__ == "__main__":

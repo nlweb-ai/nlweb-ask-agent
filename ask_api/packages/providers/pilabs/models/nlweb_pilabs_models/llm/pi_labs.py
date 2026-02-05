@@ -1,4 +1,3 @@
-import threading
 import logging
 from typing import Any, cast
 from dataclasses import dataclass
@@ -57,6 +56,10 @@ class PiLabsClient:
         resp.raise_for_status()
         return [r.get("total_score", 0) * 100 for r in resp.json()]
 
+    async def close(self) -> None:
+        """Close the HTTP client and release resources."""
+        await self._client.aclose()
+
 
 class PiLabsScoringProvider(ScoringLLMProvider):
     """
@@ -65,9 +68,6 @@ class PiLabsScoringProvider(ScoringLLMProvider):
     This is the preferred interface for scoring operations. It provides
     a cleaner API that returns float scores directly instead of dict responses.
     """
-
-    _client_lock = threading.Lock()
-    _client: PiLabsClient | None = None
 
     def __init__(self, api_key: str, endpoint: str, **kwargs):
         """Initialize PiLabs scoring provider.
@@ -80,12 +80,13 @@ class PiLabsScoringProvider(ScoringLLMProvider):
         self.api_key = api_key
         self.endpoint = endpoint
 
-    @classmethod
-    def get_client(cls, **kwargs) -> PiLabsClient:
-        with cls._client_lock:
-            if cls._client is None:
-                cls._client = PiLabsClient()
-        return cls._client
+        # Client initialized lazily on first use
+        self._client: PiLabsClient | None = None
+
+    def _ensure_client(self) -> None:
+        """Create client if not already initialized."""
+        if self._client is None:
+            self._client = PiLabsClient()
 
     async def score(
         self,
@@ -105,7 +106,8 @@ class PiLabsScoringProvider(ScoringLLMProvider):
         Returns:
             Score between 0-100
         """
-        client = self.get_client()
+        self._ensure_client()
+        assert self._client is not None
 
         # Build scoring_spec from questions list
         scoring_spec = [{"question": q} for q in questions]
@@ -132,7 +134,7 @@ class PiLabsScoringProvider(ScoringLLMProvider):
                 scoring_spec=scoring_spec,
             )
 
-        scores = await client.score(
+        scores = await self._client.score(
             [req], endpoint=self.endpoint, api_key=self.api_key, timeout=timeout
         )
         return scores[0]
@@ -157,7 +159,8 @@ class PiLabsScoringProvider(ScoringLLMProvider):
         Returns:
             List of scores (0-100) or Exception for failures
         """
-        client = self.get_client()
+        self._ensure_client()
+        assert self._client is not None
 
         # Build scoring_spec from questions list
         scoring_spec = [{"question": q} for q in questions]
@@ -189,10 +192,16 @@ class PiLabsScoringProvider(ScoringLLMProvider):
             requests.append(req)
 
         try:
-            scores = await client.score(
+            scores = await self._client.score(
                 requests, endpoint=self.endpoint, api_key=self.api_key, timeout=timeout
             )
             return cast(list[float | BaseException], scores)
         except Exception as e:
             logger.error(f"Error during Pi Labs scoring operation: {e}")
             raise
+
+    async def close(self) -> None:
+        """Close the Pi Labs client and release resources."""
+        if self._client is not None:
+            await self._client.close()
+            self._client = None

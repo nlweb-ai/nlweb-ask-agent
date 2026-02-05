@@ -181,7 +181,6 @@ async def site_config_lookup(fake_cosmos_client_class, fake_container, monkeypat
     )
 
     lookup = CosmosSiteConfigLookup(
-        provider_name="test-provider",
         endpoint="https://fake-cosmos.documents.azure.com:443/",
         database_name="test-db",
         container_name="test-container",
