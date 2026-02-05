@@ -12,6 +12,7 @@ import json
 from typing import Dict, Any
 from aiohttp import web
 from .base import BaseInterface
+from nlweb_core.handler import AskHandler
 from nlweb_core.protocol.models import AskRequest
 
 
@@ -139,7 +140,9 @@ class MCPSSEInterface(BaseInterface):
         }
         return f"data: {json.dumps(error_response)}\n\n"
 
-    async def handle_request(self, request: web.Request, handler_class) -> web.Response:
+    async def handle_request(
+        self, request: web.Request, handler_class: type[AskHandler]
+    ) -> web.Response:
         """
         Handle MCP request with SSE streaming.
 
@@ -270,8 +273,8 @@ class MCPSSEInterface(BaseInterface):
                 output_method = self.create_output_method(response)
 
                 # Create and run handler
-                handler = handler_class(ask_request, output_method)
-                await handler.runQuery()
+                handler = handler_class()
+                await handler.do(ask_request, output_method)
 
                 # Finalize stream
                 await self.finalize_response(response)

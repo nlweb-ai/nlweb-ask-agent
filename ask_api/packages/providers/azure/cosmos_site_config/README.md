@@ -19,29 +19,30 @@ Configure in your `config.yaml`:
 
 ```yaml
 site_config:
-  enabled: true
-  endpoint_env: COSMOS_DB_ENDPOINT
-  api_key_env: COSMOS_DB_KEY
-  database_name_env: COSMOS_DB_DATABASE_NAME
-  container_name: site_configs
-  use_managed_identity: false
-  cache_ttl: 300
+  default:
+    endpoint_env: COSMOS_DB_ENDPOINT
+    api_key_env: COSMOS_DB_KEY
+    database_name_env: COSMOS_DB_DATABASE_NAME
+    container_name: site_configs
+    use_managed_identity: false
+    cache_ttl: 300
 ```
 
 ## Usage
 
-The provider is automatically initialized when site_config is enabled:
+The provider is automatically initialized when site_config is configured:
 
 ```python
-from nlweb_cosmos_site_config import SiteConfigLookup
+from nlweb_cosmos_site_config import CosmosSiteConfigLookup
 
 # Initialized automatically from CONFIG
-lookup = SiteConfigLookup()
+lookup = CosmosSiteConfigLookup(provider_name="default")
 
-# Get config for a domain
-config = lookup.get_config("yelp.com")
-if config:
-    intent_elicitations = config.get("intent_elicitations", [])
+# Get full config for a domain (all config types)
+config = await lookup.get_config("yelp.com")
+
+# Get a specific config type
+elicitation = await lookup.get_config_type("yelp.com", "elicitation")
 ```
 
 ## Installation

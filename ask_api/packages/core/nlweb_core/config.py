@@ -154,11 +154,9 @@ class ObjectLookupConfig:
 
 @dataclass
 class SiteConfigStorageConfig:
-    enabled: bool = False
-    endpoint: str | None = None
-    database_name: str | None = None
-    container_name: str = "site_configs"
-    cache_ttl: int = 300
+    import_path: str
+    class_name: str
+    options: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -229,8 +227,10 @@ class AppConfig:
     # Object Storage (Cosmos DB)
     object_storage: ObjectLookupConfig | None = None
 
-    # Site Config
-    site_config: SiteConfigStorageConfig | None = None
+    # Site Config Providers
+    site_config_providers: dict[str, SiteConfigStorageConfig] = field(
+        default_factory=dict
+    )
 
     # Ranking Configuration
     ranking: RankingConfig | None = None
@@ -290,6 +290,12 @@ class AppConfig:
         ):
             return self.llm_endpoints[self.preferred_llm_endpoint]
         return None
+
+    def get_site_config_provider(
+        self, provider_name: str
+    ) -> SiteConfigStorageConfig | None:
+        """Get the specified site config provider by name."""
+        return self.site_config_providers.get(provider_name)
 
 
 # =============================================================================
@@ -589,27 +595,47 @@ def _load_object_storage(data: dict) -> ObjectLookupConfig:
     )
 
 
-def _load_site_config_storage(data: dict) -> SiteConfigStorageConfig:
-    """Load site config storage configuration from config dict."""
+def _load_site_config_storage(data: dict) -> dict[str, SiteConfigStorageConfig]:
+    """Load site config provider configuration from config dict."""
     if "site_config" not in data:
-        return SiteConfigStorageConfig(enabled=False)
+        return {}
 
     site_cfg = data["site_config"]
-    return SiteConfigStorageConfig(
-        enabled=site_cfg.get("enabled", False),
-        endpoint=(
-            _get_config_value(site_cfg.get("endpoint_env"))
-            if "endpoint_env" in site_cfg
-            else None
-        ),
-        database_name=(
-            _get_config_value(site_cfg.get("database_name_env"))
-            if "database_name_env" in site_cfg
-            else None
-        ),
-        container_name=site_cfg.get("container_name", "site_configs"),
-        cache_ttl=site_cfg.get("cache_ttl", 300),
-    )
+    if not isinstance(site_cfg, dict):
+        raise ValueError("site_config must be a mapping of provider names to configs")
+
+    providers: dict[str, SiteConfigStorageConfig] = {}
+    for provider_name, provider_cfg in site_cfg.items():
+        if not isinstance(provider_cfg, dict):
+            raise ValueError(
+                f"site_config provider '{provider_name}' must be a mapping"
+            )
+        import_path = provider_cfg.get("import_path")
+        class_name = provider_cfg.get("class_name")
+        if not import_path or not class_name:
+            raise ValueError(
+                f"site_config provider '{provider_name}' must specify import_path and class_name"
+            )
+
+        # Build options dict from all config except import_path and class_name
+        options: dict[str, Any] = {}
+        for key, value in provider_cfg.items():
+            if key in ("import_path", "class_name"):
+                continue
+            # Handle _env suffix keys by resolving environment variables
+            if key.endswith("_env"):
+                resolved_key = key[:-4]  # Remove _env suffix
+                options[resolved_key] = _get_config_value(value)
+            else:
+                options[key] = value
+
+        providers[provider_name] = SiteConfigStorageConfig(
+            import_path=import_path,
+            class_name=class_name,
+            options=options,
+        )
+
+    return providers
 
 
 def _load_ranking_config(data: dict) -> RankingConfig:
@@ -803,7 +829,7 @@ def load_config() -> AppConfig:
             data, config_directory, base_output_directory
         )
         object_storage = _load_object_storage(data)
-        site_config = _load_site_config_storage(data)
+        site_config_providers = _load_site_config_storage(data)
         ranking = _load_ranking_config(data)
         server = _load_server_config(data)
         nlweb = _load_nlweb_config(data, config_directory, base_output_directory)
@@ -846,7 +872,7 @@ def load_config() -> AppConfig:
             conversation_storage_endpoints={},
             conversation_storage_default="qdrant_local",
             object_storage=object_storage,
-            site_config=site_config,
+            site_config_providers=site_config_providers,
             ranking=ranking,
             nlweb=nlweb,
             server=server,
@@ -869,7 +895,7 @@ def load_config() -> AppConfig:
         server=ServerConfig(),
         conversation_storage=ConversationStorageConfig(type="qdrant", enabled=False),
         object_storage=ObjectLookupConfig(type="cosmos", enabled=False),
-        site_config=SiteConfigStorageConfig(enabled=False),
+        site_config_providers={},
         ranking=RankingConfig(),
         conversation_storage_behavior=StorageBehaviorConfig(),
     )

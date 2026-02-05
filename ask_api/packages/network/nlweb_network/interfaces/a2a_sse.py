@@ -13,6 +13,7 @@ import json
 from typing import Dict, Any
 from aiohttp import web
 from .base import BaseInterface
+from nlweb_core.handler import AskHandler
 from nlweb_core.protocol.models import AskRequest
 
 
@@ -143,7 +144,7 @@ class A2ASSEInterface(BaseInterface):
         await response.write_eof()
 
     async def handle_request(
-        self, request: web.Request, handler_class
+        self, request: web.Request, handler_class: type[AskHandler]
     ) -> web.StreamResponse:
         """
         Handle A2A SSE streaming request.
@@ -211,8 +212,8 @@ class A2ASSEInterface(BaseInterface):
                 ask_request = AskRequest.model_validate(query_params)
 
                 output_method = self.create_output_method(response)
-                handler = handler_class(ask_request, output_method)
-                await handler.runQuery()
+                handler = handler_class()
+                await handler.do(ask_request, output_method)
 
                 # Finalize response
                 await self.finalize_response(response)

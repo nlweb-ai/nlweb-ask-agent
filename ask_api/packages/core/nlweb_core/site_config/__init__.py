@@ -5,51 +5,22 @@ This module provides intent-based elicitation for domain-specific queries.
 """
 
 import logging
-from typing import Any, Optional, Protocol
 
-from .intent_detector import IntentDetector
+from .base import (
+    SiteConfigLookup,
+    close_site_config_lookup,
+    get_site_config_lookup,
+    initialize_site_config,
+)
 from .elicitation_checker import ElicitationChecker
 from .elicitation_handler import ElicitationHandler
+from .intent_detector import IntentDetector
+from .static_site_config import StaticSiteConfigLookup
 
 logger = logging.getLogger(__name__)
 
 
-class SiteConfigLookupProtocol(Protocol):
-    """Protocol defining the interface for site configuration lookup providers."""
-
-    async def get_config(self, domain: str) -> Optional[dict[str, Any]]:
-        """Retrieve site configuration for a domain with caching."""
-        ...
-
-    async def get_config_for_site_filter(
-        self, site_filter: Optional[str]
-    ) -> Optional[dict[str, Any]]:
-        """Retrieve site configuration for a site filter (URL or domain)."""
-        ...
-
-    async def get_item_type_for_ranking(self, site_filter: Optional[str]) -> str | None:
-        """Get the primary item type for ranking purposes."""
-        ...
-
-    async def close(self) -> None:
-        """Close the client and release resources."""
-        ...
-
-
-# Module-level cache for site config services
-_site_config_lookup: SiteConfigLookupProtocol | None = None
 _elicitation_handler: ElicitationHandler | None = None
-
-
-def get_site_config_lookup() -> SiteConfigLookupProtocol | None:
-    """Get the cached site config lookup instance."""
-    return _site_config_lookup
-
-
-def set_site_config_lookup(lookup: SiteConfigLookupProtocol | None) -> None:
-    """Set the site config lookup (called at server startup)."""
-    global _site_config_lookup
-    _site_config_lookup = lookup
 
 
 def get_elicitation_handler() -> ElicitationHandler | None:
@@ -63,19 +34,12 @@ def set_elicitation_handler(handler: ElicitationHandler | None) -> None:
     _elicitation_handler = handler
 
 
-async def close_site_config_lookup() -> None:
-    """Close the site config lookup client and release resources."""
-    global _site_config_lookup
-    if _site_config_lookup is not None:
-        await _site_config_lookup.close()
-        _site_config_lookup = None
-
-
 __all__ = [
     "IntentDetector",
     "ElicitationChecker",
     "ElicitationHandler",
-    "SiteConfigLookupProtocol",
+    "SiteConfigLookup",
+    "StaticSiteConfigLookup",
     "initialize_site_config",
     "get_site_config_lookup",
     "get_elicitation_handler",
@@ -83,57 +47,10 @@ __all__ = [
 ]
 
 
-def initialize_site_config(config) -> Optional[ElicitationHandler]:
+def initialize_elicitation_handler() -> None:
     """
-    Initialize site config lookup and elicitation handler from application config.
-
-    This should be called during server startup.
-
-    Args:
-        config: AppConfig instance with site_config settings
-
-    Returns:
-        ElicitationHandler instance or None if site config is disabled
+    Initialize the ElicitationHandler instance.
     """
-    # Check if site config is enabled
-    site_config = getattr(config, "site_config", None)
-    if not site_config or not site_config.enabled:
-        logger.info("Site config disabled - elicitation will not be available")
-        return None
-
-    # Validate required configuration
-    if not site_config.endpoint:
-        logger.warning("Site config enabled but endpoint not configured")
-        return None
-
-    if not site_config.database_name:
-        logger.warning("Site config enabled but database_name not configured")
-        return None
-
-    # Create SiteConfigLookup using provider pattern
-    try:
-        # Dynamically import the provider class
-        # Default to Azure Cosmos provider if not specified
-        import_path = "nlweb_cosmos_site_config.site_config_lookup"
-        class_name = "SiteConfigLookup"
-
-        module = __import__(import_path, fromlist=[class_name])
-        provider_class = getattr(module, class_name)
-
-        # Instantiate the provider (it reads from CONFIG.site_config)
-        site_config_lookup = provider_class()
-
-        logger.info(
-            f"SiteConfigLookup initialized via provider: {import_path}.{class_name}"
-        )
-
-        # Store in module-level cache for access by handlers
-        set_site_config_lookup(site_config_lookup)
-
-    except Exception as e:
-        logger.error(f"Failed to initialize SiteConfigLookup: {e}", exc_info=True)
-        raise
-
     # Create ElicitationHandler (uses ask_llm_parallel with scoring model)
     try:
         elicitation_handler = ElicitationHandler()
@@ -142,8 +59,6 @@ def initialize_site_config(config) -> Optional[ElicitationHandler]:
 
         # Store in module-level cache for access by handlers
         set_elicitation_handler(elicitation_handler)
-
-        return elicitation_handler
 
     except Exception as e:
         logger.error(f"Failed to initialize ElicitationHandler: {e}", exc_info=True)

@@ -13,6 +13,7 @@ import logging
 from typing import Dict, Any
 from aiohttp import web
 from .base import BaseInterface
+from nlweb_core.handler import AskHandler
 from nlweb_core.protocol.models import AskRequest
 
 logger = logging.getLogger(__name__)
@@ -53,7 +54,7 @@ class HTTPSSEInterface(BaseInterface):
         await response.write_eof()
 
     async def handle_request(
-        self, request: web.Request, handler_class
+        self, request: web.Request, handler_class: type[AskHandler]
     ) -> web.StreamResponse:
         """
         Handle HTTP request and stream SSE responses.
@@ -88,8 +89,8 @@ class HTTPSSEInterface(BaseInterface):
             output_method = self.create_output_method(response)
 
             # Create and run handler
-            handler = handler_class(ask_request, output_method)
-            await handler.runQuery()
+            handler = handler_class()
+            await handler.do(ask_request, output_method)
 
             # Finalize stream
             await self.finalize_response(response)

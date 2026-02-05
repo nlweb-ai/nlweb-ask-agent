@@ -25,7 +25,7 @@ from nlweb_core.config import (
     reset_config,
     initialize_config,
 )
-from nlweb_core.handler import NLWebHandler
+from nlweb_core.handler import SiteSelectingHandler
 from nlweb_network.interfaces import (
     HTTPJSONInterface,
     HTTPSSEInterface,
@@ -89,7 +89,7 @@ async def ask_handler(request):
     else:
         interface = HTTPJSONInterface()
 
-    return await interface.handle_request(request, NLWebHandler)
+    return await interface.handle_request(request, SiteSelectingHandler)
 
 
 async def mcp_handler(request):
@@ -103,7 +103,7 @@ async def mcp_handler(request):
     - JSON-RPC 2.0 formatted responses
     """
     interface = MCPStreamableInterface()
-    return await interface.handle_request(request, NLWebHandler)
+    return await interface.handle_request(request, SiteSelectingHandler)
 
 
 async def mcp_sse_handler(request):
@@ -117,7 +117,7 @@ async def mcp_sse_handler(request):
     - JSON-RPC 2.0 formatted responses via SSE
     """
     interface = MCPSSEInterface()
-    return await interface.handle_request(request, NLWebHandler)
+    return await interface.handle_request(request, SiteSelectingHandler)
 
 
 async def a2a_handler(request):
@@ -131,7 +131,7 @@ async def a2a_handler(request):
     - JSON-RPC 2.0 formatted responses
     """
     interface = A2AStreamableInterface()
-    return await interface.handle_request(request, NLWebHandler)
+    return await interface.handle_request(request, SiteSelectingHandler)
 
 
 async def a2a_sse_handler(request):
@@ -145,7 +145,7 @@ async def a2a_sse_handler(request):
     - JSON-RPC 2.0 formatted responses via SSE
     """
     interface = A2ASSEInterface()
-    return await interface.handle_request(request, NLWebHandler)
+    return await interface.handle_request(request, SiteSelectingHandler)
 
 
 async def await_handler(request):
@@ -353,16 +353,16 @@ async def init_app(app):
 
             traceback.print_exc()
 
-    # Initialize site config and elicitation handler if enabled
-    if config.site_config and config.site_config.enabled:
+    # Initialize site config and elicitation handler if any provider is configured
+    if config.site_config_providers:
         try:
-            from nlweb_core.site_config import initialize_site_config
+            from nlweb_core.site_config import (
+                initialize_site_config,
+                initialize_elicitation_handler,
+            )
 
-            elicitation_handler = initialize_site_config(config)
-            if elicitation_handler:
-                print("Site config and elicitation handler initialized on startup")
-            else:
-                print("Site config enabled but initialization failed (check logs)")
+            initialize_site_config(config.site_config_providers)
+            initialize_elicitation_handler()
         except Exception as e:
             print(f"Failed to initialize site config: {e}")
             import traceback

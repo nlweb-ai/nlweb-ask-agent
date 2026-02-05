@@ -12,6 +12,7 @@ import json
 from typing import Dict, Any
 from aiohttp import web
 from .base import BaseInterface
+from nlweb_core.handler import AskHandler
 from nlweb_core.mcp_handler import MCPHandler
 
 class MCPStreamableInterface(BaseInterface):
@@ -63,7 +64,9 @@ class MCPStreamableInterface(BaseInterface):
             "query_params": params.get("arguments", {}) if method == "tools/call" else {}
         }
 
-    async def handle_request(self, request: web.Request, handler_class) -> web.Response:
+    async def handle_request(
+        self, request: web.Request, handler_class: type[AskHandler]
+    ) -> web.Response:
         """
         Handle MCP JSON-RPC 2.0 request.
 

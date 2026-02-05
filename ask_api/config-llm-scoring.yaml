@@ -77,11 +77,20 @@ object_storage:
   class_name: CosmosObjectLookup
 
 site_config:
-  enabled: true
-  endpoint_env: COSMOS_DB_ENDPOINT
-  database_name_env: COSMOS_DB_DATABASE_NAME
-  container_name: site_configs
-  cache_ttl: 300  # Cache TTL in seconds (5 minutes)
+  default:
+    endpoint_env: COSMOS_DB_ENDPOINT
+    database_name_env: COSMOS_DB_DATABASE_NAME
+    container_name: site_configs
+    cache_ttl: 300  # Cache TTL in seconds (5 minutes)
+    import_path: nlweb_cosmos_site_config.site_config_lookup
+    class_name: CosmosSiteConfigLookup
+  handler:
+    import_path: nlweb_core.site_config.static_site_config
+    class_name: StaticSiteConfigLookup
+    sites:
+      aajtak.in:
+        ask_handler_class: AajtakAskHandler
+        ask_handler_import_path: nlweb_core.aajtak
 
 server:
   host: 0.0.0.0
