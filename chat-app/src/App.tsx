@@ -115,7 +115,12 @@ function App() {
     // Append URL query parameters to the endpoint for config overrides
     const queryString = window.location.search;
     const endpoint = `/ask${queryString}`;
-
+    const config = {
+      endpoint: endpoint,
+      site: site.url,
+      maxResults: 9,
+      pages: PAGES
+    }
     const nlweb = useNlWeb({
       endpoint: endpoint,
       site: site.url,
@@ -124,7 +129,7 @@ function App() {
     });
     const localSessions = useSearchSessions();
     const [sessionId, setSessionId] = useState<string>(crypto.randomUUID());
-    const [sessionResults, addResult] = useSearchSession(sessionId);
+    const {results, addSearch, addResults} = useSearchSession(sessionId);
      async function startSearch(query: string) {
       nlweb.clearResults();
       const newId = localSessions.sessions.some(s => s.sessionId === sessionId) ? crypto.randomUUID() : sessionId ;
@@ -162,10 +167,11 @@ function App() {
               sessionId={sessionId}
               startSession={startSearch}
               endSession={endSearch}
-              results={sessionResults}
-              addResult={addResult}
+              searches={results}
+              addSearch={addSearch}
+              addResults={addResults}
               nlweb={nlweb}
-              maxPages={PAGES}
+              config={config}
               sidebar={<HistorySidebar
                 sessions={localSessions.sessions}
                 onSelect={selectSession}
@@ -178,7 +184,8 @@ function App() {
                   site={site.url}
                   maxResults={50}
                   streamingState={nlweb}
-                  results={sessionResults}
+                  results={results}
+                  pages={PAGES}
                 />
               </div>
             </ChatSearch>

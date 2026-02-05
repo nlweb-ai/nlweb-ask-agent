@@ -137,15 +137,10 @@ class Meta(BaseModel):
         None,
         description="Whether to remember this interaction in conversation history (optional)",
     )
-    page: Optional[int] = Field(
+    start_num: Optional[int] = Field(
         0,
-        description="The page number to return results from"
+        description="The start offset for the returned results"
     )
-    pages:Optional[int] = Field(
-        1,
-        description="The number of pages to support"
-    )
-
 
 
 class AskRequest(BaseModel):
