@@ -21,9 +21,9 @@ from aiohttp.web_request import Request
 from aiohttp.web_exceptions import HTTPInternalServerError
 from nlweb_core.config import (
     get_config,
-    set_config_overrides,
-    reset_config,
     initialize_config,
+    override_ranking_config,
+    RankingConfig,
 )
 from nlweb_core.handler import SiteSelectingHandler
 from nlweb_network.interfaces import (
@@ -259,54 +259,20 @@ async def require_admin_api_key(app, handler):
     return middleware
 
 
-# Query param to config attribute mapping for per-request overrides
-_OVERRIDE_PARAM_MAP = {
-    "tool_selection": "tool_selection_enabled",
-    "memory": "memory_enabled",
-    "analyze_query": "analyze_query_enabled",
-    "decontextualize": "decontextualize_enabled",
-    "required_info": "required_info_enabled",
-    "aggregation": "aggregation_enabled",
-    "who_endpoint": "who_endpoint_enabled",
-}
-
-
-def _parse_bool(value: str) -> bool:
-    """Parse boolean from query param string."""
-    return value.lower() in ("true", "1", "yes", "on")
-
-
 async def config_override_middleware(app, handler):
     """
-    Middleware to set per-request config overrides from query params.
+    Middleware to set per-request ranking config overrides from query params.
 
     Supports:
-    - Boolean flags: ?memory=true&tool_selection=false
     - List params: ?scoring_questions=q1&scoring_questions=q2
     """
 
     async def middleware(request: Request):
-        overrides = {}
-
-        # Handle scoring_questions (list type, can appear multiple times)
         scoring_questions = request.query.getall("scoring_questions", default=[])
         if scoring_questions:
-            overrides["scoring_questions"] = scoring_questions
-
-        # Parse boolean flags from query params
-        for key, value in request.query.items():
-            if key in _OVERRIDE_PARAM_MAP:
-                overrides[_OVERRIDE_PARAM_MAP[key]] = _parse_bool(value)
-
-        # Set overrides (only does work if there are valid overrides)
-        if overrides:
-            set_config_overrides(overrides)
-
-        try:
-            return await handler(request)
-        finally:
-            # Always reset to static config after request
-            reset_config()
+            with override_ranking_config(RankingConfig(scoring_questions=scoring_questions)):
+                return await handler(request)
+        return await handler(request)
 
     return middleware
 

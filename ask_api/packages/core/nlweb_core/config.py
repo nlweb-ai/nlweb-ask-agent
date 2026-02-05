@@ -10,10 +10,10 @@ Backwards compatibility is not guaranteed at this time.
 
 from __future__ import annotations
 
-import copy
 import os
 import yaml
 import logging
+from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from dotenv import load_dotenv
@@ -228,8 +228,8 @@ class AppConfig:
     # Scoring Model Providers
     scoring_model_providers: dict[str, ScoringModelConfig] = field(default_factory=dict)
 
-    # Ranking Configuration
-    ranking: RankingConfig | None = None
+    # Ranking Configuration (use get_ranking_config() to access)
+    _ranking: RankingConfig | None = None
 
     # NLWeb Configuration
     nlweb: NLWebConfig | None = None
@@ -293,6 +293,13 @@ class AppConfig:
         if _site_config_provider_map is None:
             raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
         return _site_config_provider_map.get(name)
+
+    def get_ranking_config(self) -> RankingConfig:
+        """Get ranking config, checking for per-request override first."""
+        try:
+            return _ranking_config_override.get()
+        except LookupError:
+            return self._ranking or RankingConfig()
 
 
 # =============================================================================
@@ -850,7 +857,7 @@ def load_config() -> AppConfig:
             object_storage=object_storage,
             site_config_providers=site_config_providers,
             scoring_model_providers=scoring_model_providers,
-            ranking=ranking,
+            _ranking=ranking,
             nlweb=nlweb,
             server=server,
             port=data.get("port", 8080),
@@ -873,7 +880,7 @@ def load_config() -> AppConfig:
         conversation_storage=ConversationStorageConfig(type="qdrant", enabled=False),
         object_storage=ObjectLookupConfig(type="cosmos", enabled=False),
         site_config_providers={},
-        ranking=RankingConfig(),
+        _ranking=RankingConfig(),
         conversation_storage_behavior=StorageBehaviorConfig(),
     )
 
@@ -885,23 +892,8 @@ def load_config() -> AppConfig:
 # Module-private static config - None until initialize_config() is called
 _STATIC_CONFIG: AppConfig | None = None
 
-# Contextvar holds current config - no default, use get_config() to access
-_config_var: ContextVar[AppConfig] = ContextVar("config")
-
-
-# Attributes that can be overridden per-request
-OVERRIDABLE_ATTRS = frozenset(
-    {
-        "tool_selection_enabled",
-        "memory_enabled",
-        "analyze_query_enabled",
-        "decontextualize_enabled",
-        "required_info_enabled",
-        "aggregation_enabled",
-        "who_endpoint_enabled",
-        "scoring_questions",
-    }
-)
+# Per-request ranking config override (no default - falls back to static config)
+_ranking_config_override: ContextVar[RankingConfig] = ContextVar("ranking_config_override")
 
 
 def initialize_config() -> AppConfig:
@@ -918,69 +910,27 @@ def initialize_config() -> AppConfig:
 
 def get_config() -> AppConfig:
     """
-    Get the current config for this request context.
+    Get the application configuration.
 
-    Returns the request-specific config if set via set_config_overrides(),
-    otherwise returns the static config.
-    """
-    try:
-        return _config_var.get()
-    except LookupError:
-        if _STATIC_CONFIG is None:
-            raise RuntimeError(
-                "Configuration not initialized. Call initialize_config() at server startup."
-            )
-        return _STATIC_CONFIG
-
-
-def set_config_overrides(overrides: dict[str, Any]) -> None:
-    """
-    Create a deep copy of static config with overrides applied.
-
-    Called by middleware when request has config override params.
-    Only OVERRIDABLE_ATTRS are accepted; others are silently ignored.
+    Returns the static config loaded at server startup. For per-request
+    overrides of ranking config, use get_config().get_ranking_config()
+    which checks the ranking override contextvar.
     """
     if _STATIC_CONFIG is None:
         raise RuntimeError(
-            "Configuration not initialized. Call initialize_config() first."
+            "Configuration not initialized. Call initialize_config() at server startup."
         )
-
-    # Filter to only overridable attributes
-    filtered = {k: v for k, v in overrides.items() if k in OVERRIDABLE_ATTRS}
-
-    if not filtered:
-        return  # No valid overrides, keep pointing to static config
-
-    # Deep copy the static config
-    config_copy = copy.deepcopy(_STATIC_CONFIG)
-
-    # Apply overrides to the nlweb sub-config (where feature flags live)
-    if config_copy.nlweb:
-        for attr, value in filtered.items():
-            # Skip scoring_questions - it belongs to ranking config
-            if attr == "scoring_questions":
-                continue
-            if hasattr(config_copy.nlweb, attr):
-                setattr(config_copy.nlweb, attr, value)
-
-    # Apply scoring_questions to ranking config
-    if "scoring_questions" in filtered and config_copy.ranking:
-        config_copy.ranking.scoring_questions = filtered["scoring_questions"]
-
-    _config_var.set(config_copy)
+    return _STATIC_CONFIG
 
 
-def reset_config() -> None:
-    """Reset to static config. Called by middleware after request completes."""
-    # Reset by removing the contextvar value (will fall back to static)
+@contextmanager
+def override_ranking_config(ranking_config: RankingConfig):
+    """Temporarily override ranking config for the current context."""
+    token = _ranking_config_override.set(ranking_config)
     try:
-        _config_var.get()
-        # Token-based reset - set a temporary value then reset to remove it
-        if _STATIC_CONFIG is not None:
-            token = _config_var.set(_STATIC_CONFIG)
-            _config_var.reset(token)
-    except LookupError:
-        pass  # Already not set
+        yield
+    finally:
+        _ranking_config_override.reset(token)
 
 
 # =============================================================================

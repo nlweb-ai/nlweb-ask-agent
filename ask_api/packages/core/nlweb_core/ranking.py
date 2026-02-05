@@ -14,7 +14,7 @@ import logging
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
-from nlweb_core.config import get_config, RankingConfig
+from nlweb_core.config import get_config
 from nlweb_core.item_retriever import RetrievedItem
 from nlweb_core.protocol.models import Query
 from nlweb_core.llm_exceptions import (
@@ -239,9 +239,9 @@ class Ranking:
             for item, (date_str, age_days) in zip(items, date_info)
         ]
 
-        # Get config and scoring questions
+        # Get ranking config (checks contextvar for per-request override)
         config = get_config()
-        ranking_config = config.ranking or RankingConfig()
+        ranking_config = config.get_ranking_config()
         scoring_questions = ranking_config.scoring_questions
 
         try:
