@@ -110,7 +110,7 @@ class IntentDetector:
             # Call scoring provider in batch with standard question
             scoring_question = "Does the query match this intent?"
             try:
-                provider = get_scoring_provider()
+                provider = get_scoring_provider("default")
                 results = await provider.score_batch(
                     [scoring_question],
                     contexts,

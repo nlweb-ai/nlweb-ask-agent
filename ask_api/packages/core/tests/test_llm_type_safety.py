@@ -17,20 +17,12 @@ class TestAskLLMParallelValidation:
 
     @pytest.fixture
     def mock_config(self):
-        """Create a mock config object with scoring model."""
+        """Create a mock config object with generative model providers."""
         config = MagicMock()
-        config.scoring_llm_model = MagicMock()
-        config.scoring_llm_model.model = "test-model"
-        config.scoring_llm_model.llm_type = "test"
-        config.scoring_llm_model.endpoint = "https://test"
-        config.scoring_llm_model.api_key = "test-key"
-        config.scoring_llm_model.api_version = "v1"
-        config.scoring_llm_model.auth_method = "key"
-        config.scoring_llm_model.import_path = "test_module"
-        config.scoring_llm_model.class_name = "TestProvider"
-        config.high_llm_model = None
-        config.low_llm_model = None
-        config.preferred_llm_endpoint = None
+        # Set up mock generative model config
+        mock_model_config = MagicMock()
+        mock_model_config.options = {"model": "test-model"}
+        config.get_generative_model_provider = MagicMock(return_value=mock_model_config)
         return config
 
     @pytest.fixture
@@ -49,12 +41,12 @@ class TestAskLLMParallelValidation:
         ]
 
         with patch("nlweb_core.llm.get_config", return_value=mock_config), \
-             patch("nlweb_core.llm._get_provider", return_value=mock_provider):
+             patch("nlweb_core.llm.get_generative_provider", return_value=mock_provider):
 
             results = await ask_llm_parallel(
                 prompts=["prompt1", "prompt2"],
                 schema=RankingResponse,
-                level="scoring",
+                level="low",
             )
 
             assert len(results) == 2
@@ -73,12 +65,12 @@ class TestAskLLMParallelValidation:
         ]
 
         with patch("nlweb_core.llm.get_config", return_value=mock_config), \
-             patch("nlweb_core.llm._get_provider", return_value=mock_provider):
+             patch("nlweb_core.llm.get_generative_provider", return_value=mock_provider):
 
             results = await ask_llm_parallel(
                 prompts=["prompt1", "prompt2"],
                 schema=RankingResponse,
-                level="scoring",
+                level="low",
             )
 
             assert len(results) == 2
@@ -94,12 +86,12 @@ class TestAskLLMParallelValidation:
         ]
 
         with patch("nlweb_core.llm.get_config", return_value=mock_config), \
-             patch("nlweb_core.llm._get_provider", return_value=mock_provider):
+             patch("nlweb_core.llm.get_generative_provider", return_value=mock_provider):
 
             results = await ask_llm_parallel(
                 prompts=["prompt1"],
                 schema=RankingResponse,
-                level="scoring",
+                level="low",
             )
 
             assert len(results) == 1
@@ -116,12 +108,12 @@ class TestAskLLMParallelValidation:
         ]
 
         with patch("nlweb_core.llm.get_config", return_value=mock_config), \
-             patch("nlweb_core.llm._get_provider", return_value=mock_provider):
+             patch("nlweb_core.llm.get_generative_provider", return_value=mock_provider):
 
             results = await ask_llm_parallel(
                 prompts=["prompt1", "prompt2"],
                 schema=RankingResponse,
-                level="scoring",
+                level="low",
             )
 
             assert len(results) == 2
@@ -137,12 +129,12 @@ class TestAskLLMParallelValidation:
         ]
 
         with patch("nlweb_core.llm.get_config", return_value=mock_config), \
-             patch("nlweb_core.llm._get_provider", return_value=mock_provider):
+             patch("nlweb_core.llm.get_generative_provider", return_value=mock_provider):
 
             results = await ask_llm_parallel(
                 prompts=["prompt1", "prompt2"],
                 schema=RankingResponse,
-                level="scoring",
+                level="low",
             )
 
             assert len(results) == 2

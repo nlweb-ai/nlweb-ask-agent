@@ -13,6 +13,7 @@ import json
 from typing import Dict, Any
 from aiohttp import web
 from .base import BaseInterface
+from nlweb_core.handler import AskHandler
 from nlweb_core.protocol.models import AskRequest
 
 
@@ -203,7 +204,9 @@ class A2AStreamableInterface(BaseInterface):
         """
         pass
 
-    async def handle_request(self, request: web.Request, handler_class) -> web.Response:
+    async def handle_request(
+        self, request: web.Request, handler_class: type[AskHandler]
+    ) -> web.Response:
         """
         Handle A2A StreamableHTTP request.
 
@@ -248,8 +251,8 @@ class A2AStreamableInterface(BaseInterface):
                 ask_request = AskRequest.model_validate(query_params)
 
                 output_method = self.create_collector_output_method()
-                handler = handler_class(ask_request, output_method)
-                await handler.runQuery()
+                handler = handler_class()
+                await handler.do(ask_request, output_method)
 
                 # Get collected responses
                 responses = self.get_collected_responses()

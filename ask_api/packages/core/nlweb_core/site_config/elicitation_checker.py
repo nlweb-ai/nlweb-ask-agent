@@ -128,7 +128,7 @@ class ElicitationChecker:
         # Call scoring provider in batch with standard question
         scoring_question = "Does the query contain the required information?"
         try:
-            provider = get_scoring_provider()
+            provider = get_scoring_provider("default")
             results = await provider.score_batch(
                 [scoring_question],
                 contexts,

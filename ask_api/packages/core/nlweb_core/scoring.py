@@ -15,12 +15,11 @@ Backwards compatibility is not guaranteed at this time.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, cast
 import asyncio
-import importlib
 import logging
 
 from nlweb_core.config import get_config
+from nlweb_core.provider_map import ProviderMap
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,7 @@ class ScoringContext:
     """Context for scoring operations.
 
     This provides structured context for different scoring use cases:
-    - Item ranking: query + item_description + item_type
+    - Item ranking: query + item_description + item_type + publication_date + age_days
     - Intent detection: query + intent
     - Presence checking: query + required_info
     """
@@ -50,6 +49,12 @@ class ScoringContext:
     required_info: str | None = None
     """For presence checking: the required information being checked."""
 
+    publication_date: str | None = None
+    """For freshness-aware ranking: ISO format publication date string."""
+
+    age_days: int | None = None
+    """For freshness-aware ranking: Days since publication (calculated from datePublished)."""
+
 
 class ScoringLLMProvider(ABC):
     """
@@ -63,6 +68,16 @@ class ScoringLLMProvider(ABC):
     - Intent detection
     - Presence checking
     """
+
+    @abstractmethod
+    def __init__(self, **kwargs) -> None:
+        """
+        Initialize the provider with configuration.
+
+        Args:
+            **kwargs: Provider-specific configuration (endpoint, api_key, etc.)
+        """
+        pass
 
     @abstractmethod
     async def score(
@@ -119,63 +134,32 @@ class ScoringLLMProvider(ABC):
         results = await asyncio.gather(*tasks, return_exceptions=True)
         return list(results)
 
-    @classmethod
     @abstractmethod
-    def get_client(cls) -> Any:
-        """
-        Get or initialize the client for this provider.
-
-        Returns:
-            A client instance configured for the provider
-        """
+    async def close(self) -> None:
+        """Close the provider and release resources."""
         pass
 
 
-# Cache for loaded scoring providers
-_loaded_scoring_providers: dict[str, ScoringLLMProvider] = {}
+# Provider map for scoring LLM providers
+_scoring_provider_map: ProviderMap[ScoringLLMProvider] = ProviderMap(
+    config_getter=lambda name: get_config().get_scoring_model_provider(name),
+    error_prefix="Scoring model provider",
+)
 
 
-def get_scoring_provider() -> ScoringLLMProvider:
+def get_scoring_provider(name: str) -> ScoringLLMProvider:
     """
-    Get the configured scoring provider via dynamic import.
+    Get the configured scoring provider by name via dynamic import.
 
-    Uses get_config().scoring_llm_model to load the appropriate provider class.
+    Uses get_config().get_scoring_model_provider(name) to load the appropriate provider.
+
+    Args:
+        name: Provider name
 
     Returns:
         The configured ScoringLLMProvider instance
 
     Raises:
-        ValueError: If no scoring_llm_model is configured or loading fails
+        ValueError: If no scoring provider with the given name is configured
     """
-    model_config = get_config().scoring_llm_model
-    if not model_config:
-        raise ValueError("No scoring_llm_model configured")
-
-    llm_type = model_config.llm_type
-    if llm_type in _loaded_scoring_providers:
-        return _loaded_scoring_providers[llm_type]
-
-    # Use config-driven dynamic import
-    if not model_config.import_path or not model_config.class_name:
-        raise ValueError(
-            f"No import_path and class_name configured for scoring model: {llm_type}"
-        )
-
-    try:
-        import_path = model_config.import_path
-        class_name = model_config.class_name
-        module = importlib.import_module(import_path)
-        provider_class = getattr(module, class_name)
-        provider = provider_class(
-            api_key=model_config.api_key,
-            endpoint=model_config.endpoint,
-            model=model_config.model,
-            api_version=model_config.api_version,
-            auth_method=model_config.auth_method,
-        )
-        _loaded_scoring_providers[llm_type] = cast(ScoringLLMProvider, provider)
-        logger.debug(f"Loaded scoring provider: {llm_type} ({class_name})")
-    except (ImportError, AttributeError) as e:
-        raise ValueError(f"Failed to load scoring provider for {llm_type}: {e}")
-
-    return _loaded_scoring_providers[llm_type]
+    return _scoring_provider_map.get(name)

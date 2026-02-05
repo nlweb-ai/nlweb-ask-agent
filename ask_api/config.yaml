@@ -3,27 +3,24 @@
 
 port: 8000
 
-# High-tier LLM model (for complex reasoning tasks)
-high-llm-model:
-  llm_type: azure_openai
-  model: gpt-4.1
-  endpoint_env: AZURE_OPENAI_ENDPOINT
-  api_key_env: AZURE_OPENAI_KEY
-  api_version: "2024-08-01-preview"
-  auth_method: api_key
-  import_path: nlweb_azure_models.llm.azure_oai
-  class_name: provider
-
-# Low-tier LLM model (for faster, simpler tasks)
-low-llm-model:
-  llm_type: azure_openai
-  model: gpt-4.1-mini
-  endpoint_env: AZURE_OPENAI_ENDPOINT
-  api_key_env: AZURE_OPENAI_KEY
-  api_version: "2024-08-01-preview"
-  auth_method: api_key  # Use 'azure_ad' for managed identity
-  import_path: nlweb_azure_models.llm.azure_oai
-  class_name: provider
+# Generative model providers (for text/JSON generation)
+generative_model:
+  high:
+    model: gpt-4.1
+    endpoint_env: AZURE_OPENAI_ENDPOINT
+    api_key_env: AZURE_OPENAI_KEY
+    api_version: "2024-08-01-preview"
+    auth_method: api_key
+    import_path: nlweb_azure_models.llm.azure_oai
+    class_name: AzureOpenAIProvider
+  low:
+    model: gpt-4.1-mini
+    endpoint_env: AZURE_OPENAI_ENDPOINT
+    api_key_env: AZURE_OPENAI_KEY
+    api_version: "2024-08-01-preview"
+    auth_method: api_key  # Use 'azure_ad' for managed identity
+    import_path: nlweb_azure_models.llm.azure_oai
+    class_name: AzureOpenAIProvider
 
 embedding:
   provider: azure_openai
@@ -34,27 +31,22 @@ embedding:
   auth_method: api_key  # Use 'azure_ad' for managed identity
   model: text-embedding-3-small
 
-# Scoring model configuration - choose either Pi Labs or Azure OpenAI
-
-# Option 1: Pi Labs scoring (specialized scoring model)
-scoring-llm-model:
-  llm_type: pilabs
-  import_path: nlweb_pilabs_models.llm.pi_labs
-  class_name: PiLabsScoringProvider
-  endpoint_env: PI_LABS_ENDPOINT
-  api_key_env: PI_LABS_KEY
-
-# Option 2: Azure OpenAI scoring (LLM-based scoring)
-# Uncomment the section below and comment out the Pi Labs section above to use Azure OpenAI
-#scoring-llm-model:
-#  llm_type: azure_openai
-#  model: gpt-4.1-mini
-#  endpoint_env: AZURE_OPENAI_ENDPOINT
-#  api_key_env: AZURE_OPENAI_KEY
-#  api_version: "2024-08-01-preview"
-#  auth_method: api_key
-#  import_path: nlweb_azure_models.llm.azure_oai
-#  class_name: AzureOpenAIScoringProvider
+# Scoring model configuration - supports multiple named providers
+scoring_model:
+  default:
+    import_path: nlweb_pilabs_models.llm.pi_labs
+    class_name: PiLabsScoringProvider
+    endpoint_env: PI_LABS_ENDPOINT
+    api_key_env: PI_LABS_KEY
+  # Example: Additional Azure OpenAI scoring provider
+  # azure:
+  #   model: gpt-4.1-mini
+  #   endpoint_env: AZURE_OPENAI_ENDPOINT
+  #   api_key_env: AZURE_OPENAI_KEY
+  #   api_version: "2024-08-01-preview"
+  #   auth_method: api_key
+  #   import_path: nlweb_azure_models.llm.azure_oai
+  #   class_name: AzureOpenAIScoringProvider
 
 
 retrieval:
@@ -77,11 +69,20 @@ object_storage:
   class_name: CosmosObjectLookup
 
 site_config:
-  enabled: true
-  endpoint_env: COSMOS_DB_ENDPOINT
-  database_name_env: COSMOS_DB_DATABASE_NAME
-  container_name: site_configs
-  cache_ttl: 300  # Cache TTL in seconds (5 minutes)
+  default:
+    endpoint_env: COSMOS_DB_ENDPOINT
+    database_name_env: COSMOS_DB_DATABASE_NAME
+    container_name: site_configs
+    cache_ttl: 300  # Cache TTL in seconds (5 minutes)
+    import_path: nlweb_cosmos_site_config.site_config_lookup
+    class_name: CosmosSiteConfigLookup
+  handler:
+    import_path: nlweb_core.site_config.static_site_config
+    class_name: StaticSiteConfigLookup
+    sites:
+      aajtak.in:
+        ask_handler_class: AajtakAskHandler
+        ask_handler_import_path: nlweb_core.aajtak
 
 server:
   host: 0.0.0.0

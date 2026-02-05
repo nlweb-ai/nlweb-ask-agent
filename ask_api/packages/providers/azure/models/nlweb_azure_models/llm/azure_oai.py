@@ -50,132 +50,68 @@ def normalize_schema_for_structured_output(schema: Dict[str, Any]) -> Dict[str, 
 class AzureOpenAIProvider(GenerativeLLMProvider):
     """Implementation of GenerativeLLMProvider for Azure OpenAI."""
 
-    # Global client with thread-safe initialization
-    _client_lock = asyncio.Lock()
-    _client = None
-
-    @classmethod
-    async def get_client(
-        cls,
-        endpoint: str | None = None,
+    def __init__(
+        self,
+        endpoint: str,
+        api_version: str,
+        auth_method: str,
+        model: str,
         api_key: str | None = None,
-        api_version: str | None = None,
-        auth_method: str = "api_key",
-        **kwargs,
-    ) -> AsyncAzureOpenAI | None:
-        """
-        Get or initialize the Azure OpenAI client.
+    ):
+        """Initialize the Azure OpenAI generative provider.
 
         Args:
-            endpoint: Azure OpenAI endpoint URL (required)
-            api_key: API key (required)
-            api_version: API version (required)
-            auth_method: Authentication method (required)
-
-        Returns:
-            Configured AsyncAzureOpenAI client
-        """
-        if not endpoint or not api_version:
-            error_msg = f"Missing required Azure OpenAI configuration - endpoint: {endpoint}, api_version: {api_version}"
-            raise ValueError(error_msg)
-
-        # Create client with the resolved endpoint/api_version
-        async with cls._client_lock:  # Thread-safe client initialization
-            # Always create a new client if we don't have one, or if the endpoint changed
-            if (
-                cls._client is None
-                or not hasattr(cls, "_last_endpoint")
-                or cls._last_endpoint != endpoint
-            ):
-                # Create new client
-                try:
-                    if auth_method == "azure_ad":
-                        token_provider = await get_openai_token_provider()
-
-                        cls._client = AsyncAzureOpenAI(
-                            azure_endpoint=endpoint,
-                            azure_ad_token_provider=token_provider,
-                            api_version=api_version,
-                            timeout=30.0,
-                        )
-                    elif auth_method == "api_key":
-                        if not api_key:
-                            error_msg = "Missing required Azure OpenAI API key for api_key authentication"
-                            raise ValueError(error_msg)
-
-                        cls._client = AsyncAzureOpenAI(
-                            azure_endpoint=endpoint,
-                            api_key=api_key,
-                            api_version=api_version,
-                            timeout=30.0,  # Set timeout explicitly
-                        )
-                    else:
-                        error_msg = f"Unsupported authentication method: {auth_method}"
-                        raise ValueError(error_msg)
-
-                    # Track the endpoint we used to create this client
-                    cls._last_endpoint = endpoint
-
-                except Exception as e:
-                    raise
-
-        return cls._client
-
-    @classmethod
-    def clean_response(cls, content: str | None) -> Dict[str, Any]:
-        """
-        Clean and extract JSON content from OpenAI response.
-
-        Args:
-            content: The content to clean. May be None.
-
-        Returns:
-            Parsed JSON object or empty dict if content is None or invalid
+            endpoint: Azure OpenAI endpoint URL
+            api_version: API version
+            auth_method: Authentication method ('api_key' or 'azure_ad')
+            model: Model deployment name to use
+            api_key: API key for authentication (required if auth_method is 'api_key')
 
         Raises:
-            ValueError: If the content doesn't contain a valid JSON object
+            ValueError: If api_key is missing when auth_method is 'api_key'
         """
-        # Handle None content case
-        if content is None:
-            return {}
+        if auth_method == "api_key" and not api_key:
+            raise ValueError("api_key is required when auth_method is 'api_key'")
 
-        # Handle empty string case
-        response_text = content.strip()
-        if not response_text:
-            return {}
+        self.endpoint = endpoint
+        self.api_key = api_key
+        self.api_version = api_version
+        self.auth_method = auth_method
+        self.model = model
 
-        # Remove markdown code block indicators if present
-        response_text = response_text.replace("```json", "").replace("```", "").strip()
+        # Client initialized lazily on first use
+        self._client: AsyncAzureOpenAI | None = None
 
-        # Find the JSON object within the response
-        start_idx = response_text.find("{")
-        end_idx = response_text.rfind("}") + 1
+    async def _ensure_client(self) -> None:
+        """Create client if not already initialized."""
+        if self._client is not None:
+            return
 
-        if start_idx == -1 or end_idx == 0:
-            error_msg = "No valid JSON object found in response"
-            return {}
-
-        json_str = response_text[start_idx:end_idx]
-
-        try:
-            result = json.loads(json_str)
-            return result
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse response as JSON: {e}")
-            raise e
+        if self.auth_method == "azure_ad":
+            token_provider = await get_openai_token_provider()
+            self._client = AsyncAzureOpenAI(
+                azure_endpoint=self.endpoint,
+                azure_ad_token_provider=token_provider,
+                api_version=self.api_version,
+                timeout=30.0,
+            )
+        elif self.auth_method == "api_key":
+            self._client = AsyncAzureOpenAI(
+                azure_endpoint=self.endpoint,
+                api_key=self.api_key,
+                api_version=self.api_version,
+                timeout=30.0,
+            )
+        else:
+            raise ValueError(f"Unsupported authentication method: {self.auth_method}")
 
     async def get_completion(
         self,
         prompt: str,
         schema: Dict[str, Any],
-        model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 2048,
         timeout: float = 8.0,
-        endpoint: str | None = None,
-        api_key: str | None = None,
-        api_version: str | None = None,
-        auth_method: str = "api_key",
         **kwargs,
     ) -> Dict[str, Any]:
         """
@@ -184,15 +120,10 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
         Args:
             prompt: The prompt to send to the model
             schema: JSON schema for the expected response
-            model: Specific model to use (required)
-            endpoint: Azure OpenAI endpoint URL (required)
-            api_key: API key (required)
-            api_version: API version (required)
             temperature: Model temperature
             max_tokens: Maximum tokens in the generated response
             timeout: Request timeout in seconds
-            auth_method: Authentication method ('api_key' or 'azure_ad')
-            **kwargs: Additional provider-specific arguments
+            **kwargs: Additional provider-specific arguments (ignored)
 
         Returns:
             Parsed JSON response
@@ -201,17 +132,8 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
             ValueError: If the response cannot be parsed as valid JSON
             TimeoutError: If the request times out
         """
-        # Get client with all required parameters
-        client = await self.get_client(
-            endpoint=endpoint,
-            api_key=api_key,
-            api_version=api_version,
-            auth_method=auth_method,
-        )
-        if client is None:
-            return {}
-        if model is None:
-            return {}
+        await self._ensure_client()
+        assert self._client is not None
 
         # Normalize schema for structured outputs
         normalized_schema = normalize_schema_for_structured_output(schema)
@@ -221,7 +143,7 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
 
         try:
             response = await asyncio.wait_for(
-                client.chat.completions.create(
+                self._client.chat.completions.create(
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": prompt},
@@ -232,7 +154,7 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
                     stream=False,
                     presence_penalty=0.0,
                     frequency_penalty=0.0,
-                    model=model,
+                    model=self.model,
                     response_format={
                         "type": "json_schema",
                         "json_schema": {
@@ -267,12 +189,11 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
         except Exception as e:
             raise
 
-
-# Create a singleton instance
-provider = AzureOpenAIProvider()
-
-# For backwards compatibility
-get_azure_openai_completion = provider.get_completion
+    async def close(self) -> None:
+        """Close the Azure OpenAI client and release resources."""
+        if self._client is not None:
+            await self._client.close()
+            self._client = None
 
 
 class AzureOpenAIScoringProvider(ScoringLLMProvider):
@@ -282,85 +203,58 @@ class AzureOpenAIScoringProvider(ScoringLLMProvider):
     It returns numeric scores between 0-100.
     """
 
-    # Global client with thread-safe initialization
-    _client_lock = asyncio.Lock()
-    _client = None
-    _last_endpoint = None
-
-    def __init__(self, endpoint: str, api_key: str | None = None, **kwargs):
+    def __init__(
+        self,
+        endpoint: str,
+        api_version: str,
+        auth_method: str,
+        model: str,
+        api_key: str | None = None,
+        **kwargs,
+    ):
         """Initialize the Azure OpenAI scoring provider.
 
         Args:
-            endpoint: Azure OpenAI endpoint URL (required)
-            api_key: API key for authentication (required for api_key auth, optional for azure_ad)
-            **kwargs: Additional configuration (api_version, auth_method, model)
+            endpoint: Azure OpenAI endpoint URL
+            api_version: API version
+            auth_method: Authentication method ('api_key' or 'azure_ad')
+            model: Model deployment name to use
+            api_key: API key for authentication (required if auth_method is 'api_key')
+            **kwargs: Additional configuration (ignored)
         """
         self.endpoint = endpoint
         self.api_key = api_key
-        self.api_version = kwargs.get("api_version", "2024-02-01")
-        self.auth_method = kwargs.get("auth_method", "api_key")
-        self.model = kwargs.get("model", "gpt-4.1-mini")
+        self.api_version = api_version
+        self.auth_method = auth_method
+        self.model = model
 
-    @classmethod
-    async def get_client(
-        cls,
-        endpoint: str | None = None,
-        api_key: str | None = None,
-        api_version: str | None = None,
-        auth_method: str = "api_key",
-        **kwargs,
-    ) -> AsyncAzureOpenAI | None:
-        """Get or initialize the Azure OpenAI client.
+        # Client initialized lazily on first use
+        self._client: AsyncAzureOpenAI | None = None
 
-        Args:
-            endpoint: Azure OpenAI endpoint URL (required)
-            api_key: API key (required for api_key auth)
-            api_version: API version (required)
-            auth_method: Authentication method ('api_key' or 'azure_ad')
+    async def _ensure_client(self) -> None:
+        """Create client if not already initialized."""
+        if self._client is not None:
+            return
 
-        Returns:
-            Configured AsyncAzureOpenAI client or None on error
-        """
-        if not endpoint or not api_version:
-            error_msg = f"Missing required Azure OpenAI configuration - endpoint: {endpoint}, api_version: {api_version}"
-            raise ValueError(error_msg)
-
-        # Create client with the resolved endpoint/api_version
-        async with cls._client_lock:  # Thread-safe client initialization
-            # Always create a new client if we don't have one, or if the endpoint changed
-            if cls._client is None or cls._last_endpoint != endpoint:
-                try:
-                    if auth_method == "azure_ad":
-                        token_provider = await get_openai_token_provider()
-
-                        cls._client = AsyncAzureOpenAI(
-                            azure_endpoint=endpoint,
-                            azure_ad_token_provider=token_provider,
-                            api_version=api_version,
-                            timeout=30.0,
-                        )
-                    elif auth_method == "api_key":
-                        if not api_key:
-                            error_msg = "Missing required Azure OpenAI API key for api_key authentication"
-                            raise ValueError(error_msg)
-
-                        cls._client = AsyncAzureOpenAI(
-                            azure_endpoint=endpoint,
-                            api_key=api_key,
-                            api_version=api_version,
-                            timeout=30.0,
-                        )
-                    else:
-                        error_msg = f"Unsupported authentication method: {auth_method}"
-                        raise ValueError(error_msg)
-
-                    # Track the endpoint we used to create this client
-                    cls._last_endpoint = endpoint
-
-                except Exception as e:
-                    raise ValueError(f"Failed to initialize Azure OpenAI client: {e}")
-
-        return cls._client
+        if self.auth_method == "azure_ad":
+            token_provider = await get_openai_token_provider()
+            self._client = AsyncAzureOpenAI(
+                azure_endpoint=self.endpoint,
+                azure_ad_token_provider=token_provider,
+                api_version=self.api_version,
+                timeout=30.0,
+            )
+        elif self.auth_method == "api_key":
+            if not self.api_key:
+                raise ValueError("Missing required Azure OpenAI API key for api_key authentication")
+            self._client = AsyncAzureOpenAI(
+                azure_endpoint=self.endpoint,
+                api_key=self.api_key,
+                api_version=self.api_version,
+                timeout=30.0,
+            )
+        else:
+            raise ValueError(f"Unsupported authentication method: {self.auth_method}")
 
     def _build_scoring_prompt(self, context: ScoringContext) -> str:
         """Build a scoring prompt from context.
@@ -375,13 +269,31 @@ class AzureOpenAIScoringProvider(ScoringLLMProvider):
         if context.item_description and context.item_type:
             # Item ranking mode - use the NLWeb ranking prompt template
             item_type = context.item_type or "item"
+
+            # Build base prompt
             prompt = f"""Assign a score between 0 and 100 to the following {item_type} based on how relevant it is to the user's question. Use your knowledge from other sources, about the item, to make a judgement.
 
 If the score is above 50, provide a short description of the item highlighting the relevance to the user's question, without mentioning the user's question.
 
 Provide an explanation of the relevance of the item to the user's question, without mentioning the user's question or the score or explicitly mentioning the term relevance.
 
-If the score is below 75, in the description, include the reason why it is still relevant.
+If the score is below 75, in the description, include the reason why it is still relevant."""
+
+            # Add freshness context if available
+            if context.publication_date and context.age_days is not None:
+                prompt += f"""
+
+FRESHNESS CONTEXT:
+- Publication date: {context.publication_date}
+- Age: {context.age_days} days old
+
+When considering relevance, factor in the item's freshness based on the query intent:
+- For queries asking for "latest", "recent", "new", or "today's" content, give higher scores to more recent items
+- For queries about specific events, news, or time-sensitive topics, prioritize fresher content
+- For evergreen topics (recipes, how-to guides, general information), age is less important
+- Very recent items (< 7 days) should get a bonus for time-sensitive queries"""
+
+            prompt += f"""
 
 The user's question is: {context.query}
 
@@ -440,25 +352,8 @@ Provide a relevance score."""
             The 'questions' parameter is ignored for LLM-based scoring to maintain
             interface compatibility. LLM scoring uses a direct prompt template instead.
         """
-        # Use instance config as defaults, allow kwargs to override
-        endpoint = kwargs.get("endpoint", self.endpoint)
-        api_key = kwargs.get("api_key", self.api_key)
-        api_version = kwargs.get("api_version", self.api_version)
-        auth_method = kwargs.get("auth_method", self.auth_method)
-        model = kwargs.get("model", self.model)
-
-        if not model:
-            raise ValueError("Model name is required for Azure OpenAI scoring")
-
-        # Get client
-        client = await self.get_client(
-            endpoint=endpoint,
-            api_key=api_key,
-            api_version=api_version,
-            auth_method=auth_method,
-        )
-        if client is None:
-            raise ValueError("Failed to initialize Azure OpenAI client")
+        await self._ensure_client()
+        assert self._client is not None
 
         # Build prompt (questions parameter is ignored for LLM-based scoring)
         prompt = self._build_scoring_prompt(context)
@@ -483,7 +378,7 @@ Provide a relevance score."""
 
         try:
             response = await asyncio.wait_for(
-                client.chat.completions.create(
+                self._client.chat.completions.create(
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": prompt},
@@ -492,7 +387,7 @@ Provide a relevance score."""
                     temperature=0.3,  # Lower temperature for more consistent scoring
                     top_p=0.1,
                     stream=False,
-                    model=model,
+                    model=self.model,
                     response_format={
                         "type": "json_schema",
                         "json_schema": {
@@ -557,6 +452,8 @@ Provide a relevance score."""
         results = await asyncio.gather(*tasks, return_exceptions=True)
         return list(results)
 
-
-# Note: Scoring provider instances are created and cached by get_scoring_provider() in nlweb_core.scoring
-# No module-level singleton needed here
+    async def close(self) -> None:
+        """Close the Azure OpenAI client and release resources."""
+        if self._client is not None:
+            await self._client.close()
+            self._client = None

@@ -2,15 +2,10 @@
 # Licensed under the MIT License
 
 """
-This file contains the AskHandler ABC and DefaultAskHandler implementation.
-
-WARNING: This code is under development and may undergo changes in future releases.
-Backwards compatibility is not guaranteed at this time.
+Aajtak-specific AskHandler with Hindi/Hinglish transliteration support.
 """
-import importlib
 import logging
-from abc import ABC, abstractmethod
-from typing import Awaitable, Callable
+from nlweb_core.handler import AskHandler, OutputMethod
 from nlweb_core.query_analysis.query_analysis import (
     DefaultQueryAnalysisHandler,
     query_analysis_tree,
@@ -21,30 +16,9 @@ from nlweb_core.site_config import get_site_config_lookup, get_elicitation_handl
 
 logger = logging.getLogger(__name__)
 
-# Type alias for the output method callback
-OutputMethod = Callable[[dict], Awaitable[None]] | None
 
-
-class AskHandler(ABC):
-    """Abstract base class for Ask handlers."""
-
-    @abstractmethod
-    def __init__(self, **kwargs) -> None:
-        """Initialize the handler with configuration."""
-        pass
-
-    @abstractmethod
-    async def do(
-        self,
-        ask_request: AskRequest,
-        output_method: OutputMethod,
-    ) -> None:
-        """Process an ask request and send results via the output method."""
-        pass
-
-
-class DefaultAskHandler(AskHandler):
-    """Default implementation of AskHandler using NLWeb RAG pipeline."""
+class AajtakAskHandler(AskHandler):
+    """Handler for aajtak.in with Hindi/Hinglish transliteration support."""
 
     request_id: str
 
@@ -58,10 +32,10 @@ class DefaultAskHandler(AskHandler):
         output_method: OutputMethod,
     ) -> None:
         """
-        Process the ask request using the NLWeb RAG pipeline.
+        Process the ask request using the NLWeb RAG pipeline with Hindi support.
 
         Main query execution flow:
-        1. Prepare query (decontextualization, analysis, elicitation check)
+        1. Prepare query (decontextualization with transliteration, analysis, elicitation check)
         2. Send metadata (with correct response_type)
         3. Execute query body OR send elicitation
         4. Post-process results
@@ -124,7 +98,7 @@ class DefaultAskHandler(AskHandler):
             items=retrieved_items,
             query_text=request.query.effective_query,
             item_type=site_config["item_type"],
-            max_results=request.query.max_results,
+            max_results=request.query.num_results,
             min_score=request.query.min_score,
             site=request.query.site,
         )
@@ -138,33 +112,43 @@ class DefaultAskHandler(AskHandler):
         site_config: dict[str, str],
     ) -> str | None:
         """
-        Decontextualize the query using conversation context.
+        Decontextualize query for Hindi sites with Hinglish transliteration.
+        Uses Hindi-specific prompts that handle romanized Hindi (Hinglish) conversion.
 
         Args:
             request: The ask request containing query and context.
             site_config: Site configuration dict with 'item_type' key.
 
         Returns:
-            The decontextualized query string, or None if no context was provided.
+            The decontextualized query string (transliterated if needed), or None if no context.
         """
         context = request.context
         prev_queries = (context.prev or []) if context else []
         context_text = context.text if context else None
 
         if not prev_queries and context_text is None:
-            return None
-        elif prev_queries and context_text is None:
+            # No context - just transliterate
             result = await DefaultQueryAnalysisHandler(
                 request,
-                prompt_ref="PrevQueryDecontextualizer",
+                prompt_ref="NoContextTransliterator",
+                root_node=query_analysis_tree,
+                site_config=site_config,
+            ).do()
+            return result.get("transliterated_query") if result else None
+        elif prev_queries and context_text is None:
+            # Decontextualize with prev queries + transliteration
+            result = await DefaultQueryAnalysisHandler(
+                request,
+                prompt_ref="PrevQueryDecontextualizerHindi",
                 root_node=query_analysis_tree,
                 site_config=site_config,
             ).do()
             return result.get("decontextualized_query") if result else None
         else:
+            # Decontextualize with full context + transliteration
             result = await DefaultQueryAnalysisHandler(
                 request,
-                prompt_ref="FullContextDecontextualizer",
+                prompt_ref="FullContextDecontextualizerHindi",
                 root_node=query_analysis_tree,
                 site_config=site_config,
             ).do()
@@ -264,125 +248,3 @@ class DefaultAskHandler(AskHandler):
         )
 
         await ConversationSaver().save(request, final_ranked_answers)
-
-
-class SiteSelectingHandler(AskHandler):
-    """
-    Handler that dynamically selects and delegates to site-specific handlers.
-
-    This handler checks the 'handler' site_config provider for site-specific
-    handler configuration. If a site has both 'ask_handler_class' and
-    'ask_handler_import_path' configured, it dynamically imports and
-    instantiates that handler. Otherwise, it falls back to DefaultAskHandler.
-
-    Configuration example in config.yaml:
-        site_config:
-          handler:
-            import_path: nlweb_core.site_config.static_site_config
-            class_name: StaticSiteConfigLookup
-            sites:
-              example.com:
-                ask_handler_class: CustomAskHandler
-                ask_handler_import_path: my_package.handlers
-
-    Import errors are NOT silently swallowed - they raise to indicate
-    misconfiguration that should be fixed.
-    """
-
-    def __init__(self, **kwargs) -> None:
-        """Initialize the handler (no-op, delegation happens in do())."""
-        pass
-
-    async def do(
-        self,
-        ask_request: AskRequest,
-        output_method: OutputMethod,
-    ) -> None:
-        """
-        Process an ask request, delegating to site-specific or default handler.
-        """
-        handler_class = await self._get_handler_class(ask_request.query.site)
-        handler = handler_class()
-        await handler.do(ask_request, output_method)
-
-    async def _get_handler_class(self, site: str | None) -> type[AskHandler]:
-        """
-        Determine which handler class to use for the given site.
-
-        Args:
-            site: The site from the request (may be None or "all")
-
-        Returns:
-            The handler class to instantiate
-
-        Raises:
-            ValueError: If handler config is incomplete (has class but no import_path or vice versa)
-            ImportError: If the configured module cannot be imported
-            AttributeError: If the configured class doesn't exist in the module
-        """
-        # If no site specified or "all", use default
-        if not site or site == "all":
-            return DefaultAskHandler
-
-        # Try to get the handler config lookup
-        try:
-            lookup = get_site_config_lookup("handler")
-        except ValueError:
-            # 'handler' provider not configured - use default
-            logger.debug(
-                "No 'handler' site_config provider configured, using DefaultAskHandler"
-            )
-            return DefaultAskHandler
-
-        # Get config for this site
-        config = await lookup.get_config(site)
-        if not config:
-            # Site not in handler config - use default
-            logger.debug(f"No handler config for site '{site}', using DefaultAskHandler")
-            return DefaultAskHandler
-
-        # Check for handler configuration
-        handler_class_name = config.get("ask_handler_class")
-        handler_import_path = config.get("ask_handler_import_path")
-
-        # If neither is set, use default
-        if not handler_class_name and not handler_import_path:
-            logger.debug(
-                f"No handler class configured for site '{site}', using DefaultAskHandler"
-            )
-            return DefaultAskHandler
-
-        # If only one is set, that's a configuration error
-        if bool(handler_class_name) != bool(handler_import_path):
-            raise ValueError(
-                f"Site '{site}' has incomplete handler configuration: "
-                f"ask_handler_class={handler_class_name}, "
-                f"ask_handler_import_path={handler_import_path}. "
-                f"Both must be set or neither."
-            )
-
-        # Both are set - dynamically import
-        assert handler_import_path is not None  # Checked above
-        assert handler_class_name is not None  # Checked above
-
-        logger.info(
-            f"Loading custom handler for site '{site}': "
-            f"{handler_import_path}.{handler_class_name}"
-        )
-
-        try:
-            module = importlib.import_module(handler_import_path)
-            handler_class: type[AskHandler] = getattr(module, handler_class_name)
-            return handler_class
-        except ImportError as e:
-            logger.error(
-                f"Failed to import handler module '{handler_import_path}' "
-                f"for site '{site}': {e}"
-            )
-            raise
-        except AttributeError as e:
-            logger.error(
-                f"Handler class '{handler_class_name}' not found in module "
-                f"'{handler_import_path}' for site '{site}': {e}"
-            )
-            raise

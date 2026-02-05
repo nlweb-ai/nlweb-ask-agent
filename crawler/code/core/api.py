@@ -1,16 +1,13 @@
-import sys
+import db, sys, time, asyncio, json, log, logging, os
+import requests as req
+
+from azure.search.documents import SearchClient
+from azure.core.credentials import AzureKeyCredential
+from datetime import datetime, timedelta, timezone
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-import db
-from master import process_site
-import asyncio
-import os
-import time
-from datetime import datetime, timedelta, timezone
-import json
 from get_queue import get_queue
-import logging
-import log
+from master import process_site
 
 # Default user_id for all operations (auth handled at higher level)
 DEFAULT_USER_ID = "system"
@@ -137,15 +134,13 @@ def get_site_details(site_url):
         cursor.execute(
             """
             SELECT
-                f.url,
-                f.last_read,
-                f.status,
-                COUNT(i.id) as item_count
+                f.file_url,
+                f.last_read_time,
+                f.is_active,
+                f.number_of_items
             FROM files f
-            LEFT JOIN ids i ON f.url = i.file_url
             WHERE f.site_url = %s
-            GROUP BY f.url, f.last_read, f.status
-            ORDER BY f.url
+            ORDER BY f.file_url
         """,
             (site_url,),
         )
@@ -154,8 +149,7 @@ def get_site_details(site_url):
 
         # Get total vector DB count for this site
         try:
-            from azure.search.documents import SearchClient
-            from azure.core.credentials import AzureKeyCredential
+
 
             search_client = SearchClient(
                 endpoint=os.getenv("AZURE_SEARCH_ENDPOINT"),
@@ -176,6 +170,69 @@ def get_site_details(site_url):
         )
     finally:
         # Rollback any uncommitted transactions before closing
+        try:
+            conn.rollback()
+        except:
+            pass
+        conn.close()
+
+
+@app.route("/api/sites/<path:site_url>", methods=["PUT"])
+def update_site(site_url):
+    """Update site settings (interval_hours, refresh_mode)"""
+    # Normalize site URL
+    site_url = db.normalize_site_url(site_url)
+
+    data = request.json
+    interval_hours = data.get("interval_hours")
+    refresh_mode = data.get("refresh_mode")
+
+    # Validate refresh_mode if provided
+    if refresh_mode and refresh_mode not in ["diff", "full"]:
+        return jsonify({"error": "refresh_mode must be 'diff' or 'full'"}), 400
+
+    conn = db.get_connection()
+    try:
+        cursor = conn.cursor()
+
+        # Check if site exists
+        cursor.execute(
+            "SELECT site_url FROM sites WHERE site_url = %s AND user_id = %s",
+            (site_url, DEFAULT_USER_ID)
+        )
+        if not cursor.fetchone():
+            return jsonify({"error": "Site not found"}), 404
+
+        # Build UPDATE statement dynamically based on what's provided
+        updates = []
+        params = []
+        if interval_hours is not None:
+            updates.append("process_interval_hours = %s")
+            params.append(interval_hours)
+        if refresh_mode is not None:
+            updates.append("refresh_mode = %s")
+            params.append(refresh_mode)
+
+        if not updates:
+            return jsonify({"error": "No fields to update"}), 400
+
+        # Execute update
+        params.extend([site_url, DEFAULT_USER_ID])
+        cursor.execute(
+            f"UPDATE sites SET {', '.join(updates)} WHERE site_url = %s AND user_id = %s",
+            tuple(params)
+        )
+        conn.commit()
+
+        return jsonify({
+            "success": True,
+            "site_url": site_url,
+            "updated_fields": {
+                k: v for k, v in [("interval_hours", interval_hours), ("refresh_mode", refresh_mode)]
+                if v is not None
+            }
+        })
+    finally:
         try:
             conn.rollback()
         except:
@@ -246,9 +303,8 @@ def _delete_schema_map_internal(conn, site_url, schema_map_url):
     files = cursor.fetchall()
 
     # Queue removal jobs for each file so workers can:
-    # 1. Remove IDs from ids table
-    # 2. Remove from vector DB
-    # 3. Delete from files table
+    # 1. Remove from vector DB
+    # 2. Delete from files table
     queue = get_queue()
     for file_url, content_type in files:
         job = {
@@ -261,8 +317,8 @@ def _delete_schema_map_internal(conn, site_url, schema_map_url):
             job["content_type"] = content_type
         queue.send_message(job)
 
-    # NOTE: Do NOT delete from files or ids tables here - workers will do that when they process the jobs
-    # This ensures proper ordering: ids deleted first, then vector DB cleaned, then files table cleaned
+    # NOTE: Do NOT delete from files table here - workers will do that when they process the jobs
+    # This ensures proper ordering: first vector DB cleaned, then files table cleaned
 
     return len(files)
 
@@ -292,22 +348,17 @@ def add_schema_file(site_url):
             site_url, DEFAULT_USER_ID, schema_map_url, refresh_mode=refresh_mode
         )
 
-        if files_queued == 0:
-            return (
-                jsonify(
-                    {"error": "No schema files found or failed to fetch schema_map"}
-                ),
-                400,
-            )
-
+        # files_queued=0 is valid (no new files in diff mode, or schema_map was empty)
+        # Return success with appropriate message
         return jsonify(
             {
                 "success": True,
                 "site_url": site_url,
                 "schema_map_url": schema_map_url,
+                "refresh_mode": refresh_mode,
                 "files_discovered": files_added,  # New files discovered
                 "files_queued": files_queued,  # Total files queued for processing
-                "files_queued": files_queued,
+                "message": f"Processed successfully. {files_added} new files discovered, {files_queued} files queued for processing."
             }
         )
 
@@ -643,20 +694,16 @@ def get_site_files(site_url):
 
 @app.route("/api/files", methods=["GET"])
 def get_all_files():
-    """Get all files from the database with their IDs"""
+    """Get all files from the database"""
     conn = db.get_connection()
     try:
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT f.site_url, f.file_url, f.schema_map, f.is_active, f.is_manual,
-                   f.number_of_items, f.last_read_time,
-                   COUNT(DISTINCT i.id) as id_count
-            FROM files f
-            LEFT JOIN ids i ON f.file_url = i.file_url
-            GROUP BY f.site_url, f.file_url, f.schema_map, f.is_active, f.is_manual,
-                     f.number_of_items, f.last_read_time
-            ORDER BY f.site_url, f.file_url
+            SELECT site_url, file_url, schema_map, is_active, is_manual,
+                   number_of_items, last_read_time
+            FROM files
+            ORDER BY site_url, file_url
         """
         )
 
@@ -669,38 +716,10 @@ def get_all_files():
                 "is_manual": bool(row[4]),
                 "number_of_items": row[5],
                 "last_read_time": row[6].isoformat() if row[6] else None,
-                "id_count": row[7],
             }
             for row in cursor.fetchall()
         ]
         return jsonify(files)
-    finally:
-        # Rollback any uncommitted transactions before closing
-        try:
-            conn.rollback()
-        except:
-            pass
-        conn.close()
-
-
-@app.route("/api/files/<path:file_url>/ids", methods=["GET"])
-def get_file_ids(file_url):
-    """Get all IDs for a specific file"""
-    conn = db.get_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT id
-            FROM ids
-            WHERE file_url = %s
-            ORDER BY id
-        """,
-            (file_url,),
-        )
-
-        ids = [row[0] for row in cursor.fetchall()]
-        return jsonify({"file_url": file_url, "ids": ids, "count": len(ids)})
     finally:
         # Rollback any uncommitted transactions before closing
         try:
@@ -734,17 +753,6 @@ def get_file_details(file_url):
         # Get error history
         errors = db.get_file_errors(conn, file_url, limit=50)
 
-        # Get ID count
-        cursor.execute(
-            """
-            SELECT COUNT(*) as id_count
-            FROM ids
-            WHERE file_url = %s
-        """,
-            (file_url,),
-        )
-        id_count = cursor.fetchone()["id_count"]
-
         return jsonify(
             {
                 "file_url": file_url,
@@ -755,8 +763,7 @@ def get_file_details(file_url):
                     if file_info["last_read_time"]
                     else None
                 ),
-                "number_of_items": file_info["number_of_items"] or id_count,
-                "id_count": id_count,
+                "number_of_items": file_info["number_of_items"],
                 "is_active": file_info["is_active"],
                 "errors": errors,
             }
@@ -917,8 +924,6 @@ def _get_workers_kubernetes():
 
 def _get_workers_docker_compose():
     """Discover workers in Docker Compose environment"""
-    import requests as req
-
     workers = []
     seen_worker_ids = set()
 
