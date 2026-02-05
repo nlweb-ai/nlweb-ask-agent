@@ -90,7 +90,7 @@ site_config:
     sites:
       aajtak.in:
         ask_handler_class: AajtakAskHandler
-        ask_handler_import_path: nlweb_core.handler
+        ask_handler_import_path: nlweb_core.aajtak
 
 server:
   host: 0.0.0.0
