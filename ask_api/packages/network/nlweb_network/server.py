@@ -25,7 +25,7 @@ from nlweb_core.config import (
     reset_config,
     initialize_config,
 )
-from nlweb_core.handler import DefaultAskHandler
+from nlweb_core.handler import SiteSelectingHandler
 from nlweb_network.interfaces import (
     HTTPJSONInterface,
     HTTPSSEInterface,
@@ -89,7 +89,7 @@ async def ask_handler(request):
     else:
         interface = HTTPJSONInterface()
 
-    return await interface.handle_request(request, DefaultAskHandler)
+    return await interface.handle_request(request, SiteSelectingHandler)
 
 
 async def mcp_handler(request):
@@ -103,7 +103,7 @@ async def mcp_handler(request):
     - JSON-RPC 2.0 formatted responses
     """
     interface = MCPStreamableInterface()
-    return await interface.handle_request(request, DefaultAskHandler)
+    return await interface.handle_request(request, SiteSelectingHandler)
 
 
 async def mcp_sse_handler(request):
@@ -117,7 +117,7 @@ async def mcp_sse_handler(request):
     - JSON-RPC 2.0 formatted responses via SSE
     """
     interface = MCPSSEInterface()
-    return await interface.handle_request(request, DefaultAskHandler)
+    return await interface.handle_request(request, SiteSelectingHandler)
 
 
 async def a2a_handler(request):
@@ -131,7 +131,7 @@ async def a2a_handler(request):
     - JSON-RPC 2.0 formatted responses
     """
     interface = A2AStreamableInterface()
-    return await interface.handle_request(request, DefaultAskHandler)
+    return await interface.handle_request(request, SiteSelectingHandler)
 
 
 async def a2a_sse_handler(request):
@@ -145,7 +145,7 @@ async def a2a_sse_handler(request):
     - JSON-RPC 2.0 formatted responses via SSE
     """
     interface = A2ASSEInterface()
-    return await interface.handle_request(request, DefaultAskHandler)
+    return await interface.handle_request(request, SiteSelectingHandler)
 
 
 async def await_handler(request):

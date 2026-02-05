@@ -7,9 +7,10 @@ This file contains the AskHandler ABC and DefaultAskHandler implementation.
 WARNING: This code is under development and may undergo changes in future releases.
 Backwards compatibility is not guaranteed at this time.
 """
+import importlib
 import logging
 from abc import ABC, abstractmethod
-from typing import Callable, Awaitable
+from typing import Awaitable, Callable
 from nlweb_core.query_analysis.query_analysis import (
     DefaultQueryAnalysisHandler,
     query_analysis_tree,
@@ -317,3 +318,125 @@ class DefaultAskHandler(AskHandler):
         )
 
         await ConversationSaver().save(request, final_ranked_answers)
+
+
+class SiteSelectingHandler(AskHandler):
+    """
+    Handler that dynamically selects and delegates to site-specific handlers.
+
+    This handler checks the 'handler' site_config provider for site-specific
+    handler configuration. If a site has both 'ask_handler_class' and
+    'ask_handler_import_path' configured, it dynamically imports and
+    instantiates that handler. Otherwise, it falls back to DefaultAskHandler.
+
+    Configuration example in config.yaml:
+        site_config:
+          handler:
+            import_path: nlweb_core.site_config.static_site_config
+            class_name: StaticSiteConfigLookup
+            sites:
+              example.com:
+                ask_handler_class: CustomAskHandler
+                ask_handler_import_path: my_package.handlers
+
+    Import errors are NOT silently swallowed - they raise to indicate
+    misconfiguration that should be fixed.
+    """
+
+    def __init__(self, **kwargs) -> None:
+        """Initialize the handler (no-op, delegation happens in do())."""
+        pass
+
+    async def do(
+        self,
+        ask_request: AskRequest,
+        output_method: OutputMethod,
+    ) -> None:
+        """
+        Process an ask request, delegating to site-specific or default handler.
+        """
+        handler_class = await self._get_handler_class(ask_request.query.site)
+        handler = handler_class()
+        await handler.do(ask_request, output_method)
+
+    async def _get_handler_class(self, site: str | None) -> type[AskHandler]:
+        """
+        Determine which handler class to use for the given site.
+
+        Args:
+            site: The site from the request (may be None or "all")
+
+        Returns:
+            The handler class to instantiate
+
+        Raises:
+            ValueError: If handler config is incomplete (has class but no import_path or vice versa)
+            ImportError: If the configured module cannot be imported
+            AttributeError: If the configured class doesn't exist in the module
+        """
+        # If no site specified or "all", use default
+        if not site or site == "all":
+            return DefaultAskHandler
+
+        # Try to get the handler config lookup
+        try:
+            lookup = get_site_config_lookup("handler")
+        except ValueError:
+            # 'handler' provider not configured - use default
+            logger.debug(
+                "No 'handler' site_config provider configured, using DefaultAskHandler"
+            )
+            return DefaultAskHandler
+
+        # Get config for this site
+        config = await lookup.get_config(site)
+        if not config:
+            # Site not in handler config - use default
+            logger.debug(f"No handler config for site '{site}', using DefaultAskHandler")
+            return DefaultAskHandler
+
+        # Check for handler configuration
+        handler_class_name = config.get("ask_handler_class")
+        handler_import_path = config.get("ask_handler_import_path")
+
+        # If neither is set, use default
+        if not handler_class_name and not handler_import_path:
+            logger.debug(
+                f"No handler class configured for site '{site}', using DefaultAskHandler"
+            )
+            return DefaultAskHandler
+
+        # If only one is set, that's a configuration error
+        if bool(handler_class_name) != bool(handler_import_path):
+            raise ValueError(
+                f"Site '{site}' has incomplete handler configuration: "
+                f"ask_handler_class={handler_class_name}, "
+                f"ask_handler_import_path={handler_import_path}. "
+                f"Both must be set or neither."
+            )
+
+        # Both are set - dynamically import
+        assert handler_import_path is not None  # Checked above
+        assert handler_class_name is not None  # Checked above
+
+        logger.info(
+            f"Loading custom handler for site '{site}': "
+            f"{handler_import_path}.{handler_class_name}"
+        )
+
+        try:
+            module = importlib.import_module(handler_import_path)
+            handler_class: type[AskHandler] = getattr(module, handler_class_name)
+            return handler_class
+        except ImportError as e:
+            logger.error(
+                f"Failed to import handler module '{handler_import_path}' "
+                f"for site '{site}': {e}"
+            )
+            raise
+        except AttributeError as e:
+            logger.error(
+                f"Handler class '{handler_class_name}' not found in module "
+                f"'{handler_import_path}' for site '{site}': {e}"
+            )
+            raise
