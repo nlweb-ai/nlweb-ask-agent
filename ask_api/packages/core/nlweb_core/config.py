@@ -160,6 +160,15 @@ class SiteConfigStorageConfig:
 
 
 @dataclass
+class ScoringModelConfig:
+    """Configuration for a single scoring model provider."""
+
+    import_path: str
+    class_name: str
+    options: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class RankingConfig:
     scoring_questions: list[str] = field(
         default_factory=lambda: ["Is this item relevant to the query?"]
@@ -232,6 +241,9 @@ class AppConfig:
         default_factory=dict
     )
 
+    # Scoring Model Providers
+    scoring_model_providers: dict[str, ScoringModelConfig] = field(default_factory=dict)
+
     # Ranking Configuration
     ranking: RankingConfig | None = None
 
@@ -296,6 +308,12 @@ class AppConfig:
     ) -> SiteConfigStorageConfig | None:
         """Get the specified site config provider by name."""
         return self.site_config_providers.get(provider_name)
+
+    def get_scoring_model_provider(
+        self, provider_name: str
+    ) -> ScoringModelConfig | None:
+        """Get the specified scoring model provider by name."""
+        return self.scoring_model_providers.get(provider_name)
 
 
 # =============================================================================
@@ -397,26 +415,18 @@ def _load_llm_config(
     str | None,
     LLMModelConfig | None,
     LLMModelConfig | None,
-    LLMModelConfig | None,
 ]:
     """Load LLM configuration from config dict."""
     llm_endpoints = {}
     preferred_llm_endpoint = None
     high_llm_model = None
     low_llm_model = None
-    scoring_llm_model = None
 
-    if (
-        "high-llm-model" in data
-        or "low-llm-model" in data
-        or "scoring-llm-model" in data
-    ):
+    if "high-llm-model" in data or "low-llm-model" in data:
         if "high-llm-model" in data:
             high_llm_model = _parse_llm_model_config(data["high-llm-model"])
         if "low-llm-model" in data:
             low_llm_model = _parse_llm_model_config(data["low-llm-model"])
-        if "scoring-llm-model" in data:
-            scoring_llm_model = _parse_llm_model_config(data["scoring-llm-model"])
         preferred_llm_endpoint = "azure_openai"
     elif "llm" in data:
         llm_cfg = data["llm"]
@@ -449,7 +459,6 @@ def _load_llm_config(
         preferred_llm_endpoint,
         high_llm_model,
         low_llm_model,
-        scoring_llm_model,
     )
 
 
@@ -595,6 +604,33 @@ def _load_object_storage(data: dict) -> ObjectLookupConfig:
     )
 
 
+def _extract_import_class(
+    provider_cfg: dict, config_name: str, provider_name: str
+) -> tuple[str, str]:
+    """Extract and validate import_path and class_name from provider config."""
+    import_path = provider_cfg.get("import_path")
+    class_name = provider_cfg.get("class_name")
+    if not import_path or not class_name:
+        raise ValueError(
+            f"{config_name} provider '{provider_name}' must specify import_path and class_name"
+        )
+    return import_path, class_name
+
+
+def _build_options(provider_cfg: dict) -> dict[str, Any]:
+    """Build options dict from provider config, resolving _env suffixed keys."""
+    options: dict[str, Any] = {}
+    for key, value in provider_cfg.items():
+        if key in ("import_path", "class_name"):
+            continue
+        if key.endswith("_env"):
+            resolved_key = key[:-4]  # Remove _env suffix
+            options[resolved_key] = _get_config_value(value)
+        else:
+            options[key] = value
+    return options
+
+
 def _load_site_config_storage(data: dict) -> dict[str, SiteConfigStorageConfig]:
     """Load site config provider configuration from config dict."""
     if "site_config" not in data:
@@ -610,29 +646,40 @@ def _load_site_config_storage(data: dict) -> dict[str, SiteConfigStorageConfig]:
             raise ValueError(
                 f"site_config provider '{provider_name}' must be a mapping"
             )
-        import_path = provider_cfg.get("import_path")
-        class_name = provider_cfg.get("class_name")
-        if not import_path or not class_name:
-            raise ValueError(
-                f"site_config provider '{provider_name}' must specify import_path and class_name"
-            )
-
-        # Build options dict from all config except import_path and class_name
-        options: dict[str, Any] = {}
-        for key, value in provider_cfg.items():
-            if key in ("import_path", "class_name"):
-                continue
-            # Handle _env suffix keys by resolving environment variables
-            if key.endswith("_env"):
-                resolved_key = key[:-4]  # Remove _env suffix
-                options[resolved_key] = _get_config_value(value)
-            else:
-                options[key] = value
-
+        import_path, class_name = _extract_import_class(
+            provider_cfg, "site_config", provider_name
+        )
         providers[provider_name] = SiteConfigStorageConfig(
             import_path=import_path,
             class_name=class_name,
-            options=options,
+            options=_build_options(provider_cfg),
+        )
+
+    return providers
+
+
+def _load_scoring_model_config(data: dict) -> dict[str, ScoringModelConfig]:
+    """Load scoring model provider configuration from config dict."""
+    if "scoring_model" not in data:
+        return {}
+
+    scoring_cfg = data["scoring_model"]
+    if not isinstance(scoring_cfg, dict):
+        raise ValueError("scoring_model must be a mapping of provider names to configs")
+
+    providers: dict[str, ScoringModelConfig] = {}
+    for provider_name, provider_cfg in scoring_cfg.items():
+        if not isinstance(provider_cfg, dict):
+            raise ValueError(
+                f"scoring_model provider '{provider_name}' must be a mapping"
+            )
+        import_path, class_name = _extract_import_class(
+            provider_cfg, "scoring_model", provider_name
+        )
+        providers[provider_name] = ScoringModelConfig(
+            import_path=import_path,
+            class_name=class_name,
+            options=_build_options(provider_cfg),
         )
 
     return providers
@@ -821,7 +868,6 @@ def load_config() -> AppConfig:
             preferred_llm_endpoint,
             high_llm_model,
             low_llm_model,
-            scoring_llm_model,
         ) = _load_llm_config(data)
         embedding_providers, preferred_embedding_provider = _load_embedding_config(data)
         retrieval_endpoints, write_endpoint = _load_retrieval_config(data)
@@ -830,6 +876,7 @@ def load_config() -> AppConfig:
         )
         object_storage = _load_object_storage(data)
         site_config_providers = _load_site_config_storage(data)
+        scoring_model_providers = _load_scoring_model_config(data)
         ranking = _load_ranking_config(data)
         server = _load_server_config(data)
         nlweb = _load_nlweb_config(data, config_directory, base_output_directory)
@@ -862,7 +909,6 @@ def load_config() -> AppConfig:
             preferred_llm_endpoint=preferred_llm_endpoint,
             high_llm_model=high_llm_model,
             low_llm_model=low_llm_model,
-            scoring_llm_model=scoring_llm_model,
             embedding_providers=embedding_providers,
             preferred_embedding_provider=preferred_embedding_provider,
             retrieval_endpoints=retrieval_endpoints,
@@ -873,6 +919,7 @@ def load_config() -> AppConfig:
             conversation_storage_default="qdrant_local",
             object_storage=object_storage,
             site_config_providers=site_config_providers,
+            scoring_model_providers=scoring_model_providers,
             ranking=ranking,
             nlweb=nlweb,
             server=server,

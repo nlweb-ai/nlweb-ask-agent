@@ -201,7 +201,7 @@ class Ranking:
             try:
                 from nlweb_core.site_config import get_site_config_lookup
 
-                site_config_lookup = get_site_config_lookup()
+                site_config_lookup = get_site_config_lookup("default")
                 if site_config_lookup:
                     freshness_config = await site_config_lookup.get_config_type(
                         site, "freshness_config"
@@ -248,7 +248,7 @@ class Ranking:
 
         try:
             # Get the scoring provider and score all items in batch
-            provider = get_scoring_provider()
+            provider = get_scoring_provider("default")
             scores = await provider.score_batch(
                 scoring_questions,
                 contexts,
