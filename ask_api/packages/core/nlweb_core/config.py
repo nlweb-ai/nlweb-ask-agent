@@ -26,38 +26,6 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class ModelConfig:
-    high: str
-    low: str
-
-
-@dataclass
-class LLMModelConfig:
-    """Configuration for a single LLM model endpoint."""
-
-    llm_type: str
-    model: str
-    api_key: str | None = None
-    endpoint: str | None = None
-    api_version: str | None = None
-    auth_method: str | None = None
-    import_path: str | None = None
-    class_name: str | None = None
-
-
-@dataclass
-class LLMProviderConfig:
-    llm_type: str
-    api_key: str | None = None
-    models: ModelConfig | None = None
-    endpoint: str | None = None
-    api_version: str | None = None
-    auth_method: str | None = None
-    import_path: str | None = None
-    class_name: str | None = None
-
-
-@dataclass
 class EmbeddingProviderConfig:
     api_key: str | None = None
     endpoint: str | None = None
@@ -169,6 +137,15 @@ class ScoringModelConfig:
 
 
 @dataclass
+class GenerativeModelConfig:
+    """Configuration for a single generative model provider."""
+
+    import_path: str
+    class_name: str
+    options: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class RankingConfig:
     scoring_questions: list[str] = field(
         default_factory=lambda: ["Is this item relevant to the query?"]
@@ -206,12 +183,10 @@ class AppConfig:
     config_directory: str = ""
     base_output_directory: str | None = None
 
-    # LLM Configuration
-    llm_endpoints: dict[str, LLMProviderConfig] = field(default_factory=dict)
-    preferred_llm_endpoint: str | None = None
-    high_llm_model: LLMModelConfig | None = None
-    low_llm_model: LLMModelConfig | None = None
-    scoring_llm_model: LLMModelConfig | None = None
+    # Generative Model Providers
+    generative_model_providers: dict[str, GenerativeModelConfig] = field(
+        default_factory=dict
+    )
 
     # Embedding Configuration
     embedding_providers: dict[str, EmbeddingProviderConfig] = field(
@@ -290,19 +265,6 @@ class AppConfig:
             return self.embedding_providers[self.preferred_embedding_provider]
         return None
 
-    def get_llm_provider(
-        self, provider_name: str | None = None
-    ) -> LLMProviderConfig | None:
-        """Get the specified LLM provider config or the preferred one if not specified."""
-        if provider_name and provider_name in self.llm_endpoints:
-            return self.llm_endpoints[provider_name]
-        if (
-            self.preferred_llm_endpoint
-            and self.preferred_llm_endpoint in self.llm_endpoints
-        ):
-            return self.llm_endpoints[self.preferred_llm_endpoint]
-        return None
-
     def get_site_config_provider(
         self, provider_name: str
     ) -> SiteConfigStorageConfig | None:
@@ -314,6 +276,12 @@ class AppConfig:
     ) -> ScoringModelConfig | None:
         """Get the specified scoring model provider by name."""
         return self.scoring_model_providers.get(provider_name)
+
+    def get_generative_model_provider(
+        self, provider_name: str
+    ) -> GenerativeModelConfig | None:
+        """Get the specified generative model provider by name."""
+        return self.generative_model_providers.get(provider_name)
 
 
 # =============================================================================
@@ -389,77 +357,9 @@ def _get_config_value(value: Any, default: Any = None) -> Any:
     return value
 
 
-def _parse_llm_model_config(cfg: dict) -> LLMModelConfig:
-    """Parse LLM model configuration from dict."""
-    return LLMModelConfig(
-        llm_type=_get_config_value(cfg.get("llm_type", "azure_openai")),
-        model=_get_config_value(cfg.get("model")),
-        api_key=_get_config_value(cfg.get("api_key_env")),
-        endpoint=_get_config_value(cfg.get("endpoint_env")),
-        api_version=_get_config_value(cfg.get("api_version")),
-        auth_method=_get_config_value(cfg.get("auth_method"), "api_key"),
-        import_path=_get_config_value(cfg.get("import_path")),
-        class_name=_get_config_value(cfg.get("class_name")),
-    )
-
-
 # =============================================================================
 # Configuration Loading Functions
 # =============================================================================
-
-
-def _load_llm_config(
-    data: dict,
-) -> tuple[
-    dict[str, LLMProviderConfig],
-    str | None,
-    LLMModelConfig | None,
-    LLMModelConfig | None,
-]:
-    """Load LLM configuration from config dict."""
-    llm_endpoints = {}
-    preferred_llm_endpoint = None
-    high_llm_model = None
-    low_llm_model = None
-
-    if "high-llm-model" in data or "low-llm-model" in data:
-        if "high-llm-model" in data:
-            high_llm_model = _parse_llm_model_config(data["high-llm-model"])
-        if "low-llm-model" in data:
-            low_llm_model = _parse_llm_model_config(data["low-llm-model"])
-        preferred_llm_endpoint = "azure_openai"
-    elif "llm" in data:
-        llm_cfg = data["llm"]
-        provider_name = llm_cfg.get("provider", "default")
-
-        models = None
-        if "models" in llm_cfg:
-            m = llm_cfg["models"]
-            models = ModelConfig(
-                high=_get_config_value(m.get("high")),
-                low=_get_config_value(m.get("low")),
-            )
-
-        preferred_llm_endpoint = provider_name
-        llm_endpoints = {
-            provider_name: LLMProviderConfig(
-                llm_type=_get_config_value(llm_cfg.get("llm_type", provider_name)),
-                api_key=_get_config_value(llm_cfg.get("api_key_env")),
-                models=models,
-                endpoint=_get_config_value(llm_cfg.get("endpoint_env")),
-                api_version=_get_config_value(llm_cfg.get("api_version")),
-                auth_method=_get_config_value(llm_cfg.get("auth_method"), "api_key"),
-                import_path=_get_config_value(llm_cfg.get("import_path")),
-                class_name=_get_config_value(llm_cfg.get("class_name")),
-            )
-        }
-
-    return (
-        llm_endpoints,
-        preferred_llm_endpoint,
-        high_llm_model,
-        low_llm_model,
-    )
 
 
 def _load_embedding_config(
@@ -685,6 +585,33 @@ def _load_scoring_model_config(data: dict) -> dict[str, ScoringModelConfig]:
     return providers
 
 
+def _load_generative_model_config(data: dict) -> dict[str, GenerativeModelConfig]:
+    """Load generative model provider configuration from config dict."""
+    if "generative_model" not in data:
+        return {}
+
+    gen_cfg = data["generative_model"]
+    if not isinstance(gen_cfg, dict):
+        raise ValueError("generative_model must be a mapping of provider names to configs")
+
+    providers: dict[str, GenerativeModelConfig] = {}
+    for provider_name, provider_cfg in gen_cfg.items():
+        if not isinstance(provider_cfg, dict):
+            raise ValueError(
+                f"generative_model provider '{provider_name}' must be a mapping"
+            )
+        import_path, class_name = _extract_import_class(
+            provider_cfg, "generative_model", provider_name
+        )
+        providers[provider_name] = GenerativeModelConfig(
+            import_path=import_path,
+            class_name=class_name,
+            options=_build_options(provider_cfg),
+        )
+
+    return providers
+
+
 def _load_ranking_config(data: dict) -> RankingConfig:
     """Load ranking configuration from config dict."""
     if "ranking_config" not in data:
@@ -863,12 +790,7 @@ def load_config() -> AppConfig:
             data = yaml.safe_load(f) or {}
 
         # Load all configurations from unified file
-        (
-            llm_endpoints,
-            preferred_llm_endpoint,
-            high_llm_model,
-            low_llm_model,
-        ) = _load_llm_config(data)
+        generative_model_providers = _load_generative_model_config(data)
         embedding_providers, preferred_embedding_provider = _load_embedding_config(data)
         retrieval_endpoints, write_endpoint = _load_retrieval_config(data)
         conversation_storage = _load_conversation_storage(
@@ -905,10 +827,7 @@ def load_config() -> AppConfig:
         return AppConfig(
             config_directory=config_directory,
             base_output_directory=base_output_directory,
-            llm_endpoints=llm_endpoints,
-            preferred_llm_endpoint=preferred_llm_endpoint,
-            high_llm_model=high_llm_model,
-            low_llm_model=low_llm_model,
+            generative_model_providers=generative_model_providers,
             embedding_providers=embedding_providers,
             preferred_embedding_provider=preferred_embedding_provider,
             retrieval_endpoints=retrieval_endpoints,

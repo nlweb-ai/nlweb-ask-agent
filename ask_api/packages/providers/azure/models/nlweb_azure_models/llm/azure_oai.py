@@ -54,6 +54,35 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
     _client_lock = asyncio.Lock()
     _client = None
 
+    def __init__(
+        self,
+        endpoint: str,
+        api_version: str,
+        auth_method: str,
+        model: str,
+        api_key: str | None = None,
+    ):
+        """Initialize the Azure OpenAI generative provider.
+
+        Args:
+            endpoint: Azure OpenAI endpoint URL
+            api_version: API version
+            auth_method: Authentication method ('api_key' or 'azure_ad')
+            model: Model deployment name to use
+            api_key: API key for authentication (required if auth_method is 'api_key')
+
+        Raises:
+            ValueError: If api_key is missing when auth_method is 'api_key'
+        """
+        if auth_method == "api_key" and not api_key:
+            raise ValueError("api_key is required when auth_method is 'api_key'")
+
+        self.endpoint = endpoint
+        self.api_key = api_key
+        self.api_version = api_version
+        self.auth_method = auth_method
+        self.model = model
+
     @classmethod
     async def get_client(
         cls,
@@ -168,14 +197,9 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
         self,
         prompt: str,
         schema: Dict[str, Any],
-        model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 2048,
         timeout: float = 8.0,
-        endpoint: str | None = None,
-        api_key: str | None = None,
-        api_version: str | None = None,
-        auth_method: str = "api_key",
         **kwargs,
     ) -> Dict[str, Any]:
         """
@@ -184,15 +208,10 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
         Args:
             prompt: The prompt to send to the model
             schema: JSON schema for the expected response
-            model: Specific model to use (required)
-            endpoint: Azure OpenAI endpoint URL (required)
-            api_key: API key (required)
-            api_version: API version (required)
             temperature: Model temperature
             max_tokens: Maximum tokens in the generated response
             timeout: Request timeout in seconds
-            auth_method: Authentication method ('api_key' or 'azure_ad')
-            **kwargs: Additional provider-specific arguments
+            **kwargs: Additional provider-specific arguments (ignored)
 
         Returns:
             Parsed JSON response
@@ -201,17 +220,15 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
             ValueError: If the response cannot be parsed as valid JSON
             TimeoutError: If the request times out
         """
-        # Get client with all required parameters
+        # Get client using instance config
         client = await self.get_client(
-            endpoint=endpoint,
-            api_key=api_key,
-            api_version=api_version,
-            auth_method=auth_method,
+            endpoint=self.endpoint,
+            api_key=self.api_key,
+            api_version=self.api_version,
+            auth_method=self.auth_method,
         )
         if client is None:
-            return {}
-        if model is None:
-            return {}
+            raise ValueError("Failed to initialize Azure OpenAI client")
 
         # Normalize schema for structured outputs
         normalized_schema = normalize_schema_for_structured_output(schema)
@@ -232,7 +249,7 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
                     stream=False,
                     presence_penalty=0.0,
                     frequency_penalty=0.0,
-                    model=model,
+                    model=self.model,
                     response_format={
                         "type": "json_schema",
                         "json_schema": {
@@ -266,13 +283,6 @@ class AzureOpenAIProvider(GenerativeLLMProvider):
             raise
         except Exception as e:
             raise
-
-
-# Create a singleton instance
-provider = AzureOpenAIProvider()
-
-# For backwards compatibility
-get_azure_openai_completion = provider.get_completion
 
 
 class AzureOpenAIScoringProvider(ScoringLLMProvider):

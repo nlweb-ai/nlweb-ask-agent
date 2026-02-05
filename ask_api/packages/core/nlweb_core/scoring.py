@@ -72,6 +72,16 @@ class ScoringLLMProvider(ABC):
     """
 
     @abstractmethod
+    def __init__(self, **kwargs) -> None:
+        """
+        Initialize the provider with configuration.
+
+        Args:
+            **kwargs: Provider-specific configuration (endpoint, api_key, etc.)
+        """
+        pass
+
+    @abstractmethod
     async def score(
         self,
         questions: list[str],

@@ -16,7 +16,7 @@ Backwards compatibility is not guaranteed at this time.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, TypeVar, Type
+from typing import Optional, Dict, Any, TypeVar, Type, cast
 from nlweb_core.config import get_config
 from nlweb_core.llm_exceptions import (
     LLMTimeoutError,
@@ -25,7 +25,9 @@ from nlweb_core.llm_exceptions import (
 )
 from pydantic import BaseModel, ValidationError
 import asyncio
+import importlib
 import logging
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -45,11 +47,20 @@ class GenerativeLLMProvider(ABC):
     """
 
     @abstractmethod
+    def __init__(self, **kwargs) -> None:
+        """
+        Initialize the provider with configuration.
+
+        Args:
+            **kwargs: Provider-specific configuration (model, endpoint, api_key, etc.)
+        """
+        pass
+
+    @abstractmethod
     async def get_completion(
         self,
         prompt: str,
         schema: Dict[str, Any],
-        model: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = 2048,
         timeout: float = 30.0,
@@ -61,7 +72,6 @@ class GenerativeLLMProvider(ABC):
         Args:
             prompt: The text prompt to send to the LLM
             schema: JSON schema that the response should conform to
-            model: The specific model to use (if None, use default from config)
             temperature: Controls randomness of the output (0-1)
             max_tokens: Maximum tokens in the generated response
             timeout: Request timeout in seconds
@@ -81,7 +91,6 @@ class GenerativeLLMProvider(ABC):
         prompts: list[str],
         schema: Dict[str, Any],
         query_kwargs_list: list[dict[str, Any]] | None = None,
-        model: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = 2048,
         timeout: float = 30.0,
@@ -95,7 +104,6 @@ class GenerativeLLMProvider(ABC):
                 self.get_completion(
                     prompt,
                     schema,
-                    model=model,
                     temperature=temperature,
                     max_tokens=max_tokens,
                     timeout=timeout,
@@ -103,7 +111,7 @@ class GenerativeLLMProvider(ABC):
                 )
             )
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        return results
+        return list(results)
 
     @classmethod
     @abstractmethod
@@ -138,73 +146,77 @@ class GenerativeLLMProvider(ABC):
         pass
 
 
-# Cache for loaded providers
-_loaded_providers = {}
+# Cache for loaded generative providers
+_loaded_generative_providers: dict[str, GenerativeLLMProvider] = {}
+_generative_providers_lock = threading.Lock()
 
 
-def _get_provider(llm_type: str, provider_config=None):
+def get_generative_provider(name: str) -> GenerativeLLMProvider:
     """
-    Lazily load and return the provider for the given LLM type.
+    Get the configured generative provider by name via dynamic import.
+
+    Uses get_config().get_generative_model_provider(name) to load the appropriate provider.
 
     Args:
-        llm_type: The type of LLM provider to load
-        provider_config: Optional provider config with import_path and class_name
+        name: Provider name (e.g., "high", "low")
 
     Returns:
-        The provider instance
+        The configured GenerativeLLMProvider instance
 
     Raises:
-        ValueError: If the LLM type is unknown
+        ValueError: If no generative provider with the given name is configured
     """
-    # Return cached provider if already loaded
-    if llm_type in _loaded_providers:
-        return _loaded_providers[llm_type]
+    if name in _loaded_generative_providers:
+        return _loaded_generative_providers[name]
 
-    # Use config-driven dynamic import if available
-    if provider_config and provider_config.import_path and provider_config.class_name:
+    with _generative_providers_lock:
+        # Double-check after acquiring lock
+        if name in _loaded_generative_providers:
+            return _loaded_generative_providers[name]
+
+        config = get_config()
+        model_config = config.get_generative_model_provider(name)
+
+        if model_config is None:
+            raise ValueError(f"Generative model provider '{name}' is not configured")
+
         try:
-            import_path = provider_config.import_path
-            class_name = provider_config.class_name
-            module = __import__(import_path, fromlist=[class_name])
-            provider_class = getattr(module, class_name)
-            # Instantiate if it's a class, or use directly if it's already an instance
-            provider = provider_class() if callable(provider_class) else provider_class
-            _loaded_providers[llm_type] = provider
+            module = importlib.import_module(model_config.import_path)
+            provider_class = getattr(module, model_config.class_name)
+            provider = provider_class(**model_config.options)
+            _loaded_generative_providers[name] = cast(GenerativeLLMProvider, provider)
+            logger.debug(
+                f"Loaded generative provider '{name}': {model_config.class_name}"
+            )
         except (ImportError, AttributeError) as e:
-            raise ValueError(f"Failed to load provider for {llm_type}: {e}")
-    else:
-        raise ValueError(
-            f"No import_path and class_name configured for LLM type: {llm_type}"
-        )
+            raise ValueError(f"Failed to load generative provider '{name}': {e}")
 
-    return _loaded_providers[llm_type]
+        return _loaded_generative_providers[name]
 
 
 async def ask_llm_parallel(
     prompts: list[str],
     schema: Type[T],
-    provider: Optional[str] = None,
     level: str = "low",
     timeout: int = 8,
     query_params_list: list[dict[str, Any]] = [],
     max_length: int = 512,
-) -> list[T | LLMValidationError | Exception]:
+) -> list[T | LLMValidationError | BaseException]:
     """
-    Route an LLM request to the specified endpoint, with dispatch based on llm_type.
+    Route an LLM request to the configured generative provider.
 
     Args:
         prompts: The text prompts to send to the LLM
         schema: A Pydantic model class (Type[BaseModel]) for validated responses
-        provider: The LLM endpoint to use (if None, use model config based on level)
         level: The model tier to use ('low', 'high', or 'scoring')
         timeout: Request timeout in seconds
         query_params_list: Optional query parameters for development mode provider override
         max_length: Maximum length of the response in tokens (default: 512)
 
     Returns:
-        list[T | LLMValidationError | Exception]: List of validated model instances,
+        list[T | LLMValidationError | BaseException]: List of validated model instances,
         or LLMValidationError for responses that fail validation,
-        or Exception for other errors from the provider
+        or BaseException for other errors from the provider
 
     Raises:
         LLMTimeoutError: If the overall request times out
@@ -212,89 +224,33 @@ async def ask_llm_parallel(
     """
     # Convert Pydantic model to JSON schema for LLM provider
     json_schema: Dict[str, Any] = schema.model_json_schema()
-    # Get model config based on level (new format) or fall back to old format
-    config = get_config()
-    model_config = None
-    model_id = None
-    llm_type = None
-
-    if level == "high" and config.high_llm_model:
-        model_config = config.high_llm_model
-        model_id = model_config.model
-        llm_type = model_config.llm_type
-    elif level == "low" and config.low_llm_model:
-        model_config = config.low_llm_model
-        model_id = model_config.model
-        llm_type = model_config.llm_type
-    elif level == "scoring" and config.scoring_llm_model:
-        model_config = config.scoring_llm_model
-        model_id = model_config.model
-        llm_type = model_config.llm_type
-    elif (
-        config.preferred_llm_endpoint
-        and config.preferred_llm_endpoint in config.llm_endpoints
-    ):
-        # Fall back to old format
-        provider_name = provider or config.preferred_llm_endpoint
-        provider_config = config.get_llm_provider(provider_name)
-        if not provider_config or not provider_config.models:
-            return []
-        llm_type = provider_config.llm_type
-        model_id = getattr(
-            provider_config.models, level if level in ["high", "low"] else "low"
-        )
-        model_config = provider_config
-    else:
-        return []
 
     try:
-        # Get the provider instance based on llm_type
+        # Get the provider instance via factory
         try:
-            provider_instance = _get_provider(llm_type, model_config)
-        except ValueError as e:
+            provider_instance = get_generative_provider(level)
+        except ValueError:
+            logger.warning(f"No generative provider configured for level '{level}'")
             return []
 
-        logger.debug(
-            f"Calling LLM provider {provider_instance} with model {model_id} at level {level}"
-        )
-        logger.debug(f"Model config: {model_config}")
+        logger.debug(f"Calling LLM provider {provider_instance} at level {level}")
 
-        # Extract values from model config
-        endpoint_val = (
-            model_config.endpoint if hasattr(model_config, "endpoint") else None
-        )
-        api_version_val = (
-            model_config.api_version if hasattr(model_config, "api_version") else None
-        )
-        api_key_val = model_config.api_key if hasattr(model_config, "api_key") else None
-
-        # Simply call the provider's get_completion method, passing all config parameters
-        # Each provider should handle thread-safety internally
         raw_results = await asyncio.wait_for(
             provider_instance.get_completions(
                 prompts,
                 json_schema,
-                model=model_id,
                 timeout=timeout,
                 max_tokens=max_length,
-                endpoint=endpoint_val,
-                api_key=api_key_val,
-                api_version=api_version_val,
-                auth_method=(
-                    model_config.auth_method
-                    if hasattr(model_config, "auth_method")
-                    else None
-                ),
                 kwargs_list=query_params_list,
             ),
             timeout=timeout,
         )
 
         # Validate and convert results to Pydantic models
-        validated_results: list[T | LLMValidationError | Exception] = []
+        validated_results: list[T | LLMValidationError | BaseException] = []
         for raw_result in raw_results:
             # Pass through exceptions unchanged
-            if isinstance(raw_result, Exception):
+            if isinstance(raw_result, BaseException):
                 validated_results.append(raw_result)
                 continue
 
@@ -326,19 +282,17 @@ async def ask_llm_parallel(
 async def ask_llm(
     prompt: str,
     schema: Type[T],
-    provider: Optional[str] = None,
     level: str = "low",
     timeout: int = 8,
     query_params: Optional[Dict[str, Any]] = None,
     max_length: int = 512,
 ) -> T:
     """
-    Route an LLM request to the specified endpoint, with dispatch based on llm_type.
+    Route an LLM request to the configured generative provider.
 
     Args:
         prompt: The text prompt to send to the LLM
         schema: A Pydantic model class for type-safe responses
-        provider: The LLM endpoint to use (if None, use model config based on level)
         level: The model tier to use ('low', 'high', or 'scoring')
         timeout: Request timeout in seconds
         query_params: Optional query parameters for development mode provider override
@@ -355,78 +309,20 @@ async def ask_llm(
     # Convert Pydantic model to JSON schema for the provider
     json_schema: Dict[str, Any] = schema.model_json_schema()
 
-    # Get model config based on level (new format) or fall back to old format
-    config = get_config()
-    model_config = None
-    model_id = None
-    llm_type = None
-
-    if level == "high" and config.high_llm_model:
-        model_config = config.high_llm_model
-        model_id = model_config.model
-        llm_type = model_config.llm_type
-    elif level == "low" and config.low_llm_model:
-        model_config = config.low_llm_model
-        model_id = model_config.model
-        llm_type = model_config.llm_type
-    elif level == "scoring" and config.scoring_llm_model:
-        model_config = config.scoring_llm_model
-        model_id = model_config.model
-        llm_type = model_config.llm_type
-    elif (
-        config.preferred_llm_endpoint
-        and config.preferred_llm_endpoint in config.llm_endpoints
-    ):
-        # Fall back to old format
-        provider_name = provider or config.preferred_llm_endpoint
-        provider_config = config.get_llm_provider(provider_name)
-        if not provider_config or not provider_config.models:
-            raise ValueError("No valid LLM configuration found")
-        llm_type = provider_config.llm_type
-        model_id = getattr(
-            provider_config.models, level if level in ["high", "low"] else "low"
-        )
-        model_config = provider_config
-    else:
-        raise ValueError("No valid LLM configuration found")
-
     try:
-        # Get the provider instance based on llm_type
-        try:
-            provider_instance = _get_provider(llm_type, model_config)
-        except ValueError:
-            raise
+        # Get the provider instance via factory
+        provider_instance = get_generative_provider(level)
 
-        logger.debug(
-            f"Calling LLM provider {provider_instance} with model {model_id} at level {level}"
-        )
-        logger.debug(f"Model config: {model_config}")
-
-        # Extract values from model config
-        endpoint_val = (
-            model_config.endpoint if hasattr(model_config, "endpoint") else None
-        )
-        api_version_val = (
-            model_config.api_version if hasattr(model_config, "api_version") else None
-        )
-        api_key_val = model_config.api_key if hasattr(model_config, "api_key") else None
+        logger.debug(f"Calling LLM provider {provider_instance} at level {level}")
 
         # Call the provider's get_completion method
+        # Provider has model config from __init__
         raw_result = await asyncio.wait_for(
             provider_instance.get_completion(
                 prompt,
                 json_schema,
-                model=model_id,
                 timeout=timeout,
                 max_tokens=max_length,
-                endpoint=endpoint_val,
-                api_key=api_key_val,
-                api_version=api_version_val,
-                auth_method=(
-                    model_config.auth_method
-                    if hasattr(model_config, "auth_method")
-                    else None
-                ),
                 **(query_params or {}),
             ),
             timeout=timeout,
@@ -452,30 +348,3 @@ async def ask_llm(
         logger.error(f"LLM request failed: {e}", exc_info=True)
         classified_error = classify_llm_error(e)
         raise classified_error from e
-
-
-def get_available_providers() -> list:
-    """
-    Get a list of LLM providers that have their required API keys available.
-
-    Returns:
-        List of provider names that are available for use.
-    """
-    available_providers = []
-    config = get_config()
-
-    for provider_name, provider_config in config.llm_endpoints.items():
-        # Check if provider config exists and has required fields
-        if (
-            provider_config
-            and hasattr(provider_config, "api_key")
-            and provider_config.api_key
-            and provider_config.api_key.strip() != ""
-            and hasattr(provider_config, "models")
-            and provider_config.models
-            and provider_config.models.high
-            and provider_config.models.low
-        ):
-            available_providers.append(provider_name)
-
-    return available_providers
