@@ -4,13 +4,14 @@ Clean all data from tables and update schema to add authentication support.
 WARNING: This will delete all existing data!
 """
 
-import sys
 import os
+import sys
 
 # Add code/core to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'code', 'core'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "code", "core"))
 
 import db
+
 
 def clean_and_migrate_database():
     """Clean all data and run database migration"""
@@ -56,7 +57,7 @@ def clean_and_migrate_database():
         print("-" * 80)
 
         # Delete data in correct order (respecting foreign keys)
-        tables_to_clean = ['ids', 'files', 'sites', 'users']
+        tables_to_clean = ["ids", "files", "sites", "users"]
         for table in tables_to_clean:
             try:
                 cursor.execute(f"DELETE FROM {table}")
@@ -86,7 +87,9 @@ def clean_and_migrate_database():
         print("✓ Database cleaned and migrated successfully!")
         print("=" * 80)
         print("\nNew schema:")
-        print("  - users table (user_id, email, name, provider, api_key, created_at, last_login)")
+        print(
+            "  - users table (user_id, email, name, provider, api_key, created_at, last_login)"
+        )
         print("  - sites table with user_id column (FK to users)")
         print("  - files table with user_id column (FK to users)")
         print("  - ids table with user_id column (FK to users)")
@@ -97,12 +100,14 @@ def clean_and_migrate_database():
     except Exception as e:
         print(f"\n✗ Migration failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
     finally:
         conn.close()
         print("\nDatabase connection closed.")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     success = clean_and_migrate_database()
     sys.exit(0 if success else 1)

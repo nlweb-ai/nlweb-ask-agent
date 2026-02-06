@@ -2,7 +2,7 @@
 # For AKS deployment, uses environment-based resource discovery
 include ../common.mk
 
-.PHONY: dev build deploy down port-forward logs test init_environment build-llm-scoring deploy-llm-scoring down-llm-scoring logs-llm-scoring
+.PHONY: dev build deploy down port-forward logs test lint format typecheck check init_environment build-llm-scoring deploy-llm-scoring down-llm-scoring logs-llm-scoring
 
 dev:
 	uv run run_server.py
@@ -45,6 +45,18 @@ logs:
 
 test:
 	uv run pytest
+
+lint:
+	uv run ruff check .
+
+format:
+	uv run ruff format .
+	uv run ruff check --fix --select I .
+
+typecheck:
+	uv run pyright
+
+check: lint typecheck test
 
 # Pull secrets from Azure Key Vault to .env for local development
 init_environment:

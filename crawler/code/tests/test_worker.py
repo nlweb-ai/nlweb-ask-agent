@@ -373,13 +373,13 @@ def test_extract_objects_from_jsonl_yoast_regressions():
 # Tests for extract_essential_fields
 # =============================================================================
 
-from core.vector_db import (
-    extract_essential_fields,
-    ESSENTIAL_FIELDS_MAX_CHARS,
-    ESSENTIAL_FIELDS_DESCRIPTION_TRUNCATE,
-)
 import json
 
+from core.vector_db import (
+    ESSENTIAL_FIELDS_DESCRIPTION_TRUNCATE,
+    ESSENTIAL_FIELDS_MAX_CHARS,
+    extract_essential_fields,
+)
 
 # -----------------------------------------------------------------------------
 # Recipe type tests

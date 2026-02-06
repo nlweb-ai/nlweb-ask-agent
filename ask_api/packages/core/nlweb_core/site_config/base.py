@@ -6,7 +6,6 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -47,5 +46,3 @@ class SiteConfigLookup(ABC):
     async def close(self) -> None:
         """Close the client and release resources."""
         ...
-
-

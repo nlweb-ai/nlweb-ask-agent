@@ -9,8 +9,9 @@ Handles user ID extraction and conversation access validation.
 
 import logging
 from typing import Optional
-from nlweb_core.protocol.models import Meta
+
 from nlweb_core.conversation.storage import ConversationStorageClient
+from nlweb_core.protocol.models import Meta
 
 logger = logging.getLogger(__name__)
 
@@ -33,21 +34,19 @@ def get_authenticated_user_id(request_meta: Optional[Meta]) -> Optional[str]:
 
     # Handle dict format
     if isinstance(request_meta.user, dict):
-        return request_meta.user.get('id') or request_meta.user.get('user_id')
+        return request_meta.user.get("id") or request_meta.user.get("user_id")
 
     # Handle object format
-    if hasattr(request_meta.user, 'id'):
+    if hasattr(request_meta.user, "id"):
         return request_meta.user.id
-    if hasattr(request_meta.user, 'user_id'):
+    if hasattr(request_meta.user, "user_id"):
         return request_meta.user.user_id
 
     return None
 
 
 async def validate_conversation_access(
-    conversation_id: str,
-    authenticated_user_id: str,
-    storage: ConversationStorageClient
+    conversation_id: str, authenticated_user_id: str, storage: ConversationStorageClient
 ) -> bool:
     """
     Verify that the authenticated user owns this conversation.
@@ -66,17 +65,25 @@ async def validate_conversation_access(
 
         if not messages:
             # Sanitize conversation_id for logging to prevent log injection
-            sanitized_conv_id = conversation_id.replace('\n', '\\n').replace('\r', '\\r')
+            sanitized_conv_id = conversation_id.replace("\n", "\\n").replace(
+                "\r", "\\r"
+            )
             logger.warning(f"Conversation {sanitized_conv_id} not found")
             return False
 
         # Extract user_id from message metadata
-        message_user_id = messages[0].metadata.get('user_id') if messages[0].metadata else None
+        message_user_id = (
+            messages[0].metadata.get("user_id") if messages[0].metadata else None
+        )
 
         if not message_user_id:
             # Sanitize conversation_id for logging to prevent log injection
-            sanitized_conv_id = conversation_id.replace('\n', '\\n').replace('\r', '\\r')
-            logger.warning(f"Conversation {sanitized_conv_id} has no user_id in metadata")
+            sanitized_conv_id = conversation_id.replace("\n", "\\n").replace(
+                "\r", "\\r"
+            )
+            logger.warning(
+                f"Conversation {sanitized_conv_id} has no user_id in metadata"
+            )
             return False
 
         # Check if user_id matches
@@ -84,9 +91,15 @@ async def validate_conversation_access(
 
         if not has_access:
             # Sanitize all user-provided values for logging to prevent log injection
-            sanitized_auth_user = authenticated_user_id.replace('\n', '\\n').replace('\r', '\\r')
-            sanitized_conv_id = conversation_id.replace('\n', '\\n').replace('\r', '\\r')
-            sanitized_msg_user = message_user_id.replace('\n', '\\n').replace('\r', '\\r')
+            sanitized_auth_user = authenticated_user_id.replace("\n", "\\n").replace(
+                "\r", "\\r"
+            )
+            sanitized_conv_id = conversation_id.replace("\n", "\\n").replace(
+                "\r", "\\r"
+            )
+            sanitized_msg_user = message_user_id.replace("\n", "\\n").replace(
+                "\r", "\\r"
+            )
             logger.warning(
                 f"Access denied: user {sanitized_auth_user} tried to access "
                 f"conversation {sanitized_conv_id} owned by {sanitized_msg_user}"

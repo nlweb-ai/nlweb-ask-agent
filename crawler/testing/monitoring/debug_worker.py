@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """Debug worker to understand what's failing"""
 
-import sys
-import os
-import time
 import json
+import os
+import sys
+import time
 import traceback
 
-sys.path.insert(0, 'code/core')
+sys.path.insert(0, "code/core")
 import config
 import db
 from worker import process_job
+
 
 def simple_worker():
     """Simple worker without JobManager to debug issues"""
@@ -19,18 +20,18 @@ def simple_worker():
     conn = db.get_connection()
     print("[DEBUG] Connected to database")
 
-    queue_dir = os.getenv('QUEUE_DIR', 'queue')
+    queue_dir = os.getenv("QUEUE_DIR", "queue")
 
     while True:
         # Look for jobs
         found_job = False
 
         for filename in sorted(os.listdir(queue_dir)):
-            if not filename.startswith('job-') or not filename.endswith('.json'):
+            if not filename.startswith("job-") or not filename.endswith(".json"):
                 continue
 
             job_path = os.path.join(queue_dir, filename)
-            processing_path = job_path + '.processing'
+            processing_path = job_path + ".processing"
 
             try:
                 # Claim job
@@ -55,14 +56,14 @@ def simple_worker():
                 else:
                     # Move to errors
                     print("[DEBUG] Job failed, moving to errors")
-                    error_dir = os.path.join(queue_dir, 'errors')
+                    error_dir = os.path.join(queue_dir, "errors")
                     os.makedirs(error_dir, exist_ok=True)
 
                     # Add error info
-                    job['last_error'] = "Processing failed (debug)"
+                    job["last_error"] = "Processing failed (debug)"
                     error_file = os.path.join(error_dir, f"debug-{filename}")
 
-                    with open(error_file, 'w') as f:
+                    with open(error_file, "w") as f:
                         json.dump(job, f)
 
                     os.remove(processing_path)
@@ -83,7 +84,8 @@ def simple_worker():
             print("[DEBUG] No jobs found, sleeping...")
             time.sleep(5)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     try:
         simple_worker()
     except KeyboardInterrupt:

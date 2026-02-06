@@ -8,7 +8,7 @@ Azure AI Search Client - Interface for Azure AI Search operations.
 
 import logging
 import time
-from typing import List, Dict, Union, Optional, Any
+from typing import Any, Dict, List, Optional, Union
 
 from azure.core.credentials import AzureKeyCredential
 from azure.identity.aio import DefaultAzureCredential
@@ -17,11 +17,10 @@ from azure.search.documents.aio import SearchClient
 # Type alias for credentials
 CredentialType = Union[DefaultAzureCredential, AzureKeyCredential]
 
-from nlweb_core.config import get_config
-from nlweb_core.retriever import RetrievalProvider
-from nlweb_core.retrieved_item import RetrievedItem
 from nlweb_core.azure_credentials import get_azure_credential
-
+from nlweb_core.config import get_config
+from nlweb_core.retrieved_item import RetrievedItem
+from nlweb_core.retriever import RetrievalProvider
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +137,12 @@ class AzureSearchClient(RetrievalProvider):
         # Perform the search
         start_retrieve = time.time()
         results = await self._retrieve_by_site_and_vector(
-            site, embedding, num_results, index_name, query_text=query, date_filter=date_filter
+            site,
+            embedding,
+            num_results,
+            index_name,
+            query_text=query,
+            date_filter=date_filter,
         )
         retrieve_time = time.time() - start_retrieve
 
@@ -217,7 +221,9 @@ class AzureSearchClient(RetrievalProvider):
             # Use "any" mode so BM25 doesn't filter too aggressively (OR logic)
             # This is more lenient than "all" mode (AND logic)
             search_options["search_mode"] = "any"
-            logger.debug(f"Hybrid search (BM25 + vector, mode=any) for query: {query_text[:50]}...")
+            logger.debug(
+                f"Hybrid search (BM25 + vector, mode=any) for query: {query_text[:50]}..."
+            )
         else:
             logger.debug("Pure vector search (no query text)")
 
@@ -230,7 +236,9 @@ class AzureSearchClient(RetrievalProvider):
         try:
             # Execute the search - hybrid mode (BM25 + vector) if query_text provided
             # If no query_text, falls back to pure vector search
-            results = await search_client.search(search_text=query_text, **search_options)
+            results = await search_client.search(
+                search_text=query_text, **search_options
+            )
 
             # Process results into RetrievedItem objects (async iteration)
             processed_results = []

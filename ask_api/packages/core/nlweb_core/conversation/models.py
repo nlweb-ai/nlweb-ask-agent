@@ -8,9 +8,11 @@ WARNING: This code is under development and may undergo changes in future releas
 Backwards compatibility is not guaranteed at this time.
 """
 
-from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
+
 from nlweb_core.protocol.models import AskRequest, ResultObject
 
 
@@ -23,36 +25,26 @@ class ConversationMessage(BaseModel):
     """
 
     message_id: str = Field(
-        ...,
-        description="Unique identifier for this message exchange"
+        ..., description="Unique identifier for this message exchange"
     )
 
     conversation_id: str = Field(
-        ...,
-        description="Identifier linking this message to a conversation"
+        ..., description="Identifier linking this message to a conversation"
     )
 
-    timestamp: datetime = Field(
-        ...,
-        description="When this exchange was created"
-    )
+    timestamp: datetime = Field(..., description="When this exchange was created")
 
     # User's request - the complete v0.54 request
-    request: AskRequest = Field(
-        ...,
-        description="Full v0.54 AskRequest from the user"
-    )
+    request: AskRequest = Field(..., description="Full v0.54 AskRequest from the user")
 
     # Assistant's response - the result objects returned
     results: Optional[List[ResultObject]] = Field(
-        None,
-        description="Result objects returned by the assistant"
+        None, description="Result objects returned by the assistant"
     )
 
     # Additional metadata
     metadata: Optional[Dict[str, Any]] = Field(
-        None,
-        description="Additional metadata (user_id, site, response_format, etc.)"
+        None, description="Additional metadata (user_id, site, response_format, etc.)"
     )
 
     model_config = ConfigDict(

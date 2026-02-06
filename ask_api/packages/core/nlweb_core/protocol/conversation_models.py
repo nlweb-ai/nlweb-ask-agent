@@ -8,19 +8,21 @@ These models define the request/response structures for conversation management,
 following the same pattern as the NLWeb /ask endpoint.
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-from nlweb_core.protocol.models import Meta, AskRequest, ResultObject
+from pydantic import BaseModel, Field
 
+from nlweb_core.protocol.models import AskRequest, Meta, ResultObject
 
 # ============================================================================
 # Request Models
 # ============================================================================
 
+
 class ConversationFilter(BaseModel):
     """Filter criteria for listing conversations."""
+
     site: Optional[str] = Field(None, description="Filter by site")
     date_from: Optional[datetime] = Field(None, description="Start date filter")
     date_to: Optional[datetime] = Field(None, description="End date filter")
@@ -28,36 +30,40 @@ class ConversationFilter(BaseModel):
 
 class Pagination(BaseModel):
     """Pagination parameters."""
+
     limit: int = Field(20, ge=1, le=100, description="Number of items to return")
     offset: int = Field(0, ge=0, description="Number of items to skip")
 
 
 class ListConversationsRequest(BaseModel):
     """Request to list conversations for a user."""
+
     meta: Meta = Field(..., description="Request metadata with user info")
     filter: Optional[ConversationFilter] = Field(None, description="Filter criteria")
     pagination: Optional[Pagination] = Field(
-        default_factory=Pagination,
-        description="Pagination parameters"
+        default_factory=Pagination, description="Pagination parameters"
     )
 
 
 class GetConversationRequest(BaseModel):
     """Request to get messages for a specific conversation."""
+
     meta: Meta = Field(..., description="Request metadata with user info")
     pagination: Optional[Pagination] = Field(
         default_factory=lambda: Pagination(limit=100),
-        description="Pagination parameters"
+        description="Pagination parameters",
     )
 
 
 class DeleteConversationRequest(BaseModel):
     """Request to delete a conversation."""
+
     meta: Meta = Field(..., description="Request metadata with user info")
 
 
 class ConversationSearchFilter(BaseModel):
     """Search filter criteria."""
+
     site: Optional[str] = None
     date_from: Optional[datetime] = None
     date_to: Optional[datetime] = None
@@ -65,17 +71,18 @@ class ConversationSearchFilter(BaseModel):
 
 class ConversationSearch(BaseModel):
     """Search parameters for conversations."""
+
     query: str = Field(..., description="Search query text")
     filter: Optional[ConversationSearchFilter] = None
 
 
 class SearchConversationsRequest(BaseModel):
     """Request to search conversations."""
+
     meta: Meta = Field(..., description="Request metadata with user info")
     search: ConversationSearch = Field(..., description="Search parameters")
     pagination: Optional[Pagination] = Field(
-        default_factory=Pagination,
-        description="Pagination parameters"
+        default_factory=Pagination, description="Pagination parameters"
     )
 
 
@@ -83,14 +90,17 @@ class SearchConversationsRequest(BaseModel):
 # Response Models
 # ============================================================================
 
+
 class ConversationPreview(BaseModel):
     """Preview of conversation content."""
+
     query: str = Field(..., description="First query in conversation")
     result_count: int = Field(..., description="Number of results returned")
 
 
 class ConversationSummary(BaseModel):
     """Summary of a conversation."""
+
     conversation_id: str
     message_count: int
     first_message_timestamp: datetime
@@ -101,6 +111,7 @@ class ConversationSummary(BaseModel):
 
 class PaginationResponse(BaseModel):
     """Pagination metadata in response."""
+
     total: int = Field(..., description="Total number of items")
     limit: int = Field(..., description="Items per page")
     offset: int = Field(..., description="Current offset")
@@ -109,6 +120,7 @@ class PaginationResponse(BaseModel):
 
 class ListConversationsResponse(BaseModel):
     """Response with list of conversations."""
+
     field_meta: Dict[str, Any] = Field(..., alias="_meta")
     conversations: List[ConversationSummary]
     pagination: PaginationResponse
@@ -116,6 +128,7 @@ class ListConversationsResponse(BaseModel):
 
 class ConversationInfo(BaseModel):
     """Information about a conversation."""
+
     conversation_id: str
     user_id: str
     created_at: datetime
@@ -124,6 +137,7 @@ class ConversationInfo(BaseModel):
 
 class ConversationMessage(BaseModel):
     """A single message in the conversation."""
+
     message_id: str
     timestamp: datetime
     request: AskRequest
@@ -133,6 +147,7 @@ class ConversationMessage(BaseModel):
 
 class GetConversationResponse(BaseModel):
     """Response with conversation messages."""
+
     field_meta: Dict[str, Any] = Field(..., alias="_meta")
     conversation: ConversationInfo
     messages: List[ConversationMessage]
@@ -141,6 +156,7 @@ class GetConversationResponse(BaseModel):
 
 class DeleteConversationResponse(BaseModel):
     """Response confirming conversation deletion."""
+
     field_meta: Dict[str, Any] = Field(..., alias="_meta")
     conversation_id: str
     status: str = "deleted"
@@ -149,6 +165,7 @@ class DeleteConversationResponse(BaseModel):
 
 class SearchMatch(BaseModel):
     """A search result match."""
+
     conversation_id: str
     message_id: str
     match_type: str = Field(..., description="Type of match: query, result, metadata")
@@ -159,6 +176,7 @@ class SearchMatch(BaseModel):
 
 class SearchConversationsResponse(BaseModel):
     """Response with search results."""
+
     field_meta: Dict[str, Any] = Field(..., alias="_meta")
     results: List[SearchMatch]
     pagination: PaginationResponse
@@ -166,5 +184,8 @@ class SearchConversationsResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     """Error response."""
+
     field_meta: Dict[str, Any] = Field(..., alias="_meta")
-    error: Dict[str, str] = Field(..., description="Error details with code and message")
+    error: Dict[str, str] = Field(
+        ..., description="Error details with code and message"
+    )

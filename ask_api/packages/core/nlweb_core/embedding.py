@@ -8,11 +8,10 @@ Defines the EmbeddingProvider abstract base class that all embedding
 implementations must inherit from.
 """
 
-from abc import ABC, abstractmethod
-from typing import List
 import asyncio
 import logging
-
+from abc import ABC, abstractmethod
+from typing import List
 
 logger = logging.getLogger(__name__)
 

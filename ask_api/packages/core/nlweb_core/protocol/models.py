@@ -6,8 +6,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict
-
+from pydantic import BaseModel, ConfigDict, Field
 
 # ============================================================================
 # Request Models
@@ -138,8 +137,7 @@ class Meta(BaseModel):
         description="Whether to remember this interaction in conversation history (optional)",
     )
     start_num: Optional[int] = Field(
-        0,
-        description="The start offset for the returned results"
+        0, description="The start offset for the returned results"
     )
 
 

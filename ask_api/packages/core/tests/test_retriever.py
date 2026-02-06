@@ -2,9 +2,9 @@
 Tests for NLWeb retriever module.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from nlweb_core.retrieved_item import RetrievedItem
 from nlweb_core.retriever import (
     ObjectLookupProvider,
@@ -26,8 +26,16 @@ class TestEnrichResultsFromObjectStorage:
     def sample_results(self):
         """Sample search results for testing."""
         return [
-            RetrievedItem(url="https://example.com/1", raw_schema_object='{"name": "Item 1"}', site="site1"),
-            RetrievedItem(url="https://example.com/2", raw_schema_object='{"name": "Item 2"}', site="site1"),
+            RetrievedItem(
+                url="https://example.com/1",
+                raw_schema_object='{"name": "Item 1"}',
+                site="site1",
+            ),
+            RetrievedItem(
+                url="https://example.com/2",
+                raw_schema_object='{"name": "Item 2"}',
+                site="site1",
+            ),
         ]
 
     async def test_enriches_results_with_full_objects(
@@ -35,8 +43,16 @@ class TestEnrichResultsFromObjectStorage:
     ):
         """Test enriches results with full objects from storage."""
         mock_object_lookup_client.get_by_id.side_effect = [
-            {"name": "Full Item 1", "description": "Full description 1", "extra": "data1"},
-            {"name": "Full Item 2", "description": "Full description 2", "extra": "data2"},
+            {
+                "name": "Full Item 1",
+                "description": "Full description 1",
+                "extra": "data1",
+            },
+            {
+                "name": "Full Item 2",
+                "description": "Full description 2",
+                "extra": "data2",
+            },
         ]
 
         result = await enrich_results_from_object_storage(
@@ -74,21 +90,24 @@ class TestEnrichResultsFromObjectStorage:
 
     async def test_handles_empty_results_list(self, mock_object_lookup_client):
         """Test handles empty results list gracefully."""
-        result = await enrich_results_from_object_storage(
-            [], mock_object_lookup_client
-        )
+        result = await enrich_results_from_object_storage([], mock_object_lookup_client)
         assert result == []
         mock_object_lookup_client.get_by_id.assert_not_called()
 
     async def test_processes_results_concurrently(self, mock_object_lookup_client):
         """Test that results are processed concurrently with semaphore."""
         many_results = [
-            RetrievedItem(url=f"https://example.com/{i}", raw_schema_object=f'{{"name": "Item {i}"}}', site="site1")
+            RetrievedItem(
+                url=f"https://example.com/{i}",
+                raw_schema_object=f'{{"name": "Item {i}"}}',
+                site="site1",
+            )
             for i in range(25)
         ]
 
         async def slow_lookup(url):
             import asyncio
+
             await asyncio.sleep(0.01)
             return {"name": f"Full {url}"}
 

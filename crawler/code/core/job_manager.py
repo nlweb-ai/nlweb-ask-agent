@@ -1,16 +1,20 @@
 """
 Job queue management with timeout and recovery mechanisms
 """
-import os
+
+import glob
 import json
+import os
 import time
 from datetime import datetime, timedelta, timezone
-import glob
+
 
 class JobManager:
     """Manages job queue with timeout and recovery capabilities"""
 
-    def __init__(self, queue_dir='queue', job_timeout_minutes=5, cleanup_interval_minutes=2):
+    def __init__(
+        self, queue_dir="queue", job_timeout_minutes=5, cleanup_interval_minutes=2
+    ):
         self.queue_dir = queue_dir
         self.job_timeout = timedelta(minutes=job_timeout_minutes)
         self.cleanup_interval = cleanup_interval_minutes * 60  # Convert to seconds
@@ -18,7 +22,9 @@ class JobManager:
 
     def start_cleanup_daemon(self):
         """No-op for compatibility - cleanup happens during job claims"""
-        print(f"[JobManager] Cleanup will run inline (checking every {self.cleanup_interval}s)")
+        print(
+            f"[JobManager] Cleanup will run inline (checking every {self.cleanup_interval}s)"
+        )
 
     def stop_cleanup_daemon(self):
         """No-op for compatibility"""
@@ -42,7 +48,7 @@ class JobManager:
         current_time = datetime.now(timezone.utc)
 
         # Find all .processing files
-        processing_files = glob.glob(os.path.join(self.queue_dir, '*.processing'))
+        processing_files = glob.glob(os.path.join(self.queue_dir, "*.processing"))
 
         for processing_file in processing_files:
             try:
@@ -51,37 +57,53 @@ class JobManager:
                 age = current_time - mtime
 
                 if age > self.job_timeout:
-                    print(f"[JobManager] Found stale job (age: {age}): {os.path.basename(processing_file)}")
+                    print(
+                        f"[JobManager] Found stale job (age: {age}): {os.path.basename(processing_file)}"
+                    )
 
                     # Read job content to log what's being reset
                     try:
-                        with open(processing_file, 'r') as f:
+                        with open(processing_file, "r") as f:
                             job = json.load(f)
-                        print(f"[JobManager]   Type: {job.get('type')}, Site: {job.get('site')}, File: {job.get('file_url')}")
+                        print(
+                            f"[JobManager]   Type: {job.get('type')}, Site: {job.get('site')}, File: {job.get('file_url')}"
+                        )
                     except:
                         pass
 
                     # Reset job by removing .processing extension
-                    original_path = processing_file.rsplit('.processing', 1)[0]
+                    original_path = processing_file.rsplit(".processing", 1)[0]
 
                     # If job failed multiple times, move to error queue
-                    if '.retry' in original_path:
-                        retry_count = int(original_path.split('.retry')[1].split('.')[0])
+                    if ".retry" in original_path:
+                        retry_count = int(
+                            original_path.split(".retry")[1].split(".")[0]
+                        )
                         if retry_count >= 3:
                             # Move to errors after 3 retries
-                            error_dir = os.path.join(self.queue_dir, 'errors')
+                            error_dir = os.path.join(self.queue_dir, "errors")
                             os.makedirs(error_dir, exist_ok=True)
-                            error_path = os.path.join(error_dir, os.path.basename(original_path))
+                            error_path = os.path.join(
+                                error_dir, os.path.basename(original_path)
+                            )
                             os.rename(processing_file, error_path)
-                            print(f"[JobManager]   Moved to errors after {retry_count} retries")
+                            print(
+                                f"[JobManager]   Moved to errors after {retry_count} retries"
+                            )
                             stale_count += 1
                             continue
 
                     # Add retry count to filename
-                    base_name = original_path.rsplit('.retry', 1)[0] if '.retry' in original_path else original_path
+                    base_name = (
+                        original_path.rsplit(".retry", 1)[0]
+                        if ".retry" in original_path
+                        else original_path
+                    )
                     retry_count = 0
-                    if '.retry' in original_path:
-                        retry_count = int(original_path.split('.retry')[1].split('.')[0])
+                    if ".retry" in original_path:
+                        retry_count = int(
+                            original_path.split(".retry")[1].split(".")[0]
+                        )
                     retry_count += 1
 
                     new_path = f"{base_name}.retry{retry_count}.json"
@@ -103,11 +125,11 @@ class JobManager:
         self.maybe_cleanup()
 
         for filename in sorted(os.listdir(queue_dir)):
-            if not filename.startswith('job-'):
+            if not filename.startswith("job-"):
                 continue
 
             job_path = os.path.join(queue_dir, filename)
-            processing_path = job_path + '.processing'
+            processing_path = job_path + ".processing"
 
             try:
                 # Atomic claim via rename
@@ -153,24 +175,24 @@ class JobManager:
         """Mark a job as failed with error information"""
         try:
             # Read job
-            with open(processing_path, 'r') as f:
+            with open(processing_path, "r") as f:
                 job = json.load(f)
 
             # Add error information
-            job['last_error'] = error_msg
-            job['failed_at'] = datetime.now(timezone.utc).isoformat()
+            job["last_error"] = error_msg
+            job["failed_at"] = datetime.now(timezone.utc).isoformat()
 
             # Write to errors directory
-            error_dir = os.path.join(self.queue_dir, 'errors')
+            error_dir = os.path.join(self.queue_dir, "errors")
             os.makedirs(error_dir, exist_ok=True)
 
             # Generate error filename
-            timestamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
             error_filename = f"failed-{timestamp}-{os.path.basename(processing_path).replace('.processing', '')}"
             error_path = os.path.join(error_dir, error_filename)
 
             # Write job with error info
-            with open(error_path, 'w') as f:
+            with open(error_path, "w") as f:
                 json.dump(job, f, indent=2)
 
             # Remove processing file
@@ -182,7 +204,7 @@ class JobManager:
             print(f"[JobManager] Error marking job as failed: {e}")
             # Try to at least move the file
             try:
-                error_dir = os.path.join(self.queue_dir, 'errors')
+                error_dir = os.path.join(self.queue_dir, "errors")
                 os.makedirs(error_dir, exist_ok=True)
                 error_path = os.path.join(error_dir, os.path.basename(processing_path))
                 os.rename(processing_path, error_path)

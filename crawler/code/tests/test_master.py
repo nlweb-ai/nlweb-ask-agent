@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Test script for master.py with local test data"""
 
-import sys
 import os
+import sys
 
 # Add parent directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'core'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "core"))
 
 import master
+
 
 def test_schema_map_parsing():
     """Test parsing of our generated schema_map.xml files"""
@@ -16,7 +17,7 @@ def test_schema_map_parsing():
     test_sites = [
         "http://localhost:8000/hebbarskitchen_com",
         "http://localhost:8000/hebbarskitchen_com/schema_map.xml",
-        "http://localhost:8000/imdb_com"
+        "http://localhost:8000/imdb_com",
     ]
 
     print("Testing schema URL extraction:\n")
@@ -32,6 +33,7 @@ def test_schema_map_parsing():
         else:
             print(f"  No schema files found")
         print()
+
 
 def test_xml_parsing_directly():
     """Test XML parsing with actual content from our files"""
@@ -57,16 +59,25 @@ def test_xml_parsing_directly():
   </url>
 </urlset>"""
 
-    urls: list[str] = master.parse_schema_map_xml(localhost_port_format, "http://localhost:8000/test_site/")
+    urls: list[str] = master.parse_schema_map_xml(
+        localhost_port_format, "http://localhost:8000/test_site/"
+    )
     assert urls == [
         ("http://localhost:8000/test_site/1.json", "structuredData/schema.org"),
         ("http://localhost:8000/test_site/2.json", "structuredData/schema.org"),
     ]
-    
-    urls = master.parse_schema_map_xml(remote_with_tsv_format, "https://yoast-site-recipes.azurewebsites.net/wp-json/yoast/v1/schema-aggregator/get-schema/post")
+
+    urls = master.parse_schema_map_xml(
+        remote_with_tsv_format,
+        "https://yoast-site-recipes.azurewebsites.net/wp-json/yoast/v1/schema-aggregator/get-schema/post",
+    )
     assert urls == [
-        ("https://yoast-site-recipes.azurewebsites.net/wp-json/yoast/v1/schema-aggregator/get-schema/post", "structuredData/schema.org+tsv")
+        (
+            "https://yoast-site-recipes.azurewebsites.net/wp-json/yoast/v1/schema-aggregator/get-schema/post",
+            "structuredData/schema.org+tsv",
+        )
     ]
+
 
 if __name__ == "__main__":
     print("=" * 60)

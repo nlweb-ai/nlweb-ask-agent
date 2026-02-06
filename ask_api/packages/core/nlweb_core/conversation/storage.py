@@ -8,10 +8,10 @@ WARNING: This code is under development and may undergo changes in future releas
 Backwards compatibility is not guaranteed at this time.
 """
 
-from abc import ABC, abstractmethod
-from typing import List, Optional
 import importlib
 import threading
+from abc import ABC, abstractmethod
+from typing import List, Optional
 
 from nlweb_core.conversation.models import ConversationMessage
 
@@ -31,9 +31,7 @@ class ConversationStorageInterface(ABC):
 
     @abstractmethod
     async def get_messages(
-        self,
-        conversation_id: str,
-        limit: int = 100
+        self, conversation_id: str, limit: int = 100
     ) -> List[ConversationMessage]:
         """
         Get messages for a conversation.
@@ -48,11 +46,7 @@ class ConversationStorageInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_user_conversations(
-        self,
-        user_id: str,
-        limit: int = 20
-    ) -> List[str]:
+    async def get_user_conversations(self, user_id: str, limit: int = 20) -> List[str]:
         """
         Get conversation IDs for a specific user.
 
@@ -81,7 +75,11 @@ class ConversationStorageClient:
     Client that routes to appropriate storage backend based on configuration.
     """
 
-    def __init__(self, storage_config=None, backend: Optional[ConversationStorageInterface] = None):
+    def __init__(
+        self,
+        storage_config=None,
+        backend: Optional[ConversationStorageInterface] = None,
+    ):
         """
         Initialize storage client.
 
@@ -95,7 +93,9 @@ class ConversationStorageClient:
         else:
             self.backend = self._create_backend_from_config(storage_config)
 
-    def _create_backend_from_config(self, storage_config) -> ConversationStorageInterface:
+    def _create_backend_from_config(
+        self, storage_config
+    ) -> ConversationStorageInterface:
         """
         Create the appropriate storage backend from configuration.
 
@@ -139,18 +139,12 @@ class ConversationStorageClient:
         await self.backend.store_message(message)
 
     async def get_messages(
-        self,
-        conversation_id: str,
-        limit: int = 100
+        self, conversation_id: str, limit: int = 100
     ) -> List[ConversationMessage]:
         """Get messages for a conversation."""
         return await self.backend.get_messages(conversation_id, limit)
 
-    async def get_user_conversations(
-        self,
-        user_id: str,
-        limit: int = 20
-    ) -> List[str]:
+    async def get_user_conversations(self, user_id: str, limit: int = 20) -> List[str]:
         """Get conversation IDs for a user."""
         return await self.backend.get_user_conversations(user_id, limit)
 

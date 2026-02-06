@@ -8,13 +8,13 @@ WARNING: This code is under development and may undergo changes in future releas
 Backwards compatibility is not guaranteed at this time.
 """
 
-import uuid
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from nlweb_core.protocol.models import AskRequest, ResultObject
 from nlweb_core.conversation.models import ConversationMessage
+from nlweb_core.protocol.models import AskRequest, ResultObject
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +47,7 @@ class ConversationSaver:
     def _get_or_create_conversation_id(self, request: AskRequest) -> str:
         """Get conversation_id from meta.session_context or create new one."""
         meta = request.meta
-        if (meta and
-            meta.session_context and
-            meta.session_context.conversation_id):
+        if meta and meta.session_context and meta.session_context.conversation_id:
             return meta.session_context.conversation_id
         return str(uuid.uuid4())
 
@@ -58,8 +56,8 @@ class ConversationSaver:
         meta = request.meta
         if meta and meta.user:
             if isinstance(meta.user, dict):
-                return meta.user.get('id') or meta.user.get('user_id')
-            elif hasattr(meta.user, 'id'):
+                return meta.user.get("id") or meta.user.get("user_id")
+            elif hasattr(meta.user, "id"):
                 return meta.user.id
         return None
 
@@ -93,8 +91,7 @@ class ConversationSaver:
             result_objects = None
             if results:
                 result_objects = [
-                    ResultObject(**r) if isinstance(r, dict) else r
-                    for r in results
+                    ResultObject(**r) if isinstance(r, dict) else r for r in results
                 ]
 
             prefer = request.prefer
@@ -107,8 +104,8 @@ class ConversationSaver:
                 metadata={
                     "user_id": user_id,
                     "site": request.query.site,
-                    "response_format": prefer.response_format if prefer else None
-                }
+                    "response_format": prefer.response_format if prefer else None,
+                },
             )
 
             await self.storage_client.store_message(message)

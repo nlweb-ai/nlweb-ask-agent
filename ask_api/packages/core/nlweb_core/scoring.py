@@ -12,11 +12,10 @@ WARNING: This code is under development and may undergo changes in future releas
 Backwards compatibility is not guaranteed at this time.
 """
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
 import asyncio
 import logging
-
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -135,5 +134,3 @@ class ScoringLLMProvider(ABC):
     async def close(self) -> None:
         """Close the provider and release resources."""
         pass
-
-

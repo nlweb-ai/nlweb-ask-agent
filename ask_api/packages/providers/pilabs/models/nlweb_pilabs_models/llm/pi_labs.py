@@ -1,9 +1,9 @@
+import json
 import logging
 from typing import cast
-import httpx
-import json
 
-from nlweb_core.scoring import ScoringLLMProvider, ScoringContext
+import httpx
+from nlweb_core.scoring import ScoringContext, ScoringLLMProvider
 
 logger = logging.getLogger(__name__)
 
@@ -52,21 +52,27 @@ class PiLabsScoringProvider(ScoringLLMProvider):
         payload = []
         for ctx in contexts:
             if ctx.item_description is not None:
-                payload.append({
-                    "llm_input": ctx.query,
-                    "llm_output": ctx.item_description,
-                    "scoring_spec": scoring_spec,
-                })
+                payload.append(
+                    {
+                        "llm_input": ctx.query,
+                        "llm_output": ctx.item_description,
+                        "scoring_spec": scoring_spec,
+                    }
+                )
             else:
-                payload.append({
-                    "llm_input": "",
-                    "llm_output": json.dumps({
-                        "query": ctx.query,
-                        "intent": ctx.intent,
-                        "required_info": ctx.required_info,
-                    }),
-                    "scoring_spec": scoring_spec,
-                })
+                payload.append(
+                    {
+                        "llm_input": "",
+                        "llm_output": json.dumps(
+                            {
+                                "query": ctx.query,
+                                "intent": ctx.intent,
+                                "required_info": ctx.required_info,
+                            }
+                        ),
+                        "scoring_spec": scoring_spec,
+                    }
+                )
 
         try:
             resp = await self._client.post(
@@ -76,7 +82,9 @@ class PiLabsScoringProvider(ScoringLLMProvider):
                 timeout=timeout,
             )
             if resp.status_code != 200:
-                logger.error(f"Pi Labs scoring API error {resp.status_code}: {resp.text}")
+                logger.error(
+                    f"Pi Labs scoring API error {resp.status_code}: {resp.text}"
+                )
             resp.raise_for_status()
             scores = [r.get("total_score", 0) * 100 for r in resp.json()]
             return cast(list[float | BaseException], scores)

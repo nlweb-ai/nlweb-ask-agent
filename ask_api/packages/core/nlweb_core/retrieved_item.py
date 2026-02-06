@@ -93,5 +93,3 @@ class RetrievedItem:
         raise ValueError(
             f"schema_object must be str, dict, or list[dict], got {type(raw).__name__}"
         )
-
-

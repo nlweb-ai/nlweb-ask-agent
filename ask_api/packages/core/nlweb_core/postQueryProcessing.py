@@ -45,7 +45,7 @@ class PostQueryProcessing:
         query_text: str,
         modes: list[str],
         send_results: Callable[[list], Awaitable[None]],
-        start_num: int = 0
+        start_num: int = 0,
     ) -> None:
         """Execute post-query processing based on mode.
 
@@ -65,7 +65,7 @@ class PostQueryProcessing:
         results: list[dict],
         query_text: str,
         send_results: Callable[[list], Awaitable[None]],
-        start_num: int = 0
+        start_num: int = 0,
     ) -> None:
         """Generate and send a summary of the top results."""
         if not results:

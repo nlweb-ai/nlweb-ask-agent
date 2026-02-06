@@ -8,15 +8,15 @@ WARNING: This code is under development and may undergo changes in future releas
 Backwards compatibility is not guaranteed at this time.
 """
 
-from typing import List, Optional
-from datetime import datetime
 import uuid
+from datetime import datetime
+from typing import List, Optional
 
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models
 
-from nlweb_core.conversation.storage import ConversationStorageInterface
 from nlweb_core.conversation.models import ConversationMessage
+from nlweb_core.conversation.storage import ConversationStorageInterface
 
 
 class QdrantStorage(ConversationStorageInterface):
@@ -40,10 +40,7 @@ class QdrantStorage(ConversationStorageInterface):
         # Initialize Qdrant client
         if config.url:
             # Remote Qdrant
-            self.client = AsyncQdrantClient(
-                url=config.url,
-                api_key=config.api_key
-            )
+            self.client = AsyncQdrantClient(url=config.url, api_key=config.api_key)
         elif config.database_path:
             # Local Qdrant
             self.client = AsyncQdrantClient(path=config.database_path)
@@ -61,8 +58,7 @@ class QdrantStorage(ConversationStorageInterface):
         # Check if collection exists
         collections = await self.client.get_collections()
         collection_exists = any(
-            col.name == self.collection_name
-            for col in collections.collections
+            col.name == self.collection_name for col in collections.collections
         )
 
         if not collection_exists:
@@ -84,7 +80,7 @@ class QdrantStorage(ConversationStorageInterface):
         await self._ensure_collection_exists()
 
         # Convert message to dict for storage
-        payload = message.model_dump(mode='json')
+        payload = message.model_dump(mode="json")
 
         # Generate a unique point ID
         point_id = str(uuid.uuid4())
@@ -96,15 +92,13 @@ class QdrantStorage(ConversationStorageInterface):
                 models.PointStruct(
                     id=point_id,
                     vector={},  # Empty vector
-                    payload=payload
+                    payload=payload,
                 )
-            ]
+            ],
         )
 
     async def get_messages(
-        self,
-        conversation_id: str,
-        limit: int = 100
+        self, conversation_id: str, limit: int = 100
     ) -> List[ConversationMessage]:
         """
         Get messages for a conversation.
@@ -125,13 +119,13 @@ class QdrantStorage(ConversationStorageInterface):
                 must=[
                     models.FieldCondition(
                         key="conversation_id",
-                        match=models.MatchValue(value=conversation_id)
+                        match=models.MatchValue(value=conversation_id),
                     )
                 ]
             ),
             limit=limit,
             with_payload=True,
-            with_vectors=False
+            with_vectors=False,
         )
 
         points = result[0]  # First element is the list of points
@@ -141,8 +135,8 @@ class QdrantStorage(ConversationStorageInterface):
         for point in points:
             payload = point.payload
             # Convert timestamp string back to datetime
-            if isinstance(payload.get('timestamp'), str):
-                payload['timestamp'] = datetime.fromisoformat(payload['timestamp'])
+            if isinstance(payload.get("timestamp"), str):
+                payload["timestamp"] = datetime.fromisoformat(payload["timestamp"])
             messages.append(ConversationMessage(**payload))
 
         # Sort by timestamp
@@ -150,11 +144,7 @@ class QdrantStorage(ConversationStorageInterface):
 
         return messages
 
-    async def get_user_conversations(
-        self,
-        user_id: str,
-        limit: int = 20
-    ) -> List[str]:
+    async def get_user_conversations(self, user_id: str, limit: int = 20) -> List[str]:
         """
         Get conversation IDs for a specific user.
 
@@ -173,14 +163,13 @@ class QdrantStorage(ConversationStorageInterface):
             scroll_filter=models.Filter(
                 must=[
                     models.FieldCondition(
-                        key="metadata.user_id",
-                        match=models.MatchValue(value=user_id)
+                        key="metadata.user_id", match=models.MatchValue(value=user_id)
                     )
                 ]
             ),
             limit=1000,  # Get more to aggregate by conversation
             with_payload=True,
-            with_vectors=False
+            with_vectors=False,
         )
 
         points = result[0]
@@ -188,18 +177,19 @@ class QdrantStorage(ConversationStorageInterface):
         # Extract unique conversation_ids with their latest timestamp
         conversation_times = {}
         for point in points:
-            conv_id = point.payload['conversation_id']
-            timestamp_str = point.payload['timestamp']
+            conv_id = point.payload["conversation_id"]
+            timestamp_str = point.payload["timestamp"]
             timestamp = datetime.fromisoformat(timestamp_str)
 
-            if conv_id not in conversation_times or timestamp > conversation_times[conv_id]:
+            if (
+                conv_id not in conversation_times
+                or timestamp > conversation_times[conv_id]
+            ):
                 conversation_times[conv_id] = timestamp
 
         # Sort by most recent and return conversation IDs
         sorted_convs = sorted(
-            conversation_times.items(),
-            key=lambda x: x[1],
-            reverse=True
+            conversation_times.items(), key=lambda x: x[1], reverse=True
         )
 
         return [conv_id for conv_id, _ in sorted_convs[:limit]]
@@ -221,9 +211,9 @@ class QdrantStorage(ConversationStorageInterface):
                     must=[
                         models.FieldCondition(
                             key="conversation_id",
-                            match=models.MatchValue(value=conversation_id)
+                            match=models.MatchValue(value=conversation_id),
                         )
                     ]
                 )
-            )
+            ),
         )

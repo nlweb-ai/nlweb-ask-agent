@@ -1,13 +1,14 @@
-import requests
-from urllib.parse import urljoin, urlparse
-import os
 import logging
-from datetime import datetime, timezone
+import os
 import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+from urllib.parse import urljoin, urlparse
+
 import config  # Load environment variables
 import db
-from get_queue import get_queue
 import log
+import requests
+from get_queue import get_queue
 
 log.configure(os.environ)
 logger = logging.getLogger("master")
@@ -61,9 +62,7 @@ def parse_schema_map_xml(xml_content, base_url):
                 if loc is not None and loc.text:
                     # Make URL absolute if needed
                     url = urljoin(base_url, loc.text.strip())
-                    logger.debug(
-                        f"Adding URL: {url} with content_type: {content_type}"
-                    )
+                    logger.debug(f"Adding URL: {url} with content_type: {content_type}")
                     # Return tuple of (url, content_type) to pass format info to worker
                     schema_urls.append((url, content_type))
 
@@ -84,11 +83,7 @@ def get_schema_urls_from_robots(site_url):
 
     # First, try robots.txt
     parsed_site = urlparse(site_url)
-    site_url_normalized = (
-        site_url
-        if parsed_site.scheme
-        else f"https://{site_url}"
-    )
+    site_url_normalized = site_url if parsed_site.scheme else f"https://{site_url}"
     robots_url = urljoin(site_url_normalized, "/robots.txt")
 
     try:
@@ -166,7 +161,9 @@ def is_aajtak_recent_file(url):
     today = date.today()
     for days_ago in range(LAST_X_DAYS):
         check_date = today - timedelta(days=days_ago)
-        date_pattern = f"yyyy={check_date.year}&mm={check_date.month:02d}&dd={check_date.day:02d}"
+        date_pattern = (
+            f"yyyy={check_date.year}&mm={check_date.month:02d}&dd={check_date.day:02d}"
+        )
         if date_pattern in url:
             return True
 
@@ -180,12 +177,20 @@ def filter_aajtak_recent_files(file_url_tuples):
 
     Result: ~3 files instead of 1,500
     """
-    recent_files = [url_tuple for url_tuple in file_url_tuples if is_aajtak_recent_file(url_tuple[0])]
-    logger.info(f"aajtak.in filter: {len(file_url_tuples)} files → {len(recent_files)} recent files")
+    recent_files = [
+        url_tuple
+        for url_tuple in file_url_tuples
+        if is_aajtak_recent_file(url_tuple[0])
+    ]
+    logger.info(
+        f"aajtak.in filter: {len(file_url_tuples)} files → {len(recent_files)} recent files"
+    )
     return recent_files
 
 
-def add_schema_map_to_site(site_url, user_id="system", schema_map_url=None, refresh_mode="diff"):
+def add_schema_map_to_site(
+    site_url, user_id="system", schema_map_url=None, refresh_mode="diff"
+):
     """
     Add a schema map to a site (Level 2 logic):
     1. Fetch and parse the schema_map XML
@@ -211,12 +216,18 @@ def add_schema_map_to_site(site_url, user_id="system", schema_map_url=None, refr
             (site_url, user_id),
         )
         if not cursor.fetchone():
-            db.add_site(conn, site_url, user_id, schema_map_url=schema_map_url, refresh_mode=refresh_mode)
+            db.add_site(
+                conn,
+                site_url,
+                user_id,
+                schema_map_url=schema_map_url,
+                refresh_mode=refresh_mode,
+            )
         else:
             # Site exists - update schema_map_url and refresh_mode
             cursor.execute(
                 "UPDATE sites SET schema_map_url = %s, refresh_mode = %s WHERE site_url = %s AND user_id = %s",
-                (schema_map_url, refresh_mode, site_url, user_id)
+                (schema_map_url, refresh_mode, site_url, user_id),
             )
 
         # Fetch and parse the schema_map to get all JSON file URLs
@@ -229,12 +240,12 @@ def add_schema_map_to_site(site_url, user_id="system", schema_map_url=None, refr
 
         logger.info(f"Fetched schema_map, parsing with base_url: {site_url}")
         json_file_url_tuples = parse_schema_map_xml(response.text, site_url)
-        logger.info(
-            f"Parsed {len(json_file_url_tuples)} files from schema_map"
-        )
+        logger.info(f"Parsed {len(json_file_url_tuples)} files from schema_map")
 
         if not json_file_url_tuples:
-            logger.debug(f"No schema files found in {schema_map_url}; response preview: {response.text[:500]}")
+            logger.debug(
+                f"No schema files found in {schema_map_url}; response preview: {response.text[:500]}"
+            )
             return (0, 0)
 
         # Create triples: (site_url, schema_map_url, file_url) for database
@@ -264,12 +275,16 @@ def add_schema_map_to_site(site_url, user_id="system", schema_map_url=None, refr
             # Queue ALL files from XML (current behavior)
             # Worker will check file_hash and skip if unchanged
             files_to_queue = [url_tuple[0] for url_tuple in json_file_url_tuples]
-            logger.info(f"Refresh mode: FULL - queuing {len(files_to_queue)} files (worker will check hashes)")
+            logger.info(
+                f"Refresh mode: FULL - queuing {len(files_to_queue)} files (worker will check hashes)"
+            )
         else:
             # Queue only NEW files (diff mode)
             # Workers won't encounter existing files at all
             files_to_queue = added_files
-            logger.info(f"Refresh mode: DIFF - queuing {len(files_to_queue)} new files only")
+            logger.info(
+                f"Refresh mode: DIFF - queuing {len(files_to_queue)} new files only"
+            )
 
         # HACK: For aajtak.in, override files_to_queue to only recent files
         # This avoids checking 1,500+ historical files that never change
@@ -277,7 +292,9 @@ def add_schema_map_to_site(site_url, user_id="system", schema_map_url=None, refr
         if site_url == "aajtak.in":
             recent_tuples = filter_aajtak_recent_files(json_file_url_tuples)
             files_to_queue = [url_tuple[0] for url_tuple in recent_tuples]
-            logger.info(f"aajtak.in override: queuing {len(files_to_queue)} recent files (ignoring mode)")
+            logger.info(
+                f"aajtak.in override: queuing {len(files_to_queue)} recent files (ignoring mode)"
+            )
 
         queue = get_queue()
         queued_count = 0
@@ -305,9 +322,13 @@ def add_schema_map_to_site(site_url, user_id="system", schema_map_url=None, refr
                 logger.error(f"Error queuing file {file_url}: {e}")
 
         if refresh_mode == "full":
-            logger.info(f"Queued {queued_count} process_file jobs in FULL mode (worker will skip unchanged via hash)")
+            logger.info(
+                f"Queued {queued_count} process_file jobs in FULL mode (worker will skip unchanged via hash)"
+            )
         else:
-            logger.info(f"Queued {queued_count} new files in DIFF mode (existing files not queued)")
+            logger.info(
+                f"Queued {queued_count} new files in DIFF mode (existing files not queued)"
+            )
 
         # Queue jobs for REMOVED files
         for file_url in removed_files:
@@ -358,7 +379,7 @@ def process_site(site_url, user_id="system"):
         cursor = conn.cursor()
         cursor.execute(
             "SELECT schema_map_url, refresh_mode FROM sites WHERE site_url = %s AND user_id = %s",
-            (site_url, user_id)
+            (site_url, user_id),
         )
         result = cursor.fetchone()
         conn.close()
@@ -371,7 +392,9 @@ def process_site(site_url, user_id="system"):
             stored_schema_map = result[0]
             stored_refresh_mode = result[1] if result[1] else "diff"
             refresh_mode = stored_refresh_mode
-            logger.info(f"Using stored schema_map: {stored_schema_map}, refresh_mode: {refresh_mode}")
+            logger.info(
+                f"Using stored schema_map: {stored_schema_map}, refresh_mode: {refresh_mode}"
+            )
             schema_map_urls = [stored_schema_map]
         else:
             # No stored schema_map, try discovery from robots.txt
@@ -385,9 +408,7 @@ def process_site(site_url, user_id="system"):
             logger.debug(f"No schema maps found for {site_url}")
             return 0  # No schema maps = no files queued
 
-        logger.debug(
-            f"Found {len(schema_map_urls)} schema map(s) for {site_url}"
-        )
+        logger.debug(f"Found {len(schema_map_urls)} schema map(s) for {site_url}")
 
         # For each schema map, use Level 2 logic to add it
         total_files = 0

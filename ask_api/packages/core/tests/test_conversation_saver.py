@@ -2,12 +2,16 @@
 Tests for NLWeb conversation saver module.
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 import uuid
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from nlweb_core.conversation_saver import ConversationSaver, set_conversation_storage_client, get_conversation_storage_client
-from nlweb_core.protocol.models import AskRequest, Query, Meta, SessionContext, Prefer
+import pytest
+from nlweb_core.conversation_saver import (
+    ConversationSaver,
+    get_conversation_storage_client,
+    set_conversation_storage_client,
+)
+from nlweb_core.protocol.models import AskRequest, Meta, Prefer, Query, SessionContext
 
 
 @pytest.fixture(autouse=True)
@@ -90,7 +94,9 @@ class TestGetUserId:
         """Test 'id' takes precedence over 'user_id'."""
         set_conversation_storage_client(None)
         saver = ConversationSaver()
-        request = make_request(remember=True, user={"id": "id-val", "user_id": "user_id-val"})
+        request = make_request(
+            remember=True, user={"id": "id-val", "user_id": "user_id-val"}
+        )
         assert saver._get_user_id(request) == "id-val"
 
     def test_returns_none_for_empty_user_dict(self):
@@ -184,7 +190,9 @@ class TestSave:
             site="example.com",
             response_format="json",
         )
-        results = [{"@type": "Thing", "name": "Test Result", "url": "https://example.com"}]
+        results = [
+            {"@type": "Thing", "name": "Test Result", "url": "https://example.com"}
+        ]
         await saver.save(request, results)
 
         mock_client.store_message.assert_called_once()
@@ -222,4 +230,6 @@ class TestSave:
             # Should not raise
             await saver.save(request, [])
             mock_logger.error.assert_called_once()
-            assert "Failed to save conversation turn" in mock_logger.error.call_args[0][0]
+            assert (
+                "Failed to save conversation turn" in mock_logger.error.call_args[0][0]
+            )

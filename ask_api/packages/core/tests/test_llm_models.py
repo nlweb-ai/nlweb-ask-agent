@@ -6,8 +6,8 @@ Tests for LLM response Pydantic models.
 """
 
 import pytest
+from nlweb_core.llm_models import QuestionResponse, RankingResponse, ScoreResponse
 from pydantic import ValidationError
-from nlweb_core.llm_models import RankingResponse, ScoreResponse, QuestionResponse
 
 
 class TestRankingResponse:

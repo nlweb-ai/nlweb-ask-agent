@@ -8,12 +8,12 @@ WARNING: This code is under development and may undergo changes in future releas
 Backwards compatibility is not guaranteed at this time.
 """
 
-from typing import List
-from datetime import datetime
 import json
+from datetime import datetime
+from typing import List
 
-from nlweb_core.conversation.storage import ConversationStorageInterface
 from nlweb_core.conversation.models import ConversationMessage
+from nlweb_core.conversation.storage import ConversationStorageInterface
 
 # Lazy imports to avoid requiring azure.data.tables when not using this backend
 _azure_imports_done = False
@@ -29,8 +29,14 @@ def _ensure_azure_imports():
     global ResourceExistsError, ResourceNotFoundError
 
     if not _azure_imports_done:
-        from azure.data.tables.aio import TableServiceClient as TSC, TableClient as TC
-        from azure.core.exceptions import ResourceExistsError as REE, ResourceNotFoundError as RNFE
+        from azure.core.exceptions import (
+            ResourceExistsError as REE,
+        )
+        from azure.core.exceptions import (
+            ResourceNotFoundError as RNFE,
+        )
+        from azure.data.tables.aio import TableClient as TC
+        from azure.data.tables.aio import TableServiceClient as TSC
 
         TableServiceClient = TSC
         TableClient = TC
@@ -70,8 +76,12 @@ class AzureTableStorage(ConversationStorageInterface):
         self._client_initialized = False
 
         # Validate configuration
-        if not config.connection_string and not (config.host and config.auth_method == 'azure_ad'):
-            raise ValueError("Azure Table Storage requires either connection_string or (host + auth_method='azure_ad')")
+        if not config.connection_string and not (
+            config.host and config.auth_method == "azure_ad"
+        ):
+            raise ValueError(
+                "Azure Table Storage requires either connection_string or (host + auth_method='azure_ad')"
+            )
 
     async def _ensure_client(self):
         """Create client if not already initialized."""
@@ -84,14 +94,14 @@ class AzureTableStorage(ConversationStorageInterface):
             self.table_service_client = TableServiceClient.from_connection_string(
                 conn_str=self.config.connection_string
             )
-        elif self.config.host and self.config.auth_method == 'azure_ad':
+        elif self.config.host and self.config.auth_method == "azure_ad":
             # Use Azure AD (managed identity) with shared credential
             from nlweb_core.azure_credentials import get_azure_credential
+
             account_url = f"https://{self.config.host}.table.core.windows.net"
             credential = await get_azure_credential()
             self.table_service_client = TableServiceClient(
-                endpoint=account_url,
-                credential=credential
+                endpoint=account_url, credential=credential
             )
 
         # Get table client
@@ -120,23 +130,31 @@ class AzureTableStorage(ConversationStorageInterface):
         PartitionKey: user_id (from metadata)
         RowKey: conversation_id + timestamp (for ordering and uniqueness)
         """
-        user_id = message.metadata.get('user_id', 'anonymous') if message.metadata else 'anonymous'
+        user_id = (
+            message.metadata.get("user_id", "anonymous")
+            if message.metadata
+            else "anonymous"
+        )
 
         # Create RowKey with timestamp for ordering
-        timestamp_str = message.timestamp.strftime('%Y%m%d%H%M%S%f')
+        timestamp_str = message.timestamp.strftime("%Y%m%d%H%M%S%f")
         row_key = f"{message.conversation_id}_{timestamp_str}"
 
         # Serialize request and results to JSON
         entity = {
-            'PartitionKey': user_id,
-            'RowKey': row_key,
-            'message_id': message.message_id,
-            'conversation_id': message.conversation_id,
-            'timestamp': message.timestamp.isoformat(),
-            'request': json.dumps(message.request.model_dump(mode='json')),
-            'results': json.dumps([r.model_dump(mode='json') for r in message.results]) if message.results else None,
-            'metadata': json.dumps(message.metadata) if message.metadata else None,
-            'site': message.metadata.get('site') if message.metadata else None,  # Denormalized for easier filtering
+            "PartitionKey": user_id,
+            "RowKey": row_key,
+            "message_id": message.message_id,
+            "conversation_id": message.conversation_id,
+            "timestamp": message.timestamp.isoformat(),
+            "request": json.dumps(message.request.model_dump(mode="json")),
+            "results": json.dumps([r.model_dump(mode="json") for r in message.results])
+            if message.results
+            else None,
+            "metadata": json.dumps(message.metadata) if message.metadata else None,
+            "site": message.metadata.get("site")
+            if message.metadata
+            else None,  # Denormalized for easier filtering
         }
 
         return entity
@@ -146,25 +164,25 @@ class AzureTableStorage(ConversationStorageInterface):
         from nlweb_core.protocol.models import AskRequest, ResultObject
 
         # Parse JSON fields
-        request_data = json.loads(entity['request'])
+        request_data = json.loads(entity["request"])
         request = AskRequest(**request_data)
 
         results = None
-        if entity.get('results'):
-            results_data = json.loads(entity['results'])
+        if entity.get("results"):
+            results_data = json.loads(entity["results"])
             results = [ResultObject(**r) for r in results_data]
 
         metadata = None
-        if entity.get('metadata'):
-            metadata = json.loads(entity['metadata'])
+        if entity.get("metadata"):
+            metadata = json.loads(entity["metadata"])
 
         return ConversationMessage(
-            message_id=entity['message_id'],
-            conversation_id=entity['conversation_id'],
-            timestamp=datetime.fromisoformat(entity['timestamp']),
+            message_id=entity["message_id"],
+            conversation_id=entity["conversation_id"],
+            timestamp=datetime.fromisoformat(entity["timestamp"]),
             request=request,
             results=results,
-            metadata=metadata
+            metadata=metadata,
         )
 
     async def store_message(self, message: ConversationMessage) -> None:
@@ -179,9 +197,7 @@ class AzureTableStorage(ConversationStorageInterface):
         await self.table_client.create_entity(entity=entity)
 
     async def get_messages(
-        self,
-        conversation_id: str,
-        limit: int = 100
+        self, conversation_id: str, limit: int = 100
     ) -> List[ConversationMessage]:
         """
         Get messages for a conversation.
@@ -200,8 +216,17 @@ class AzureTableStorage(ConversationStorageInterface):
 
         entities = self.table_client.query_entities(
             query_filter=query_filter,
-            select=['PartitionKey', 'RowKey', 'message_id', 'conversation_id', 'timestamp',
-                   'request', 'results', 'metadata', 'site']
+            select=[
+                "PartitionKey",
+                "RowKey",
+                "message_id",
+                "conversation_id",
+                "timestamp",
+                "request",
+                "results",
+                "metadata",
+                "site",
+            ],
         )
 
         messages = []
@@ -215,11 +240,7 @@ class AzureTableStorage(ConversationStorageInterface):
 
         return messages
 
-    async def get_user_conversations(
-        self,
-        user_id: str,
-        limit: int = 20
-    ) -> List[str]:
+    async def get_user_conversations(self, user_id: str, limit: int = 20) -> List[str]:
         """
         Get conversation IDs for a specific user.
 
@@ -236,24 +257,24 @@ class AzureTableStorage(ConversationStorageInterface):
         query_filter = f"PartitionKey eq '{user_id}'"
 
         entities = self.table_client.query_entities(
-            query_filter=query_filter,
-            select=['conversation_id', 'timestamp']
+            query_filter=query_filter, select=["conversation_id", "timestamp"]
         )
 
         # Group by conversation_id and get latest timestamp
         conversation_times = {}
         async for entity in entities:
-            conv_id = entity['conversation_id']
-            timestamp = datetime.fromisoformat(entity['timestamp'])
+            conv_id = entity["conversation_id"]
+            timestamp = datetime.fromisoformat(entity["timestamp"])
 
-            if conv_id not in conversation_times or timestamp > conversation_times[conv_id]:
+            if (
+                conv_id not in conversation_times
+                or timestamp > conversation_times[conv_id]
+            ):
                 conversation_times[conv_id] = timestamp
 
         # Sort by most recent and return conversation IDs
         sorted_convs = sorted(
-            conversation_times.items(),
-            key=lambda x: x[1],
-            reverse=True
+            conversation_times.items(), key=lambda x: x[1], reverse=True
         )
 
         return [conv_id for conv_id, _ in sorted_convs[:limit]]
@@ -271,16 +292,14 @@ class AzureTableStorage(ConversationStorageInterface):
         query_filter = f"conversation_id eq '{conversation_id}'"
 
         entities = self.table_client.query_entities(
-            query_filter=query_filter,
-            select=['PartitionKey', 'RowKey']
+            query_filter=query_filter, select=["PartitionKey", "RowKey"]
         )
 
         # Delete each entity
         async for entity in entities:
             try:
                 await self.table_client.delete_entity(
-                    partition_key=entity['PartitionKey'],
-                    row_key=entity['RowKey']
+                    partition_key=entity["PartitionKey"], row_key=entity["RowKey"]
                 )
             except ResourceNotFoundError:
                 # Entity already deleted, continue

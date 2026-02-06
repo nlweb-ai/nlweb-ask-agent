@@ -7,12 +7,14 @@ This allows correlating logs from different components for the same request.
 """
 
 import contextvars
-import uuid
 import logging
+import uuid
 from typing import Optional
 
 # Context variable to store the current request ID
-request_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar('request_id', default=None)
+request_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "request_id", default=None
+)
 
 
 def set_request_id(request_id: Optional[str] = None) -> str:
@@ -60,7 +62,7 @@ class RequestIDFilter(logging.Filter):
 
     def filter(self, record):
         """Add request_id to the log record."""
-        record.request_id = get_request_id() or 'N/A'
+        record.request_id = get_request_id() or "N/A"
         return True
 
 
@@ -79,7 +81,7 @@ def configure_logging_with_request_id():
         # Update formatter to include request_id if it doesn't already
         if handler.formatter:
             format_str = handler.formatter._fmt
-            if format_str and 'request_id' not in format_str:
+            if format_str and "request_id" not in format_str:
                 # Prepend request_id to existing format
-                new_format = '[%(request_id)s] ' + format_str
+                new_format = "[%(request_id)s] " + format_str
                 handler.setFormatter(logging.Formatter(new_format))

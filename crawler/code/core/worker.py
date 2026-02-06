@@ -1,29 +1,30 @@
-import feedparser
-import logging
-import requests
-import urllib.parse
-import os
-import time
+import hashlib
 import json
+import logging
+import os
+import signal
 import sys
 import threading
-import signal
-import hashlib
+import time
+import urllib.parse
 from datetime import datetime, timezone
+from typing import Any
+
+import feedparser
+import requests
 from flask import Flask, jsonify
 from rss2schema import _entry_to_schema_article
-from typing import Any
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(__file__))
 import config  # Load environment variables
 import db
-from vector_db import vector_db_add, vector_db_delete
-from cosmos_db import cosmos_db_batch_add, cosmos_db_batch_delete
-from scheduler import update_site_last_processed
-from get_queue import get_queue
 import log
+from cosmos_db import cosmos_db_batch_add, cosmos_db_batch_delete
+from get_queue import get_queue
 from rss2schema import parse_rss_to_schema
+from scheduler import update_site_last_processed
+from vector_db import vector_db_add, vector_db_delete
 
 log.configure(os.environ)
 logger = logging.getLogger("worker")
@@ -81,8 +82,7 @@ def old_process_json_array(json_array):
 
 
 type_inherits = lambda parent, type_: (
-    type_ == parent
-    or (isinstance(type_, list) and parent in type_)
+    type_ == parent or (isinstance(type_, list) and parent in type_)
 )
 
 
@@ -90,7 +90,9 @@ should_not_skip = lambda obj: (
     isinstance(obj, dict)
     # Removed @id/url requirement - will generate hash-based ID if needed
     and not any(type_inherits(skipped, obj.get("@type")) for skipped in skip_types)
-    and not ("@graph" in obj and "@id" not in obj)  # Exclude graph containers without @id
+    and not (
+        "@graph" in obj and "@id" not in obj
+    )  # Exclude graph containers without @id
 )
 
 
@@ -139,7 +141,7 @@ def normalize_object_id(obj: dict, file_url: str) -> dict:
     # No @id or url - generate one from file_url + content hash
     # Create stable hash of object content
     content_str = json.dumps(obj, sort_keys=True, ensure_ascii=True)
-    content_hash = hashlib.sha256(content_str.encode('utf-8')).hexdigest()[:16]
+    content_hash = hashlib.sha256(content_str.encode("utf-8")).hexdigest()[:16]
 
     # Use # as delimiter (standard URI fragment identifier)
     obj["@id"] = f"{file_url}#{content_hash}"
@@ -156,7 +158,9 @@ is_graph = lambda item: (
 )
 
 
-def extract_objects_from_schema_file(content: str, content_type: str | None, file_url: str):
+def extract_objects_from_schema_file(
+    content: str, content_type: str | None, file_url: str
+):
     ### Check if this is an RSS feed ###
     if content_type and "rss" in content_type.lower():
         logger.info(f"Parsing RSS feed content")
@@ -164,7 +168,7 @@ def extract_objects_from_schema_file(content: str, content_type: str | None, fil
             # Parse RSS content directly (no download needed)
             feed = feedparser.parse(content)
 
-            if not hasattr(feed, 'entries') or not feed.entries:
+            if not hasattr(feed, "entries") or not feed.entries:
                 logger.warning(f"No entries found in RSS feed")
                 return [], []
 
@@ -185,6 +189,7 @@ def extract_objects_from_schema_file(content: str, content_type: str | None, fil
         except Exception as e:
             logger.error(f"Error parsing RSS feed: {e}")
             import traceback
+
             logger.debug(traceback.format_exc())
             return [], []
 
@@ -210,9 +215,7 @@ def extract_objects_from_schema_file(content: str, content_type: str | None, fil
                 # Split by tab: first part is URL, second part is JSON
                 parts = line.split("\t", 1)
                 if len(parts) != 2:
-                    logger.warning(
-                        f"Line {i} doesn't have exactly 2 parts, skipping"
-                    )
+                    logger.warning(f"Line {i} doesn't have exactly 2 parts, skipping")
                     continue
 
                 page_url, json_str = parts
@@ -220,8 +223,8 @@ def extract_objects_from_schema_file(content: str, content_type: str | None, fil
                 for obj in filter(should_not_skip, parsed):
                     # Use page_url (first column) not file_url for TSV format
                     normalize_object_id(obj, page_url)  # Ensure @id exists
-                    if obj['@id'] not in unique_objects:
-                        unique_objects[obj['@id']] = obj
+                    if obj["@id"] not in unique_objects:
+                        unique_objects[obj["@id"]] = obj
 
                 # Check for @graph arrays within each object which do not have an @id
                 for obj in filter(is_graph, parsed):
@@ -229,8 +232,8 @@ def extract_objects_from_schema_file(content: str, content_type: str | None, fil
                     for gobj in graph_objects:
                         # Use page_url (first column) not file_url for TSV format
                         normalize_object_id(gobj, page_url)  # Ensure @id exists
-                        if gobj['@id'] not in unique_objects:
-                            unique_objects[gobj['@id']] = gobj
+                        if gobj["@id"] not in unique_objects:
+                            unique_objects[gobj["@id"]] = gobj
             except json.JSONDecodeError as e:
                 logger.warning(f"Error parsing JSON on line {i}: {e}")
                 continue
@@ -247,23 +250,25 @@ def extract_objects_from_schema_file(content: str, content_type: str | None, fil
         is_json = False
 
     if is_json and isinstance(content_json, (list, dict)):
-        content_json: list = [content_json] if not isinstance(content_json, list) else content_json
+        content_json: list = (
+            [content_json] if not isinstance(content_json, list) else content_json
+        )
 
         unique_objects = {}
 
         # Skip objects which are invalid or masked in skip_types
         for obj in filter(should_not_skip, content_json):
             normalize_object_id(obj, file_url)  # Ensure @id exists
-            if obj['@id'] not in unique_objects:  # Keep first occurrence
-                unique_objects[obj['@id']] = obj
+            if obj["@id"] not in unique_objects:  # Keep first occurrence
+                unique_objects[obj["@id"]] = obj
 
         # Check for @graph arrays within each object which do not have an @id
         for obj in filter(is_graph, content_json):
             graph_objects = list(filter(should_not_skip, obj["@graph"]))
             for gobj in graph_objects:
                 normalize_object_id(gobj, file_url)  # Ensure @id exists
-                if gobj['@id'] not in unique_objects:
-                    unique_objects[gobj['@id']] = gobj
+                if gobj["@id"] not in unique_objects:
+                    unique_objects[gobj["@id"]] = gobj
 
         return list(unique_objects.keys()), list(unique_objects.values())
 
@@ -287,16 +292,16 @@ def extract_objects_from_schema_file(content: str, content_type: str | None, fil
 
     for obj in filter(should_not_skip, objects):
         normalize_object_id(obj, file_url)  # Ensure @id exists
-        if obj['@id'] not in unique_objects:  # Keep first occurrence
-            unique_objects[obj['@id']] = obj
+        if obj["@id"] not in unique_objects:  # Keep first occurrence
+            unique_objects[obj["@id"]] = obj
 
     # Check for @graph arrays within each object which do not have an @id
     for obj in filter(is_graph, objects):
         graph_objects = list(filter(should_not_skip, obj["@graph"]))
         for gobj in graph_objects:
             normalize_object_id(gobj, file_url)  # Ensure @id exists
-            if gobj['@id'] not in unique_objects:
-                unique_objects[gobj['@id']] = gobj
+            if gobj["@id"] not in unique_objects:
+                unique_objects[gobj["@id"]] = gobj
 
     return list(unique_objects.keys()), list(unique_objects.values())
 
@@ -337,7 +342,9 @@ def extract_schema_data_from_url(url, content_type=None):
         response.raise_for_status()
         logger.info(f"Fetched {url}: {status_code} status, {content_length} bytes")
 
-        ids, objects = extract_objects_from_schema_file(response.text, content_type, url)
+        ids, objects = extract_objects_from_schema_file(
+            response.text, content_type, url
+        )
         num_objects = len(ids)
         logger.debug(f"Extracted {num_objects} IDs from array in {url}")
         return ids, objects
@@ -361,10 +368,12 @@ def augment_object(obj: dict[str, Any]) -> dict[str, Any]:
     Set any fields which might be missing but can be derived from other fields.
     """
     augmented = obj.copy()
-    if (obj.get("@type") == "Article" or (
-        isinstance(obj.get("@type"), list)
-        and "Article" in obj.get("@type") # type: ignore
-    )) and "name" not in obj:
+    if (
+        obj.get("@type") == "Article"
+        or (
+            isinstance(obj.get("@type"), list) and "Article" in obj.get("@type")  # type: ignore
+        )
+    ) and "name" not in obj:
         augmented["name"] = obj.get("headline", "Untitled Article")
     return augmented
 
@@ -399,7 +408,9 @@ def process_job(conn, job):
                 return True  # Job completed successfully (file was deleted)
 
             stored_hash = result[0]
-            logger.info(f"File exists in database (stored hash: {stored_hash or 'NULL'})")
+            logger.info(
+                f"File exists in database (stored hash: {stored_hash or 'NULL'})"
+            )
 
             # Download the file content
             logger.info(f"Downloading file: {job['file_url']}")
@@ -414,32 +425,50 @@ def process_job(conn, job):
                 if content_type and "rss" in content_type.lower():
                     logger.info(f"RSS feed detected - parsing first before hashing")
                     # Parse RSS to schema.org objects
-                    ids, objects = extract_objects_from_schema_file(file_content, content_type, job["file_url"])
+                    ids, objects = extract_objects_from_schema_file(
+                        file_content, content_type, job["file_url"]
+                    )
 
                     # Hash the stable schema.org objects (sorted for consistency)
-                    objects_json = json.dumps(objects, sort_keys=True, ensure_ascii=True)
-                    current_hash = hashlib.sha256(objects_json.encode('utf-8')).hexdigest()
-                    logger.info(f"Calculated hash from {len(objects)} schema.org objects: {current_hash}")
+                    objects_json = json.dumps(
+                        objects, sort_keys=True, ensure_ascii=True
+                    )
+                    current_hash = hashlib.sha256(
+                        objects_json.encode("utf-8")
+                    ).hexdigest()
+                    logger.info(
+                        f"Calculated hash from {len(objects)} schema.org objects: {current_hash}"
+                    )
 
                     # Compare hashes - skip if unchanged
                     if stored_hash and current_hash == stored_hash:
-                        logger.info(f"RSS articles unchanged (hash match), skipping processing")
+                        logger.info(
+                            f"RSS articles unchanged (hash match), skipping processing"
+                        )
                         return True  # Job completed successfully (no work needed)
 
-                    logger.info(f"RSS articles changed or new file, proceeding with processing")
+                    logger.info(
+                        f"RSS articles changed or new file, proceeding with processing"
+                    )
                     # Skip extraction below since we already parsed
                     skip_extraction = True
                 else:
                     # For TSV/JSON: hash raw content
-                    current_hash = hashlib.sha256(file_content.encode('utf-8')).hexdigest()
+                    current_hash = hashlib.sha256(
+                        file_content.encode("utf-8")
+                    ).hexdigest()
                     logger.info(f"Calculated content hash: {current_hash}")
 
                     # Compare hashes - skip if unchanged
                     if stored_hash and current_hash == stored_hash:
-                        logger.info(f"File content unchanged (hash match), skipping processing")
+                        logger.info(
+                            f"File content unchanged (hash match), skipping processing"
+                        )
                         return True  # Job completed successfully (no work needed)
 
-                    logger.info(f"File content changed or new file, proceeding with processing")
+                    logger.info(
+                        f"File content changed or new file, proceeding with processing"
+                    )
                     skip_extraction = False
 
             except requests.RequestException as e:
@@ -460,13 +489,16 @@ def process_job(conn, job):
                 logger.info(f"Extracting entities from file")
                 extraction_start = time.time()
                 try:
-                    ids, objects = extract_objects_from_schema_file(file_content, content_type, job["file_url"])
+                    ids, objects = extract_objects_from_schema_file(
+                        file_content, content_type, job["file_url"]
+                    )
                     extraction_time = time.time() - extraction_start
                     logger.info(f"⏱️  Extraction took {extraction_time:.2f}s")
                 except Exception as e:
                     error_msg = f"Failed to extract schema data: {str(e)}"
                     logger.error(f"Error extracting schema data: {error_msg}")
                     import traceback
+
                     traceback.print_exc()
                     db.log_processing_error(
                         conn,
@@ -478,7 +510,9 @@ def process_job(conn, job):
                     )
                     return False  # Fail the job - cannot process without entities
             else:
-                logger.info(f"Using already extracted entities from RSS parsing ({len(objects)} objects)")
+                logger.info(
+                    f"Using already extracted entities from RSS parsing ({len(objects)} objects)"
+                )
 
             logger.info(
                 f"Extracted {len(ids)} IDs, {len(objects)} objects from {job['file_url']}"
@@ -595,7 +629,9 @@ def process_job(conn, job):
                         error_conn.close()
                     except Exception as log_err:
                         logger.error(f"Failed to log error to database: {log_err}")
-                    logger.warning(f"Cosmos DB upsert failed - hash updated but objects not stored")
+                    logger.warning(
+                        f"Cosmos DB upsert failed - hash updated but objects not stored"
+                    )
                     return False
 
                 # Step 2: Upsert to Vector DB (searchable index)
@@ -630,7 +666,9 @@ def process_job(conn, job):
                         error_conn.close()
                     except Exception as log_err:
                         logger.error(f"Failed to log error to database: {log_err}")
-                    logger.warning(f"Vector DB upsert failed - items in Cosmos but not searchable")
+                    logger.warning(
+                        f"Vector DB upsert failed - items in Cosmos but not searchable"
+                    )
                     return False
             else:
                 logger.info(f"No items to upsert (all were BreadcrumbList or invalid)")
@@ -664,8 +702,7 @@ def process_job(conn, job):
 
             # Get site_url for domain matching
             cursor.execute(
-                "SELECT site_url FROM files WHERE file_url = %s",
-                (job["file_url"],)
+                "SELECT site_url FROM files WHERE file_url = %s", (job["file_url"],)
             )
             result = cursor.fetchone()
             if not result:
@@ -683,7 +720,9 @@ def process_job(conn, job):
                 logger.info(f"Attempting to extract entities from file")
                 # Use extract_schema_data_from_url (same as insertion)
                 # It auto-detects TSV/JSON/RSS format
-                ids, objects = extract_schema_data_from_url(job["file_url"], job.get("content_type"))
+                ids, objects = extract_schema_data_from_url(
+                    job["file_url"], job.get("content_type")
+                )
                 logger.info(f"Extracted {len(ids)} entities from file")
 
                 # Filter entities by domain match using simple substring check
@@ -695,23 +734,29 @@ def process_job(conn, job):
 
                     # Check if entity_id contains the site domain with proper URL delimiters
                     # Handles both with and without www prefix
-                    if any([
-                        f"://{site_url_lower}/" in entity_id_lower,
-                        f"://www.{site_url_lower}/" in entity_id_lower,
-                        f"://{site_url_lower}?" in entity_id_lower,
-                        f"://www.{site_url_lower}?" in entity_id_lower,
-                        f"://{site_url_lower}#" in entity_id_lower,
-                        f"://www.{site_url_lower}#" in entity_id_lower,
-                    ]):
+                    if any(
+                        [
+                            f"://{site_url_lower}/" in entity_id_lower,
+                            f"://www.{site_url_lower}/" in entity_id_lower,
+                            f"://{site_url_lower}?" in entity_id_lower,
+                            f"://www.{site_url_lower}?" in entity_id_lower,
+                            f"://{site_url_lower}#" in entity_id_lower,
+                            f"://www.{site_url_lower}#" in entity_id_lower,
+                        ]
+                    ):
                         ids_to_delete.append(entity_id)
                         logger.debug(f"Will delete: {entity_id} (domain match)")
                     else:
                         ids_skipped.append(entity_id)
                         logger.debug(f"Skipping: {entity_id} (different domain)")
 
-                logger.info(f"Will delete {len(ids_to_delete)} entities matching domain {site_url}")
+                logger.info(
+                    f"Will delete {len(ids_to_delete)} entities matching domain {site_url}"
+                )
                 if ids_skipped:
-                    logger.info(f"Skipped {len(ids_skipped)} IDs with different domains")
+                    logger.info(
+                        f"Skipped {len(ids_skipped)} IDs with different domains"
+                    )
 
             except requests.RequestException as e:
                 logger.warning(f"Could not download file (URL dead?): {e}")
@@ -720,6 +765,7 @@ def process_job(conn, job):
             except Exception as e:
                 logger.error(f"Error extracting entities: {e}")
                 import traceback
+
                 traceback.print_exc()
                 # Continue anyway
 
@@ -737,17 +783,22 @@ def process_job(conn, job):
 
             # Delete entities from Vector DB and Cosmos DB (best effort)
             if ids_to_delete:
-                logger.info(f"Deleting {len(ids_to_delete)} entities from Vector DB and Cosmos DB")
+                logger.info(
+                    f"Deleting {len(ids_to_delete)} entities from Vector DB and Cosmos DB"
+                )
 
                 # Step 1: Delete from Vector DB (make unsearchable)
                 from vector_db import vector_db_batch_delete
 
                 try:
                     vector_db_batch_delete(ids_to_delete)
-                    logger.info(f"Successfully deleted {len(ids_to_delete)} items from Vector DB")
+                    logger.info(
+                        f"Successfully deleted {len(ids_to_delete)} items from Vector DB"
+                    )
                 except Exception as e:
                     logger.error(f"Failed to delete from Vector DB: {e}")
                     import traceback
+
                     traceback.print_exc()
                     # Open fresh connection only for error logging
                     try:
@@ -765,16 +816,21 @@ def process_job(conn, job):
                     except Exception as log_err:
                         logger.error(f"Failed to log error to database: {log_err}")
                     # SQL already committed - cannot rollback
-                    logger.warning(f"Vector DB delete failed - orphaned search results may exist")
+                    logger.warning(
+                        f"Vector DB delete failed - orphaned search results may exist"
+                    )
                     return False  # Fail the job - cleanup later
 
                 # Step 2: Delete from Cosmos DB (remove storage)
                 try:
                     cosmos_db_batch_delete(ids_to_delete)
-                    logger.info(f"Successfully deleted {len(ids_to_delete)} items from Cosmos DB")
+                    logger.info(
+                        f"Successfully deleted {len(ids_to_delete)} items from Cosmos DB"
+                    )
                 except Exception as e:
                     logger.error(f"Failed to delete from Cosmos DB: {e}")
                     import traceback
+
                     traceback.print_exc()
                     # Open fresh connection only for error logging
                     try:
@@ -791,12 +847,16 @@ def process_job(conn, job):
                         error_conn.close()
                     except Exception as log_err:
                         logger.error(f"Failed to log error to database: {log_err}")
-                    logger.warning(f"Cosmos DB delete failed - orphaned storage may exist")
+                    logger.warning(
+                        f"Cosmos DB delete failed - orphaned storage may exist"
+                    )
                     return False  # Fail the job - cleanup later
 
                 logger.info(f"Successfully removed {len(ids_to_delete)} entities")
             else:
-                logger.info(f"No entities to delete (file was dead or no matching entities)")
+                logger.info(
+                    f"No entities to delete (file was dead or no matching entities)"
+                )
 
             return True
 
@@ -997,7 +1057,6 @@ def worker_loop():
 if __name__ == "__main__":
     logger_startup = logging.getLogger("worker.startup")
 
-
     # Test database connectivity first
     logger_startup.info("Testing database connection...")
     try:
@@ -1009,12 +1068,12 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # Test Queue connectivity
-    queue_type = os.getenv('QUEUE_TYPE', 'file')
-    if queue_type == 'storage':
+    queue_type = os.getenv("QUEUE_TYPE", "file")
+    if queue_type == "storage":
         logger_startup.info("Testing Storage Queue connection...")
         try:
-            from azure.storage.queue import QueueServiceClient
             from azure.identity import DefaultAzureCredential
+            from azure.storage.queue import QueueServiceClient
 
             storage_account = os.getenv("AZURE_STORAGE_ACCOUNT_NAME")
             queue_name = os.getenv("AZURE_STORAGE_QUEUE_NAME", "crawler-jobs")

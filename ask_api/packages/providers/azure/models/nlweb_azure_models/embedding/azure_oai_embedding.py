@@ -7,10 +7,10 @@ Azure OpenAI embedding provider implementation.
 
 import logging
 from typing import List
-from openai import AsyncAzureOpenAI
-from nlweb_core.embedding import EmbeddingProvider
-from nlweb_core.azure_credentials import get_openai_token_provider
 
+from nlweb_core.azure_credentials import get_openai_token_provider
+from nlweb_core.embedding import EmbeddingProvider
+from openai import AsyncAzureOpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -68,9 +68,7 @@ class AzureOpenAIEmbeddingProvider(EmbeddingProvider):
         if len(text) > MAX_SINGLE_CHARS:
             text = text[:MAX_SINGLE_CHARS]
 
-        response = await self._client.embeddings.create(
-            input=text, model=self.model
-        )
+        response = await self._client.embeddings.create(input=text, model=self.model)
         return response.data[0].embedding
 
     async def get_batch_embeddings(
@@ -80,11 +78,11 @@ class AzureOpenAIEmbeddingProvider(EmbeddingProvider):
         await self._ensure_client()
         assert self._client is not None
 
-        trimmed = [t[:MAX_BATCH_CHARS] if len(t) > MAX_BATCH_CHARS else t for t in texts]
+        trimmed = [
+            t[:MAX_BATCH_CHARS] if len(t) > MAX_BATCH_CHARS else t for t in texts
+        ]
 
-        response = await self._client.embeddings.create(
-            input=trimmed, model=self.model
-        )
+        response = await self._client.embeddings.create(input=trimmed, model=self.model)
         return [data.embedding for data in response.data]
 
     async def close(self) -> None:

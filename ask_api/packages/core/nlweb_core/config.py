@@ -10,23 +10,24 @@ Backwards compatibility is not guaranteed at this time.
 
 from __future__ import annotations
 
-import os
-import yaml
 import logging
+import os
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
+
+import yaml
 from dotenv import load_dotenv
-from typing import Any, TYPE_CHECKING
 
 from nlweb_core.provider_map import ProviderMap
 
 if TYPE_CHECKING:
     from nlweb_core.embedding import EmbeddingProvider
     from nlweb_core.llm import GenerativeLLMProvider
+    from nlweb_core.retriever import ObjectLookupProvider, RetrievalProvider
     from nlweb_core.scoring import ScoringLLMProvider
     from nlweb_core.site_config.base import SiteConfigLookup
-    from nlweb_core.retriever import ObjectLookupProvider, RetrievalProvider
 
 logger = logging.getLogger(__name__)
 
@@ -186,15 +187,11 @@ class AppConfig:
     )
 
     # Embedding Configuration
-    embedding_providers: dict[str, EmbeddingConfig] = field(
-        default_factory=dict
-    )
+    embedding_providers: dict[str, EmbeddingConfig] = field(default_factory=dict)
     preferred_embedding_provider: str | None = None
 
     # Retrieval Providers
-    retrieval_providers: dict[str, RetrievalConfig] = field(
-        default_factory=dict
-    )
+    retrieval_providers: dict[str, RetrievalConfig] = field(default_factory=dict)
 
     # Conversation Storage
     conversation_storage: ConversationStorageConfig | None = None
@@ -268,37 +265,49 @@ class AppConfig:
     def get_embedding_provider(self, name: str) -> EmbeddingProvider:
         """Get a cached embedding provider instance by name."""
         if _embedding_provider_map is None:
-            raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+            raise RuntimeError(
+                "Providers not initialized. Call initialize_providers() first."
+            )
         return _embedding_provider_map.get(name)
 
     def get_generative_provider(self, name: str) -> GenerativeLLMProvider:
         """Get a cached generative LLM provider instance by name."""
         if _generative_provider_map is None:
-            raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+            raise RuntimeError(
+                "Providers not initialized. Call initialize_providers() first."
+            )
         return _generative_provider_map.get(name)
 
     def get_scoring_provider(self, name: str) -> ScoringLLMProvider:
         """Get a cached scoring LLM provider instance by name."""
         if _scoring_provider_map is None:
-            raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+            raise RuntimeError(
+                "Providers not initialized. Call initialize_providers() first."
+            )
         return _scoring_provider_map.get(name)
 
     def get_site_config_lookup(self, name: str) -> SiteConfigLookup:
         """Get a cached site config lookup instance by name."""
         if _site_config_provider_map is None:
-            raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+            raise RuntimeError(
+                "Providers not initialized. Call initialize_providers() first."
+            )
         return _site_config_provider_map.get(name)
 
     def get_object_lookup_provider(self, name: str) -> ObjectLookupProvider:
         """Get a cached object lookup provider instance by name."""
         if _object_storage_provider_map is None:
-            raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+            raise RuntimeError(
+                "Providers not initialized. Call initialize_providers() first."
+            )
         return _object_storage_provider_map.get(name)
 
     def get_retrieval_provider(self, name: str) -> RetrievalProvider:
         """Get a cached retrieval provider instance by name."""
         if _retrieval_provider_map is None:
-            raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+            raise RuntimeError(
+                "Providers not initialized. Call initialize_providers() first."
+            )
         return _retrieval_provider_map.get(name)
 
     def get_ranking_config(self) -> RankingConfig:
@@ -402,9 +411,7 @@ def _load_embedding_config(
     preferred = None
     for provider_name, provider_cfg in emb_cfg.items():
         if not isinstance(provider_cfg, dict):
-            raise ValueError(
-                f"embedding provider '{provider_name}' must be a mapping"
-            )
+            raise ValueError(f"embedding provider '{provider_name}' must be a mapping")
         import_path, class_name = _extract_import_class(
             provider_cfg, "embedding", provider_name
         )
@@ -430,9 +437,7 @@ def _load_retrieval_provider_config(data: dict) -> dict[str, RetrievalConfig]:
     providers: dict[str, RetrievalConfig] = {}
     for provider_name, provider_cfg in ret_cfg.items():
         if not isinstance(provider_cfg, dict):
-            raise ValueError(
-                f"retrieval provider '{provider_name}' must be a mapping"
-            )
+            raise ValueError(f"retrieval provider '{provider_name}' must be a mapping")
         import_path, class_name = _extract_import_class(
             provider_cfg, "retrieval", provider_name
         )
@@ -507,7 +512,9 @@ def _load_object_storage_config(data: dict) -> dict[str, ObjectStorageConfig]:
 
     obj_cfg = data["object_storage"]
     if not isinstance(obj_cfg, dict):
-        raise ValueError("object_storage must be a mapping of provider names to configs")
+        raise ValueError(
+            "object_storage must be a mapping of provider names to configs"
+        )
 
     providers: dict[str, ObjectStorageConfig] = {}
     for provider_name, provider_cfg in obj_cfg.items():
@@ -615,7 +622,9 @@ def _load_generative_model_config(data: dict) -> dict[str, GenerativeModelConfig
 
     gen_cfg = data["generative_model"]
     if not isinstance(gen_cfg, dict):
-        raise ValueError("generative_model must be a mapping of provider names to configs")
+        raise ValueError(
+            "generative_model must be a mapping of provider names to configs"
+        )
 
     providers: dict[str, GenerativeModelConfig] = {}
     for provider_name, provider_cfg in gen_cfg.items():
@@ -896,7 +905,9 @@ def load_config() -> AppConfig:
 _STATIC_CONFIG: AppConfig | None = None
 
 # Per-request ranking config override (no default - falls back to static config)
-_ranking_config_override: ContextVar[RankingConfig] = ContextVar("ranking_config_override")
+_ranking_config_override: ContextVar[RankingConfig] = ContextVar(
+    "ranking_config_override"
+)
 
 
 def initialize_config() -> AppConfig:
@@ -952,7 +963,9 @@ _retrieval_provider_map: ProviderMap | None = None
 def override_embedding_provider(old_name: str, new_name: str):
     """Temporarily remap an embedding provider name."""
     if _embedding_provider_map is None:
-        raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+        raise RuntimeError(
+            "Providers not initialized. Call initialize_providers() first."
+        )
     with _embedding_provider_map.override(old_name, new_name):
         yield
 
@@ -961,7 +974,9 @@ def override_embedding_provider(old_name: str, new_name: str):
 def override_generative_provider(old_name: str, new_name: str):
     """Temporarily remap a generative provider name."""
     if _generative_provider_map is None:
-        raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+        raise RuntimeError(
+            "Providers not initialized. Call initialize_providers() first."
+        )
     with _generative_provider_map.override(old_name, new_name):
         yield
 
@@ -970,7 +985,9 @@ def override_generative_provider(old_name: str, new_name: str):
 def override_scoring_provider(old_name: str, new_name: str):
     """Temporarily remap a scoring provider name."""
     if _scoring_provider_map is None:
-        raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+        raise RuntimeError(
+            "Providers not initialized. Call initialize_providers() first."
+        )
     with _scoring_provider_map.override(old_name, new_name):
         yield
 
@@ -979,7 +996,9 @@ def override_scoring_provider(old_name: str, new_name: str):
 def override_site_config_provider(old_name: str, new_name: str):
     """Temporarily remap a site config provider name."""
     if _site_config_provider_map is None:
-        raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+        raise RuntimeError(
+            "Providers not initialized. Call initialize_providers() first."
+        )
     with _site_config_provider_map.override(old_name, new_name):
         yield
 
@@ -988,7 +1007,9 @@ def override_site_config_provider(old_name: str, new_name: str):
 def override_object_storage_provider(old_name: str, new_name: str):
     """Temporarily remap an object storage provider name."""
     if _object_storage_provider_map is None:
-        raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+        raise RuntimeError(
+            "Providers not initialized. Call initialize_providers() first."
+        )
     with _object_storage_provider_map.override(old_name, new_name):
         yield
 
@@ -997,14 +1018,22 @@ def override_object_storage_provider(old_name: str, new_name: str):
 def override_retrieval_provider(old_name: str, new_name: str):
     """Temporarily remap a retrieval provider name."""
     if _retrieval_provider_map is None:
-        raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+        raise RuntimeError(
+            "Providers not initialized. Call initialize_providers() first."
+        )
     with _retrieval_provider_map.override(old_name, new_name):
         yield
 
 
 def initialize_providers(config: AppConfig) -> None:
     """Eagerly create all provider instances from config. Call at server startup."""
-    global _embedding_provider_map, _generative_provider_map, _scoring_provider_map, _site_config_provider_map, _object_storage_provider_map, _retrieval_provider_map
+    global \
+        _embedding_provider_map, \
+        _generative_provider_map, \
+        _scoring_provider_map, \
+        _site_config_provider_map, \
+        _object_storage_provider_map, \
+        _retrieval_provider_map
     _embedding_provider_map = ProviderMap(
         config=config.embedding_providers,
         error_prefix="Embedding provider",

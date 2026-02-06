@@ -7,13 +7,13 @@ Uses native async client for proper async/await support.
 """
 
 import hashlib
-import time
 import logging
-from typing import Optional, Dict, Any
+import time
+from typing import Any, Dict, Optional
 from urllib.parse import urlparse
-from azure.cosmos.aio import CosmosClient
-from azure.cosmos import exceptions
 
+from azure.cosmos import exceptions
+from azure.cosmos.aio import CosmosClient
 from nlweb_core.azure_credentials import get_azure_credential
 from nlweb_core.site_config import SiteConfigLookup
 
@@ -187,9 +187,7 @@ class CosmosSiteConfigLookup(SiteConfigLookup):
             self.cache.clear()
             logger.info("Entire cache invalidated")
 
-    async def get_config_type(
-        self, site: str, config_type: str
-    ) -> Optional[Any]:
+    async def get_config_type(self, site: str, config_type: str) -> Optional[Any]:
         """
         Retrieve a specific config type for a site.
 

@@ -5,4 +5,4 @@
 
 from nlweb_cosmos_object_db.cosmos_lookup import CosmosObjectLookup
 
-__all__ = ['CosmosObjectLookup']
+__all__ = ["CosmosObjectLookup"]

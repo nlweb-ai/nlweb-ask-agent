@@ -3,14 +3,16 @@
 Create a test user with API key for testing authentication system.
 """
 
-import sys
 import os
+import sys
 
 # Add code/core to path to import our modules
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'code', 'core'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "code", "core"))
+
+import secrets
 
 import db
-import secrets
+
 
 def create_test_user():
     """Create a test user with a known API key"""
@@ -52,20 +54,26 @@ def create_test_user():
             print(f"\n✓ Test user already exists: {user_id}")
             print("  Updating API key...")
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 UPDATE users
                 SET api_key = %s, last_login = GETUTCDATE()
                 WHERE user_id = %s
-            """, (api_key, user_id))
+            """,
+                (api_key, user_id),
+            )
             conn.commit()
             print("  ✓ API key updated")
         else:
             print(f"\n✓ Creating new test user: {user_id}")
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO users (user_id, email, name, provider, api_key, created_at, last_login)
                 VALUES (%s, %s, %s, %s, %s, GETUTCDATE(), GETUTCDATE())
-            """, (user_id, email, name, provider, api_key))
+            """,
+                (user_id, email, name, provider, api_key),
+            )
             conn.commit()
             print("  ✓ Test user created")
 
@@ -111,7 +119,7 @@ def create_test_user():
         print("=" * 80 + "\n")
 
         # Write to a file for easy access
-        with open('.test_api_key', 'w') as f:
+        with open(".test_api_key", "w") as f:
             f.write(api_key)
         print("✓ API key saved to .test_api_key file")
         print("  You can load it with: export TEST_API_KEY=$(cat .test_api_key)")
@@ -119,9 +127,11 @@ def create_test_user():
     except Exception as e:
         print(f"\n✗ Error creating test user: {e}")
         import traceback
+
         traceback.print_exc()
     finally:
         conn.close()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     create_test_user()

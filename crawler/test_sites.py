@@ -4,29 +4,32 @@ Test script for adding/removing sites with schema maps and verifying data loadin
 Tests with real sites: hebbarskitchen, imdb, backcountry
 """
 
-import requests
-import time
-import sys
 import os
+import sys
+import time
+
+import requests
 
 # Configuration
 API_BASE = "http://172.193.209.48/api"
-API_KEY = open('.test_api_key').read().strip() if os.path.exists('.test_api_key') else None
+API_KEY = (
+    open(".test_api_key").read().strip() if os.path.exists(".test_api_key") else None
+)
 
 # Test sites with schema map URLs on guha.com
 TEST_SITES = {
-    'hebbarskitchen': {
-        'site_url': 'https://www.hebbarskitchen.com',
-        'schema_map': 'https://guha.com/data/hebbarskitchen_com/schema_map.xml'
+    "hebbarskitchen": {
+        "site_url": "https://www.hebbarskitchen.com",
+        "schema_map": "https://guha.com/data/hebbarskitchen_com/schema_map.xml",
     },
-    'imdb': {
-        'site_url': 'https://www.imdb.com',
-        'schema_map': 'https://guha.com/data/imdb_com/schema_map.xml'
+    "imdb": {
+        "site_url": "https://www.imdb.com",
+        "schema_map": "https://guha.com/data/imdb_com/schema_map.xml",
     },
-    'backcountry': {
-        'site_url': 'https://www.backcountry.com',
-        'schema_map': 'https://guha.com/data/backcountry_com/schema_map.xml'
-    }
+    "backcountry": {
+        "site_url": "https://www.backcountry.com",
+        "schema_map": "https://guha.com/data/backcountry_com/schema_map.xml",
+    },
 }
 
 
@@ -38,7 +41,9 @@ def verify_schema_map_exists(schema_map_url):
             print(f"  ✓ Schema map exists: {schema_map_url}")
             return True
         else:
-            print(f"  ✗ Schema map not found (HTTP {response.status_code}): {schema_map_url}")
+            print(
+                f"  ✗ Schema map not found (HTTP {response.status_code}): {schema_map_url}"
+            )
             return False
     except Exception as e:
         print(f"  ✗ Error checking schema map: {e}")
@@ -47,14 +52,14 @@ def verify_schema_map_exists(schema_map_url):
 
 def add_site(site_name, site_url, interval_hours=24):
     """Add a site via API"""
-    headers = {'X-API-Key': API_KEY}
+    headers = {"X-API-Key": API_KEY}
 
     try:
         response = requests.post(
             f"{API_BASE}/sites",
             json={"site_url": site_url, "interval_hours": interval_hours},
             headers=headers,
-            timeout=10
+            timeout=10,
         )
 
         if response.status_code == 200:
@@ -70,23 +75,24 @@ def add_site(site_name, site_url, interval_hours=24):
 
 def add_schema_map(site_name, site_url, schema_map_url):
     """Add schema map to a site via API"""
-    headers = {'X-API-Key': API_KEY}
+    headers = {"X-API-Key": API_KEY}
 
     try:
         import urllib.parse
-        encoded_url = urllib.parse.quote(site_url, safe='')
+
+        encoded_url = urllib.parse.quote(site_url, safe="")
 
         response = requests.post(
             f"{API_BASE}/sites/{encoded_url}/schema-files",
             json={"schema_map_url": schema_map_url},
             headers=headers,
-            timeout=30
+            timeout=30,
         )
 
         if response.status_code == 200:
             data = response.json()
-            files_added = data.get('files_added', 0)
-            files_queued = data.get('files_queued', 0)
+            files_added = data.get("files_added", 0)
+            files_queued = data.get("files_queued", 0)
             print(f"  ✓ Added schema map for {site_name}")
             print(f"    Files added: {files_added}, Files queued: {files_queued}")
             return files_added > 0
@@ -100,23 +106,24 @@ def add_schema_map(site_name, site_url, schema_map_url):
 
 def delete_site(site_name, site_url):
     """Delete a site via API"""
-    headers = {'X-API-Key': API_KEY}
+    headers = {"X-API-Key": API_KEY}
 
     try:
         import urllib.parse
-        encoded_url = urllib.parse.quote(site_url, safe='')
+
+        encoded_url = urllib.parse.quote(site_url, safe="")
 
         response = requests.delete(
-            f"{API_BASE}/sites/{encoded_url}",
-            headers=headers,
-            timeout=30
+            f"{API_BASE}/sites/{encoded_url}", headers=headers, timeout=30
         )
 
         if response.status_code == 200:
             data = response.json()
             print(f"  ✓ Deleted site: {site_name}")
             print(f"    Schema maps removed: {data.get('schema_maps_removed', 0)}")
-            print(f"    Files queued for removal: {data.get('files_queued_for_removal', 0)}")
+            print(
+                f"    Files queued for removal: {data.get('files_queued_for_removal', 0)}"
+            )
             return True
         else:
             print(f"  ✗ Failed to delete site {site_name}: {response.text}")
@@ -128,7 +135,7 @@ def delete_site(site_name, site_url):
 
 def get_status():
     """Get current status of all sites"""
-    headers = {'X-API-Key': API_KEY}
+    headers = {"X-API-Key": API_KEY}
 
     try:
         response = requests.get(f"{API_BASE}/status", headers=headers, timeout=10)
@@ -144,15 +151,15 @@ def get_status():
 
 def show_status(title="CURRENT STATUS"):
     """Display current status"""
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(title)
-    print('='*70)
+    print("=" * 70)
 
     status = get_status()
     if not status:
         return
 
-    sites = status.get('sites', [])
+    sites = status.get("sites", [])
 
     if not sites:
         print("  No sites found")
@@ -162,9 +169,9 @@ def show_status(title="CURRENT STATUS"):
     total_ids = 0
 
     for site in sites:
-        site_url = site['site_url']
-        files = site.get('total_files', 0)
-        ids = site.get('total_ids', 0)
+        site_url = site["site_url"]
+        files = site.get("total_files", 0)
+        ids = site.get("total_ids", 0)
 
         total_files += files
         total_ids += ids
@@ -191,8 +198,8 @@ def wait_for_processing(expected_files=None, timeout=120):
             time.sleep(5)
             continue
 
-        sites = status.get('sites', [])
-        total_ids = sum(site.get('total_ids', 0) for site in sites)
+        sites = status.get("sites", [])
+        total_ids = sum(site.get("total_ids", 0) for site in sites)
 
         # Check if IDs are stable (not changing)
         if total_ids == last_ids and total_ids > 0:
@@ -225,7 +232,7 @@ def main():
         sys.exit(1)
 
     # Verify API is accessible
-    headers = {'X-API-Key': API_KEY}
+    headers = {"X-API-Key": API_KEY}
     try:
         response = requests.get(f"{API_BASE}/status", headers=headers, timeout=5)
         if response.status_code != 200:
@@ -245,20 +252,22 @@ def main():
     print("PHASE 1: ADD HEBBARSKITCHEN")
     print("=" * 70)
 
-    site_info = TEST_SITES['hebbarskitchen']
+    site_info = TEST_SITES["hebbarskitchen"]
 
     print("\n1. Verifying schema map exists...")
-    if not verify_schema_map_exists(site_info['schema_map']):
+    if not verify_schema_map_exists(site_info["schema_map"]):
         print("✗ Cannot proceed - schema map not found")
         sys.exit(1)
 
     print("\n2. Adding site...")
-    if not add_site('hebbarskitchen', site_info['site_url']):
+    if not add_site("hebbarskitchen", site_info["site_url"]):
         print("✗ Failed to add site")
         sys.exit(1)
 
     print("\n3. Adding schema map...")
-    if not add_schema_map('hebbarskitchen', site_info['site_url'], site_info['schema_map']):
+    if not add_schema_map(
+        "hebbarskitchen", site_info["site_url"], site_info["schema_map"]
+    ):
         print("✗ Failed to add schema map")
         sys.exit(1)
 
@@ -274,22 +283,24 @@ def main():
     print("PHASE 2: ADD IMDB AND BACKCOUNTRY")
     print("=" * 70)
 
-    for site_name in ['imdb', 'backcountry']:
+    for site_name in ["imdb", "backcountry"]:
         site_info = TEST_SITES[site_name]
 
         print(f"\n{site_name.upper()}:")
         print("1. Verifying schema map exists...")
-        if not verify_schema_map_exists(site_info['schema_map']):
+        if not verify_schema_map_exists(site_info["schema_map"]):
             print(f"⚠ Skipping {site_name} - schema map not found")
             continue
 
         print("2. Adding site...")
-        if not add_site(site_name, site_info['site_url']):
+        if not add_site(site_name, site_info["site_url"]):
             print(f"⚠ Failed to add {site_name}")
             continue
 
         print("3. Adding schema map...")
-        if not add_schema_map(site_name, site_info['site_url'], site_info['schema_map']):
+        if not add_schema_map(
+            site_name, site_info["site_url"], site_info["schema_map"]
+        ):
             print(f"⚠ Failed to add schema map for {site_name}")
             continue
 
@@ -305,10 +316,10 @@ def main():
     print("PHASE 3: REMOVE HEBBARSKITCHEN")
     print("=" * 70)
 
-    site_info = TEST_SITES['hebbarskitchen']
+    site_info = TEST_SITES["hebbarskitchen"]
 
     print("\n1. Deleting hebbarskitchen site...")
-    if not delete_site('hebbarskitchen', site_info['site_url']):
+    if not delete_site("hebbarskitchen", site_info["site_url"]):
         print("✗ Failed to delete site")
         sys.exit(1)
 
@@ -320,8 +331,8 @@ def main():
     # Verify hebbarskitchen is gone
     status = get_status()
     if status:
-        sites = status.get('sites', [])
-        hebbar_found = any(s['site_url'] == site_info['site_url'] for s in sites)
+        sites = status.get("sites", [])
+        hebbar_found = any(s["site_url"] == site_info["site_url"] for s in sites)
 
         if not hebbar_found:
             print("\n✓ Hebbarskitchen successfully removed from sites list")
@@ -339,5 +350,5 @@ def main():
     show_status("FINAL STATUS")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

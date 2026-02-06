@@ -8,12 +8,12 @@ This module provides a reusable ProviderMap class that eagerly instantiates
 providers from a config dict at construction time.
 """
 
+import importlib
+import logging
 from collections.abc import Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Generic, TypeVar, Any, Protocol, cast, runtime_checkable
-import importlib
-import logging
+from typing import Any, Generic, Protocol, TypeVar, cast, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
@@ -86,9 +86,7 @@ class ProviderMap(Generic[T]):
                     f"Loaded {error_prefix.lower()} '{name}': {cfg.class_name}"
                 )
             except (ImportError, AttributeError) as e:
-                raise ValueError(
-                    f"Failed to load {error_prefix.lower()} '{name}': {e}"
-                )
+                raise ValueError(f"Failed to load {error_prefix.lower()} '{name}': {e}")
 
     def get(self, name: str) -> T:
         """
@@ -142,5 +140,7 @@ class ProviderMap(Generic[T]):
             try:
                 await provider.close()
             except Exception as e:
-                logger.warning(f"Error closing {self._error_prefix.lower()} '{name}': {e}")
+                logger.warning(
+                    f"Error closing {self._error_prefix.lower()} '{name}': {e}"
+                )
         self._providers.clear()

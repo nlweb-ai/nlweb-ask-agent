@@ -8,14 +8,15 @@ Backwards compatibility is not guaranteed at this time.
 Code for calling Azure Open AI endpoints for LLM functionality.
 """
 
-import logging
-import json
-from openai import AsyncAzureOpenAI
 import asyncio
-from typing import Dict, Any
-from nlweb_core.llm import GenerativeLLMProvider
-from nlweb_core.scoring import ScoringLLMProvider, ScoringContext
+import json
+import logging
+from typing import Any, Dict
+
 from nlweb_core.azure_credentials import get_openai_token_provider
+from nlweb_core.llm import GenerativeLLMProvider
+from nlweb_core.scoring import ScoringContext, ScoringLLMProvider
+from openai import AsyncAzureOpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -246,7 +247,9 @@ class AzureOpenAIScoringProvider(ScoringLLMProvider):
             )
         elif self.auth_method == "api_key":
             if not self.api_key:
-                raise ValueError("Missing required Azure OpenAI API key for api_key authentication")
+                raise ValueError(
+                    "Missing required Azure OpenAI API key for api_key authentication"
+                )
             self._client = AsyncAzureOpenAI(
                 azure_endpoint=self.endpoint,
                 api_key=self.api_key,

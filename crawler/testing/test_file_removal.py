@@ -7,20 +7,21 @@ Test file removal scenario:
 4. Trigger reprocessing to verify database updates
 """
 
-import sys
 import os
+import subprocess
+import sys
 import time
 import xml.etree.ElementTree as ET
-import requests
-import subprocess
 
-sys.path.insert(0, 'code/core')
+import requests
+
+sys.path.insert(0, "code/core")
 import config
 import db
 
 # Test sites
-TEST_SITES = ['backcountry_com', 'hebbarskitchen_com', 'imdb_com', 'seattle_gov']
-DATA_DIR = 'data'
+TEST_SITES = ["backcountry_com", "hebbarskitchen_com", "imdb_com", "seattle_gov"]
+DATA_DIR = "data"
 API_BASE = "http://localhost:5001/api"
 
 
@@ -30,38 +31,42 @@ def update_schema_maps(num_files=10):
 
     for site in TEST_SITES:
         site_dir = os.path.join(DATA_DIR, site)
-        schema_map_path = os.path.join(site_dir, 'schema_map.xml')
+        schema_map_path = os.path.join(site_dir, "schema_map.xml")
 
         if not os.path.exists(site_dir):
             print(f"  ✗ Site directory not found: {site_dir}")
             continue
 
         # Count available JSON files
-        json_files = sorted([f for f in os.listdir(site_dir) if f.endswith('.json')])
+        json_files = sorted([f for f in os.listdir(site_dir) if f.endswith(".json")])
         available = len(json_files)
 
         # Create new schema_map.xml
-        urlset = ET.Element('urlset', xmlns="http://www.sitemaps.org/schemas/sitemap/0.9")
+        urlset = ET.Element(
+            "urlset", xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        )
         base_url = f"http://localhost:8000/{site}/"
 
         # Add up to num_files entries
         files_to_add = min(num_files, available)
         for i in range(1, files_to_add + 1):
-            url = ET.SubElement(urlset, 'url')
-            url.set('contentType', 'structuredData/schema.org')
-            loc = ET.SubElement(url, 'loc')
+            url = ET.SubElement(urlset, "url")
+            url.set("contentType", "structuredData/schema.org")
+            loc = ET.SubElement(url, "loc")
             loc.text = f"{base_url}{i}.json"
 
         # Write the file with proper formatting
         tree = ET.ElementTree(urlset)
-        ET.indent(tree, space='  ')
+        ET.indent(tree, space="  ")
 
-        with open(schema_map_path, 'wb') as f:
+        with open(schema_map_path, "wb") as f:
             f.write(b'<?xml version="1.0" encoding="utf-8"?>\n')
-            tree.write(f, encoding='utf-8', xml_declaration=False)
-            f.write(b'\n')
+            tree.write(f, encoding="utf-8", xml_declaration=False)
+            f.write(b"\n")
 
-        print(f"  ✓ {site}: Updated to include {files_to_add} files (of {available} available)")
+        print(
+            f"  ✓ {site}: Updated to include {files_to_add} files (of {available} available)"
+        )
 
 
 def clear_all_data():
@@ -74,10 +79,10 @@ def clear_all_data():
     conn.close()
 
     # Clear queue
-    queue_dir = os.getenv('QUEUE_DIR', 'queue')
+    queue_dir = os.getenv("QUEUE_DIR", "queue")
     if os.path.exists(queue_dir):
         for f in os.listdir(queue_dir):
-            if f.endswith('.json') or f.endswith('.processing'):
+            if f.endswith(".json") or f.endswith(".processing"):
                 os.remove(os.path.join(queue_dir, f))
 
     print("  ✓ Database and queue cleared")
@@ -92,15 +97,15 @@ def add_and_process_sites():
 
         # Add site
         response = requests.post(
-            f"{API_BASE}/sites",
-            json={"site_url": site_url, "interval_hours": 24}
+            f"{API_BASE}/sites", json={"site_url": site_url, "interval_hours": 24}
         )
         if response.status_code == 200:
             print(f"  ✓ Added {site}")
 
         # Trigger processing
         import urllib.parse
-        encoded_url = urllib.parse.quote(site_url, safe='')
+
+        encoded_url = urllib.parse.quote(site_url, safe="")
         response = requests.post(f"{API_BASE}/process/{encoded_url}")
         if response.status_code == 200:
             print(f"  ✓ Triggered processing for {site}")
@@ -108,7 +113,9 @@ def add_and_process_sites():
 
 def wait_for_processing(expected_files_per_site=10, timeout=60):
     """Wait for initial processing to complete"""
-    print(f"\nWaiting for processing (expecting {expected_files_per_site} files per site)...")
+    print(
+        f"\nWaiting for processing (expecting {expected_files_per_site} files per site)..."
+    )
 
     start_time = time.time()
     while time.time() - start_time < timeout:
@@ -116,8 +123,8 @@ def wait_for_processing(expected_files_per_site=10, timeout=60):
         response = requests.get(f"{API_BASE}/queue/status")
         if response.status_code == 200:
             data = response.json()
-            pending = data.get('pending_jobs', 0)
-            processing = data.get('processing_jobs', 0)
+            pending = data.get("pending_jobs", 0)
+            processing = data.get("processing_jobs", 0)
 
             if pending == 0 and processing == 0:
                 print("  ✓ All jobs completed")
@@ -131,7 +138,9 @@ def wait_for_processing(expected_files_per_site=10, timeout=60):
 
 def check_database_state(expected_files_per_site=10):
     """Check current database state and return statistics"""
-    print(f"\nChecking database state (expecting {expected_files_per_site} files per site)...")
+    print(
+        f"\nChecking database state (expecting {expected_files_per_site} files per site)..."
+    )
 
     conn = db.get_connection()
     cursor = conn.cursor()
@@ -156,7 +165,7 @@ def check_database_state(expected_files_per_site=10):
     total_ids = 0
 
     for site_url, file_count, id_count in results:
-        site_name = site_url.split('/')[-1]
+        site_name = site_url.split("/")[-1]
         total_files += file_count
         total_ids += id_count
         status = "✓" if file_count == expected_files_per_site else "✗"
@@ -176,7 +185,7 @@ def remove_files_from_schema_maps(files_to_remove=3):
 
     for site in TEST_SITES:
         site_dir = os.path.join(DATA_DIR, site)
-        schema_map_path = os.path.join(site_dir, 'schema_map.xml')
+        schema_map_path = os.path.join(site_dir, "schema_map.xml")
 
         if not os.path.exists(schema_map_path):
             continue
@@ -186,32 +195,34 @@ def remove_files_from_schema_maps(files_to_remove=3):
         root = tree.getroot()
 
         # Find all URL elements
-        namespace = {'sitemap': 'http://www.sitemaps.org/schemas/sitemap/0.9'}
-        urls = root.findall('sitemap:url', namespace) or root.findall('url')
+        namespace = {"sitemap": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+        urls = root.findall("sitemap:url", namespace) or root.findall("url")
 
         # Track which files we're removing
         site_removed = []
 
         # Remove the last 'files_to_remove' entries
         for i in range(min(files_to_remove, len(urls))):
-            url_to_remove = urls[-(i+1)]
-            loc = url_to_remove.find('sitemap:loc', namespace) or url_to_remove.find('loc')
+            url_to_remove = urls[-(i + 1)]
+            loc = url_to_remove.find("sitemap:loc", namespace) or url_to_remove.find(
+                "loc"
+            )
             if loc is not None:
                 file_url = loc.text
-                file_name = file_url.split('/')[-1]
+                file_name = file_url.split("/")[-1]
                 site_removed.append(file_name)
             root.remove(url_to_remove)
 
         removed_files[site] = site_removed
 
         # Write updated schema_map
-        ET.indent(tree, space='  ')
-        with open(schema_map_path, 'wb') as f:
+        ET.indent(tree, space="  ")
+        with open(schema_map_path, "wb") as f:
             f.write(b'<?xml version="1.0" encoding="utf-8"?>\n')
-            tree.write(f, encoding='utf-8', xml_declaration=False)
-            f.write(b'\n')
+            tree.write(f, encoding="utf-8", xml_declaration=False)
+            f.write(b"\n")
 
-        remaining = len(root.findall('sitemap:url', namespace) or root.findall('url'))
+        remaining = len(root.findall("sitemap:url", namespace) or root.findall("url"))
         print(f"  ✓ {site}: Removed {len(site_removed)} files, {remaining} remaining")
         if site_removed:
             print(f"      Removed: {', '.join(site_removed)}")
@@ -226,7 +237,8 @@ def trigger_reprocessing():
     for site in TEST_SITES:
         site_url = f"http://localhost:8000/{site}"
         import urllib.parse
-        encoded_url = urllib.parse.quote(site_url, safe='')
+
+        encoded_url = urllib.parse.quote(site_url, safe="")
         response = requests.post(f"{API_BASE}/process/{encoded_url}")
         if response.status_code == 200:
             print(f"  ✓ Triggered reprocessing for {site}")
@@ -248,11 +260,14 @@ def verify_removed_files(removed_files):
             file_url = f"{site_url}/{file_name}"
 
             # Check if file is marked as inactive
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT is_active
                 FROM files
                 WHERE file_url = ?
-            """, file_url)
+            """,
+                file_url,
+            )
 
             result = cursor.fetchone()
             if result and result[0] == 0:
@@ -262,11 +277,14 @@ def verify_removed_files(removed_files):
                 all_correct = False
 
             # Check that IDs are removed
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT COUNT(*)
                 FROM ids
                 WHERE file_url = ?
-            """, file_url)
+            """,
+                file_url,
+            )
 
             count = cursor.fetchone()[0]
             if count == 0:
@@ -337,16 +355,20 @@ def main():
 
     print(f"\nInitial state: {initial_files} files, {initial_ids} IDs")
     print(f"Final state:   {final_files} files, {final_ids} IDs")
-    print(f"Difference:    {initial_files - final_files} files removed, {initial_ids - final_ids} IDs removed")
+    print(
+        f"Difference:    {initial_files - final_files} files removed, {initial_ids - final_ids} IDs removed"
+    )
 
     expected_files_removed = len(TEST_SITES) * 3
     if (initial_files - final_files) == expected_files_removed:
         print(f"\n✓ TEST PASSED: Correctly removed {expected_files_removed} files")
     else:
-        print(f"\n✗ TEST FAILED: Expected to remove {expected_files_removed} files, but removed {initial_files - final_files}")
+        print(
+            f"\n✗ TEST FAILED: Expected to remove {expected_files_removed} files, but removed {initial_files - final_files}"
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Check if services are running
     try:
         response = requests.get(f"{API_BASE}/status", timeout=2)

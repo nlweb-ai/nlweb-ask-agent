@@ -8,6 +8,7 @@ Provides REST endpoints for CRUD operations on site configurations.
 """
 
 import logging
+
 from aiohttp import web
 
 logger = logging.getLogger(__name__)

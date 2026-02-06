@@ -7,11 +7,11 @@ Simple in-memory rate limiter for NLWeb server.
 Uses token bucket algorithm with per-IP and per-user rate limiting.
 """
 
-import time
 import asyncio
+import logging
+import time
 from collections import defaultdict
 from typing import Dict, Tuple
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -47,10 +47,7 @@ class TokenBucket:
             # Refill tokens based on time elapsed
             now = time.time()
             elapsed = now - self.last_refill
-            self.tokens = min(
-                self.capacity,
-                self.tokens + (elapsed * self.refill_rate)
-            )
+            self.tokens = min(self.capacity, self.tokens + (elapsed * self.refill_rate))
             self.last_refill = now
 
             # Try to consume tokens
@@ -68,11 +65,7 @@ class RateLimiter:
     Supports per-IP and per-user rate limiting with configurable limits.
     """
 
-    def __init__(
-        self,
-        requests_per_minute: int = 60,
-        burst_size: int = 10
-    ):
+    def __init__(self, requests_per_minute: int = 60, burst_size: int = 10):
         """
         Initialize rate limiter.
 
@@ -100,8 +93,7 @@ class RateLimiter:
         """Get existing bucket or create new one."""
         if client_id not in self.buckets:
             self.buckets[client_id] = TokenBucket(
-                capacity=self.burst_size,
-                refill_rate=self.refill_rate
+                capacity=self.burst_size, refill_rate=self.refill_rate
             )
         return self.buckets[client_id]
 
@@ -125,18 +117,18 @@ class RateLimiter:
 
         # Calculate rate limit headers
         headers = {
-            'X-RateLimit-Limit': str(self.requests_per_minute),
-            'X-RateLimit-Remaining': str(int(bucket.tokens)),
-            'X-RateLimit-Reset': str(int(bucket.last_refill + 60))
+            "X-RateLimit-Limit": str(self.requests_per_minute),
+            "X-RateLimit-Remaining": str(int(bucket.tokens)),
+            "X-RateLimit-Reset": str(int(bucket.last_refill + 60)),
         }
 
         if not allowed:
             # Calculate retry-after in seconds
             tokens_needed = 1 - bucket.tokens
             retry_after = int(tokens_needed / self.refill_rate)
-            headers['Retry-After'] = str(retry_after)
+            headers["Retry-After"] = str(retry_after)
             # Sanitize client_id for logging to prevent log injection
-            sanitized_client_id = client_id.replace('\n', '\\n').replace('\r', '\\r')
+            sanitized_client_id = client_id.replace("\n", "\\n").replace("\r", "\\r")
             logger.warning(f"Rate limit exceeded for {sanitized_client_id}")
 
         return allowed, headers
@@ -161,7 +153,9 @@ class RateLimiter:
                     del self.buckets[client_id]
 
                 if to_remove:
-                    logger.debug(f"Cleaned up {len(to_remove)} inactive rate limit buckets")
+                    logger.debug(
+                        f"Cleaned up {len(to_remove)} inactive rate limit buckets"
+                    )
 
     def start_cleanup_task(self):
         """Start background cleanup task."""
@@ -184,8 +178,7 @@ _rate_limiter = None
 
 
 def get_rate_limiter(
-    requests_per_minute: int = 60,
-    burst_size: int = 10
+    requests_per_minute: int = 60, burst_size: int = 10
 ) -> RateLimiter:
     """
     Get or create global rate limiter instance.
@@ -200,8 +193,7 @@ def get_rate_limiter(
     global _rate_limiter
     if _rate_limiter is None:
         _rate_limiter = RateLimiter(
-            requests_per_minute=requests_per_minute,
-            burst_size=burst_size
+            requests_per_minute=requests_per_minute, burst_size=burst_size
         )
         _rate_limiter.start_cleanup_task()
     return _rate_limiter

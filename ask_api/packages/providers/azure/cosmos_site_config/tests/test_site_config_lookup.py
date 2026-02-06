@@ -18,13 +18,11 @@ import hashlib
 import time as time_module
 
 import pytest
-
 from nlweb_cosmos_site_config.site_config_lookup import (
     CosmosSiteConfigLookup,
     generate_config_id,
     normalize_domain,
 )
-
 
 # =============================================================================
 # Pure Function Tests
@@ -180,9 +178,7 @@ class TestGetConfig:
 
         assert result == {"elicitation": {"prompt": "Test prompt"}}
 
-    async def test_normalizes_site_parameter(
-        self, site_config_lookup, fake_container
-    ):
+    async def test_normalizes_site_parameter(self, site_config_lookup, fake_container):
         """Site parameter is normalized before lookup."""
         normalized = "yelp.com"
         config_id = generate_config_id(normalized)
@@ -205,13 +201,14 @@ class TestGetConfig:
         assert await site_config_lookup.get_config("www.yelp.com") == {"key": "value"}
 
         site_config_lookup.cache.clear()
-        assert await site_config_lookup.get_config("https://yelp.com") == {"key": "value"}
+        assert await site_config_lookup.get_config("https://yelp.com") == {
+            "key": "value"
+        }
 
         site_config_lookup.cache.clear()
-        assert (
-            await site_config_lookup.get_config("https://www.yelp.com/path")
-            == {"key": "value"}
-        )
+        assert await site_config_lookup.get_config("https://www.yelp.com/path") == {
+            "key": "value"
+        }
 
 
 class TestGetConfigType:
@@ -352,7 +349,9 @@ class TestUpdateConfigType:
         config_data = {"complex": [1, 2, 3], "nested": {"deep": {"value": True}}}
 
         # Write using plain domain
-        await site_config_lookup.update_config_type("yelp.com", "test_config", config_data)
+        await site_config_lookup.update_config_type(
+            "yelp.com", "test_config", config_data
+        )
 
         # Read using various URL forms (clear cache between reads)
         site_config_lookup.cache.clear()
@@ -368,7 +367,9 @@ class TestUpdateConfigType:
         assert result2 == config_data
 
         site_config_lookup.cache.clear()
-        result3 = await site_config_lookup.get_config_type("WWW.YELP.COM", "test_config")
+        result3 = await site_config_lookup.get_config_type(
+            "WWW.YELP.COM", "test_config"
+        )
         assert result3 == config_data
 
     async def test_preserves_complex_nested_structures(self, site_config_lookup):
@@ -385,7 +386,9 @@ class TestUpdateConfigType:
             "empty_dict": {},
         }
 
-        await site_config_lookup.update_config_type("yelp.com", "complex", complex_config)
+        await site_config_lookup.update_config_type(
+            "yelp.com", "complex", complex_config
+        )
 
         result = await site_config_lookup.get_config_type("yelp.com", "complex")
         assert result == complex_config
@@ -406,13 +409,15 @@ class TestRoundTripIntegrity:
             {"boolean_true": True, "boolean_false": False},
             {"null_value": None},
             {"empty_string": ""},
-            {"unicode": "Hello \u4e16\u754c \U0001F600"},
+            {"unicode": "Hello \u4e16\u754c \U0001f600"},
             {"special_chars": "line1\nline2\ttab"},
             {"list_of_dicts": [{"a": 1}, {"b": 2}]},
             {"deeply_nested": {"l1": {"l2": {"l3": {"l4": "value"}}}}},
         ],
     )
-    async def test_config_data_survives_roundtrip(self, site_config_lookup, config_data):
+    async def test_config_data_survives_roundtrip(
+        self, site_config_lookup, config_data
+    ):
         """Various data types survive round-trip exactly."""
         await site_config_lookup.update_config_type("test.com", "config", config_data)
 
@@ -466,9 +471,9 @@ class TestDeleteConfigType:
         )
 
         # Verify other type still exists
-        assert await site_config_lookup.get_config_type("yelp.com", "scoring_specs") == {
-            "threshold": 0.5
-        }
+        assert await site_config_lookup.get_config_type(
+            "yelp.com", "scoring_specs"
+        ) == {"threshold": 0.5}
 
     async def test_deletes_entire_document_when_last_config_type(
         self, site_config_lookup
@@ -539,9 +544,7 @@ class TestDeleteFullConfig:
 class TestCaching:
     """Tests for caching behavior."""
 
-    async def test_cache_is_populated_on_read(
-        self, site_config_lookup, fake_container
-    ):
+    async def test_cache_is_populated_on_read(self, site_config_lookup, fake_container):
         """Cache is populated after read."""
         normalized = "yelp.com"
         config_id = generate_config_id(normalized)
@@ -779,9 +782,7 @@ class TestNormalizationIntegration:
         )
 
         # Delete using different variant
-        await site_config_lookup.delete_full_config(
-            "https://WWW.YELP.COM/path?query=1"
-        )
+        await site_config_lookup.delete_full_config("https://WWW.YELP.COM/path?query=1")
 
         # All variants should see no data
         for variant in self.YELP_VARIANTS:
@@ -903,7 +904,9 @@ class TestEdgeCases:
         """Handling of very long domain names."""
         long_domain = "a" * 100 + ".example.com"
 
-        await site_config_lookup.update_config_type(long_domain, "config", {"long": True})
+        await site_config_lookup.update_config_type(
+            long_domain, "config", {"long": True}
+        )
 
         result = await site_config_lookup.get_config_type(long_domain, "config")
         assert result == {"long": True}

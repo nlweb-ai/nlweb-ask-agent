@@ -4,9 +4,10 @@ Script to add IMDB data to production using the schema-files API.
 Uses the finer-grained API endpoint to add schema_map.xml files from guha.com/data/
 """
 
-import requests
 import sys
 from urllib.parse import quote
+
+import requests
 
 # Production configuration
 API_BASE = "https://testing.nlweb.ai/api"
@@ -16,11 +17,12 @@ API_KEY = "tqYiq7xqxSb-iC5WPHi1ek341XCKhl4HLhN5OK9mPaUPBZfQykMoTbQX4jrQddr4"
 SITE_URL = "https://www.imdb.com"
 SCHEMA_MAP_URL = "https://guha.com/data/imdb_com/schema_map.xml"
 
+
 def add_schema_map_to_site(site_url, schema_map_url, api_key):
     """Add a schema map to a site using the schema-files API"""
 
     # URL encode the site_url for the API path
-    encoded_site = quote(site_url, safe='')
+    encoded_site = quote(site_url, safe="")
 
     # Construct the API endpoint
     endpoint = f"{API_BASE}/sites/{encoded_site}/schema-files"
@@ -33,13 +35,8 @@ def add_schema_map_to_site(site_url, schema_map_url, api_key):
     try:
         response = requests.post(
             endpoint,
-            headers={
-                'X-API-Key': api_key,
-                'Content-Type': 'application/json'
-            },
-            json={
-                'schema_map_url': schema_map_url
-            }
+            headers={"X-API-Key": api_key, "Content-Type": "application/json"},
+            json={"schema_map_url": schema_map_url},
         )
 
         if response.status_code == 200:
@@ -57,18 +54,16 @@ def add_schema_map_to_site(site_url, schema_map_url, api_key):
         print(f"\n✗ Error: {e}")
         return False
 
+
 def check_site_status(site_url, api_key):
     """Check the status of a site"""
-    encoded_site = quote(site_url, safe='')
+    encoded_site = quote(site_url, safe="")
     endpoint = f"{API_BASE}/sites/{encoded_site}"
 
     print(f"\nChecking site status...")
 
     try:
-        response = requests.get(
-            endpoint,
-            headers={'X-API-Key': api_key}
-        )
+        response = requests.get(endpoint, headers={"X-API-Key": api_key})
 
         if response.status_code == 200:
             data = response.json()
@@ -86,6 +81,7 @@ def check_site_status(site_url, api_key):
     except Exception as e:
         print(f"Error checking status: {e}")
         return False
+
 
 def main():
     print("=" * 60)
@@ -105,9 +101,12 @@ def main():
         print("\nYou can monitor progress at:")
         print(f"  Web UI: https://testing.nlweb.ai/")
         print(f"  Profile: https://testing.nlweb.ai/profile")
-        print(f"  Site Details: https://testing.nlweb.ai/site-details.html?site={quote(SITE_URL, safe='')}")
+        print(
+            f"  Site Details: https://testing.nlweb.ai/site-details.html?site={quote(SITE_URL, safe='')}"
+        )
 
     return 0 if success else 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

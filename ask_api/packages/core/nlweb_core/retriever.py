@@ -7,7 +7,8 @@ Retrieval and object lookup provider interfaces.
 
 import asyncio
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional, Union
+from typing import Any, Dict, List, Optional, Union
+
 from nlweb_core.retrieved_item import RetrievedItem
 
 

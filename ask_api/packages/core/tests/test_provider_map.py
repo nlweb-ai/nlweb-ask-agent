@@ -3,10 +3,10 @@
 
 """Tests for ProviderMap provider caching and name override infrastructure."""
 
-import pytest
 from dataclasses import dataclass, field
-from nlweb_core.provider_map import ProviderMap
 
+import pytest
+from nlweb_core.provider_map import ProviderMap
 
 # -- Test fixtures -----------------------------------------------------------
 

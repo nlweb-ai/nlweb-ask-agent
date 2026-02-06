@@ -45,6 +45,13 @@ members = [
     "packages/providers/pilabs/models",
 ]
 
+[tool.ruff]
+target-version = "py312"
+exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+
 [tool.pyright]
 venvPath = "."
 venv = ".venv"

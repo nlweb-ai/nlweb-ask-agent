@@ -8,13 +8,14 @@ WARNING: This code is under development and may undergo changes in future releas
 Backwards compatibility is not guaranteed at this time.
 """
 
-from xml.etree import ElementTree as ET
 import asyncio
 import importlib
 import logging
 import os
-from nlweb_core.utils import fill_prompt_variables
+from xml.etree import ElementTree as ET
+
 from nlweb_core.query_analysis.response_models import get_response_model
+from nlweb_core.utils import fill_prompt_variables
 
 logger = logging.getLogger(__name__)
 

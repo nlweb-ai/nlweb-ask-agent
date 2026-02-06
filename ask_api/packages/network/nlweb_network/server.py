@@ -16,34 +16,36 @@ Each endpoint uses an interface adapter to handle protocol-specific
 formatting while routing to the appropriate NLWeb handler.
 """
 
+import os
+
 from aiohttp import request, web
-from aiohttp.web_request import Request
 from aiohttp.web_exceptions import HTTPInternalServerError
+from aiohttp.web_request import Request
 from nlweb_core.config import (
+    RankingConfig,
     get_config,
     initialize_config,
     override_ranking_config,
-    RankingConfig,
 )
 from nlweb_core.handler import SiteSelectingHandler
-from nlweb_network.interfaces import (
-    HTTPJSONInterface,
-    HTTPSSEInterface,
-    MCPStreamableInterface,
-    MCPSSEInterface,
-    A2AStreamableInterface,
-    A2ASSEInterface,
-)
-from nlweb_network.admin_handlers import (
-    get_site_config_handler,
-    get_config_type_handler,
-    update_config_type_handler,
-    delete_config_type_handler,
-    delete_site_config_handler,
-)
-import os
 from pyinstrument import Profiler, processors
 from pyinstrument.renderers import HTMLRenderer
+
+from nlweb_network.admin_handlers import (
+    delete_config_type_handler,
+    delete_site_config_handler,
+    get_config_type_handler,
+    get_site_config_handler,
+    update_config_type_handler,
+)
+from nlweb_network.interfaces import (
+    A2ASSEInterface,
+    A2AStreamableInterface,
+    HTTPJSONInterface,
+    HTTPSSEInterface,
+    MCPSSEInterface,
+    MCPStreamableInterface,
+)
 
 
 async def health_handler(request):
@@ -270,7 +272,9 @@ async def config_override_middleware(app, handler):
     async def middleware(request: Request):
         scoring_questions = request.query.getall("scoring_questions", default=[])
         if scoring_questions:
-            with override_ranking_config(RankingConfig(scoring_questions=scoring_questions)):
+            with override_ranking_config(
+                RankingConfig(scoring_questions=scoring_questions)
+            ):
                 return await handler(request)
         return await handler(request)
 
@@ -279,8 +283,9 @@ async def config_override_middleware(app, handler):
 
 async def init_app(app):
     """Initialize conversation storage on startup."""
-    from nlweb_core.config import get_config
     import sys
+
+    from nlweb_core.config import get_config
 
     config = get_config()
 
@@ -404,7 +409,8 @@ def create_app():
 
     # Enable CORS if configured
     if get_config().server.enable_cors:
-        from aiohttp_cors import setup as cors_setup, ResourceOptions
+        from aiohttp_cors import ResourceOptions
+        from aiohttp_cors import setup as cors_setup
 
         cors = cors_setup(
             app,

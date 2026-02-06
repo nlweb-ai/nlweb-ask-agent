@@ -4,12 +4,13 @@ Start the API server
 Run in terminal 2
 """
 
+import os
 import subprocess
 import sys
-import os
 from pathlib import Path
 
 API_PORT = 5001
+
 
 def main():
     print("=" * 60)
@@ -25,6 +26,7 @@ def main():
     try:
         import flask
         import flask_cors
+
         try:
             import pymssql
         except Exception as e:
@@ -38,7 +40,7 @@ def main():
         sys.exit(1)
 
     # Set environment for API port
-    os.environ['API_PORT'] = str(API_PORT)
+    os.environ["API_PORT"] = str(API_PORT)
 
     print("\nStarting Flask app...")
     print("Press Ctrl+C to stop")
@@ -48,6 +50,7 @@ def main():
         subprocess.run(["python3", "code/core/api.py"])
     except KeyboardInterrupt:
         print("\nAPI server stopped")
+
 
 if __name__ == "__main__":
     main()
