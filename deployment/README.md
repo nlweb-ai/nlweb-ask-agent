@@ -22,26 +22,6 @@ Bicep templates for Azure infrastructure required by ask_api and crawler.
 - Azure subscription with OpenAI access enabled
 - `PI_LABS_ENDPOINT` and `PI_LABS_KEY` environment variables
 
-### GitHub Packages Authentication
-
-The chat-app depends on `@nlweb-ai/search-components` from GitHub Packages, which requires authentication even for public packages.
-
-**One-time setup using the GitHub CLI:**
-
-```bash
-# Login to GitHub if not already authenticated
-gh auth login
-
-# Configure pnpm/npm to use your GitHub token
-pnpm config set //npm.pkg.github.com/:_authToken $(gh auth token)
-```
-
-**For Docker builds**, set `GIT_TOKEN` before running `make build-images`:
-
-```bash
-export GIT_TOKEN=$(gh auth token)
-```
-
 ## Bringing Up a New Environment
 
 Run these commands in sequence:
@@ -51,19 +31,23 @@ Run these commands in sequence:
 make login
 
 # 2. Set required environment variables
+# Please acquire the Pi Lab keys from your admin
 export PI_LABS_ENDPOINT=https://...
 export PI_LABS_KEY=...
 
 # 3. Deploy Azure infrastructure (~15-20 min)
+# Please set the environment to your desired name
 make deploy ENV_NAME=myenv LOCATION=eastus2
 
 # 4. Setup Kubernetes infrastructure (cert-manager, KEDA, ALB, Gateway)
+# Pre-req: Make sure to install helm before running this command
 make setup-k8s ENV_NAME=myenv
 
 # 5. Build Docker images via ACR Tasks
 make build-images ENV_NAME=myenv
 
 # 6. Deploy application to AKS
+# Make sure docker is installed and running
 make install-nlweb ENV_NAME=myenv
 
 # 7. (Optional) Enable TLS
