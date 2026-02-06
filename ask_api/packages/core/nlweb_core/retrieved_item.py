@@ -2,7 +2,7 @@
 # Licensed under the MIT License
 
 """
-Abstract base class for item retrievers.
+Data types for retrieved items.
 
 WARNING: This code is under development and may undergo changes in future releases.
 Backwards compatibility is not guaranteed at this time.
@@ -11,7 +11,6 @@ Backwards compatibility is not guaranteed at this time.
 from __future__ import annotations
 
 import json
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -96,32 +95,3 @@ class RetrievedItem:
         )
 
 
-@dataclass
-class RetrievalParams:
-    """Parameters for item retrieval operations."""
-
-    query_text: str
-    """The query text to search for (decontextualized or original)."""
-
-    site: str = "all"
-    """Site filter for the search. Defaults to 'all'."""
-
-    num_results: int = 50
-    """Maximum number of results to retrieve. Defaults to 50."""
-
-
-class ItemRetriever(ABC):
-    """Abstract base class for item retrievers."""
-
-    @abstractmethod
-    async def retrieve(self, params: RetrievalParams) -> list[RetrievedItem]:
-        """
-        Retrieve items based on the provided parameters.
-
-        Args:
-            params: RetrievalParams containing query_text, site, num_results.
-
-        Returns:
-            List of RetrievedItem objects.
-        """
-        pass

@@ -8,7 +8,7 @@ Retrieval and object lookup provider interfaces.
 import asyncio
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional, Union
-from nlweb_core.item_retriever import ItemRetriever, RetrievedItem
+from nlweb_core.retrieved_item import RetrievedItem
 
 
 class RetrievalProvider(ABC):
@@ -128,15 +128,3 @@ async def enrich_results_from_object_storage(
     enriched_results = await asyncio.gather(*tasks)
 
     return list(enriched_results)
-
-
-def get_item_retriever() -> ItemRetriever:
-    """
-    Factory function to get the configured ItemRetriever instance.
-
-    Returns:
-        ItemRetriever instance (currently VectorDBRetriever)
-    """
-    from nlweb_core.vector_db_retriever import VectorDBRetriever
-
-    return VectorDBRetriever()

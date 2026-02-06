@@ -5,7 +5,7 @@
 
 import pytest
 
-from nlweb_core.item_retriever import RetrievedItem
+from nlweb_core.retrieved_item import RetrievedItem
 from nlweb_core.ranked_result import (
     RankedResult,
     select_best_from_graph,

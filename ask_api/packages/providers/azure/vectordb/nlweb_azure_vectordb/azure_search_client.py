@@ -19,7 +19,7 @@ CredentialType = Union[DefaultAzureCredential, AzureKeyCredential]
 
 from nlweb_core.embedding import get_embedding
 from nlweb_core.retriever import RetrievalProvider
-from nlweb_core.item_retriever import RetrievedItem
+from nlweb_core.retrieved_item import RetrievedItem
 from nlweb_core.azure_credentials import get_azure_credential
 
 

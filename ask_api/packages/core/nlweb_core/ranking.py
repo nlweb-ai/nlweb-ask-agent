@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
 from nlweb_core.config import get_config
-from nlweb_core.item_retriever import RetrievedItem
+from nlweb_core.retrieved_item import RetrievedItem
 from nlweb_core.protocol.models import Query
 from nlweb_core.llm_exceptions import (
     LLMError,

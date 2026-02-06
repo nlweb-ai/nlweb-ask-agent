@@ -113,18 +113,21 @@ class DefaultAskHandler(AskHandler):
         site_config: dict[str, str],
     ) -> list[dict]:
         """Execute the query body by retrieving and ranking items."""
-        from nlweb_core.retriever import get_item_retriever
-        from nlweb_core.item_retriever import RetrievalParams
+        from nlweb_core.retriever import enrich_results_from_object_storage
         from nlweb_core.ranking import Ranking
 
-        retriever = get_item_retriever()
-        retrieved_items = await retriever.retrieve(
-            RetrievalParams(
-                query_text=request.query.effective_query,
-                site=request.query.site,
-                num_results=request.query.num_results,
-            )
+        config = get_config()
+        vectordb_client = config.get_retrieval_provider("default")
+        retrieved_items = await vectordb_client.search(
+            request.query.effective_query,
+            request.query.site,
+            request.query.num_results,
         )
+        if config.object_storage_providers:
+            object_lookup_client = config.get_object_lookup_provider("default")
+            retrieved_items = await enrich_results_from_object_storage(
+                retrieved_items, object_lookup_client
+            )
 
         final_ranked_answers = await Ranking().rank(
             items=retrieved_items,

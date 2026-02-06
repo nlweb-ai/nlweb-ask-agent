@@ -5,7 +5,7 @@ Tests for NLWeb retriever module.
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from nlweb_core.item_retriever import RetrievedItem
+from nlweb_core.retrieved_item import RetrievedItem
 from nlweb_core.retriever import (
     ObjectLookupProvider,
     RetrievalProvider,
