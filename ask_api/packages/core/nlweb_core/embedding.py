@@ -2,106 +2,74 @@
 # Licensed under the MIT License
 
 """
-Wrapper around the various embedding providers.
+Embedding provider interface.
 
-WARNING: This code is under development and may undergo changes in future releases.
-Backwards compatibility is not guaranteed at this time.
+Defines the EmbeddingProvider abstract base class that all embedding
+implementations must inherit from.
 """
 
-from typing import Optional, List
+from abc import ABC, abstractmethod
+from typing import List
 import asyncio
-import threading
-
-from nlweb_core.config import get_config
+import logging
 
 
-# Add locks for thread-safe provider access
-_provider_locks = {
-    "openai": threading.Lock(),
-    "gemini": threading.Lock(),
-    "azure_openai": threading.Lock(),
-    "snowflake": threading.Lock(),
-    "elasticsearch": threading.Lock()
-}
+logger = logging.getLogger(__name__)
 
-async def get_embedding(
-    text: str,
-    provider: Optional[str] = None,
-    model: Optional[str] = None,
-    timeout: int = 30,
-    query_params: Optional[dict] = None
-) -> List[float]:
+
+class EmbeddingProvider(ABC):
     """
-    Get embedding for the provided text using the specified provider and model.
+    Abstract base class for embedding providers.
 
-    Args:
-        text: The text to embed
-        provider: Optional provider name, defaults to preferred_embedding_provider
-        model: Optional model name, defaults to the provider's configured model
-        timeout: Maximum time to wait for embedding response in seconds
-        query_params: Optional query parameters from HTTP request
-
-    Returns:
-        List of floats representing the embedding vector
+    Concrete implementations (e.g., AzureOpenAIEmbeddingProvider) implement
+    the get_embedding and close methods. An optional batch method is provided
+    with a default implementation that calls get_embedding in parallel.
     """
-    config = get_config()
 
-    # Allow overriding provider in development mode
-    if config.is_development_mode() and query_params:
-        if 'embedding_provider' in query_params:
-            provider = query_params['embedding_provider']
+    @abstractmethod
+    def __init__(self, **kwargs) -> None:
+        """
+        Initialize the provider with configuration.
 
-    provider = provider or config.preferred_embedding_provider
+        Args:
+            **kwargs: Provider-specific configuration (endpoint, api_key, model, etc.)
+        """
+        pass
 
-    # Truncate text to 20k characters to avoid token limit issues
-    MAX_CHARS = 20000
-    original_length = len(text)
-    if original_length > MAX_CHARS:
-        text = text[:MAX_CHARS]
+    @abstractmethod
+    async def get_embedding(self, text: str, timeout: float = 30.0) -> List[float]:
+        """
+        Get embedding vector for a single text.
 
+        Args:
+            text: The text to embed
+            timeout: Maximum time in seconds
 
-    if provider not in config.embedding_providers:
-        error_msg = f"Unknown embedding provider '{provider}'"
-        raise ValueError(error_msg)
+        Returns:
+            List of floats representing the embedding vector
+        """
+        pass
 
-    # Get provider config using the helper method
-    provider_config = config.get_embedding_provider(provider)
-    if not provider_config:
-        error_msg = f"Missing configuration for embedding provider '{provider}'"
-        raise ValueError(error_msg)
+    async def get_batch_embeddings(
+        self, texts: List[str], timeout: float = 60.0
+    ) -> List[List[float]]:
+        """
+        Get embedding vectors for multiple texts.
 
-    # Use the provided model or fall back to the configured model
-    model_id = model or provider_config.model
-    if not model_id:
-        error_msg = f"No embedding model specified for provider '{provider}'"
-        raise ValueError(error_msg)
+        Default implementation calls get_embedding in parallel using gather.
+        Concrete providers can override for native batch API support.
 
+        Args:
+            texts: List of texts to embed
+            timeout: Maximum time in seconds
 
-    try:
-        # Use config-driven dynamic import
-        if not provider_config.import_path or not provider_config.class_name:
-            error_msg = f"No import_path and class_name configured for embedding provider '{provider}'"
-            raise ValueError(error_msg)
+        Returns:
+            List of embedding vectors
+        """
+        tasks = [self.get_embedding(text, timeout=timeout) for text in texts]
+        return list(await asyncio.gather(*tasks))
 
-        # Dynamic import based on config
-        import_path = provider_config.import_path
-        class_name = provider_config.class_name
-
-        try:
-            module = __import__(import_path, fromlist=[class_name])
-            embedding_callable = getattr(module, class_name)
-
-            # Call the embedding function with timeout
-            result = await asyncio.wait_for(
-                embedding_callable(text, model=model_id),
-                timeout=timeout
-            )
-            return result
-        except (ImportError, AttributeError) as e:
-            error_msg = f"Failed to load embedding provider '{provider}': {e}"
-            raise ValueError(error_msg)
-
-    except asyncio.TimeoutError:
-        raise
-    except Exception as e:
-        raise
+    @abstractmethod
+    async def close(self) -> None:
+        """Close the provider and release resources."""
+        pass

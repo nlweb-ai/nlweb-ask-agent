@@ -42,39 +42,37 @@ llm:
     low: gpt-35-turbo
 
 embedding:
-  provider: azure_openai
-  import_path: nlweb_azure_models.embedding.azure_oai_embedding
-  class_name: get_azure_embedding
-  endpoint_env: AZURE_OPENAI_ENDPOINT
-  auth_method: azure_ad
-  model: text-embedding-ada-002
+  default:
+    import_path: nlweb_azure_models.embedding.azure_oai_embedding
+    class_name: AzureOpenAIEmbeddingProvider
+    endpoint_env: AZURE_OPENAI_ENDPOINT
+    auth_method: azure_ad
+    model: text-embedding-ada-002
 
-scoring-llm-model:
-  llm_type: azure_openai
-  model: gpt-4.1-mini
-  endpoint_env: AZURE_OPENAI_ENDPOINT
-  api_key_env: AZURE_OPENAI_KEY
-  api_version: "2024-02-01"
-  auth_method: api_key
-  import_path: nlweb_azure_models.llm.azure_oai
-  class_name: AzureOpenAIScoringProvider
+scoring_model:
+  default:
+    model: gpt-4.1-mini
+    endpoint_env: AZURE_OPENAI_ENDPOINT
+    api_key_env: AZURE_OPENAI_KEY
+    api_version: "2024-02-01"
+    auth_method: api_key
+    import_path: nlweb_azure_models.llm.azure_oai
+    class_name: AzureOpenAIScoringProvider
 ```
 
 ### Authentication Methods
 
 #### API Key Authentication
 ```yaml
-llm:
-  provider: azure_openai
-  import_path: nlweb_azure_models.llm.azure_oai
-  class_name: provider
-  endpoint_env: AZURE_OPENAI_ENDPOINT
-  api_key_env: AZURE_OPENAI_KEY
-  api_version: 2024-02-01
-  auth_method: api_key
-  models:
-    high: gpt-4
-    low: gpt-35-turbo
+generative_model:
+  high:
+    import_path: nlweb_azure_models.llm.azure_oai
+    class_name: AzureOpenAIProvider
+    endpoint_env: AZURE_OPENAI_ENDPOINT
+    api_key_env: AZURE_OPENAI_KEY
+    api_version: 2024-02-01
+    auth_method: api_key
+    model: gpt-4
 ```
 
 Set environment variables:
@@ -105,26 +103,14 @@ export AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
 ## Usage
 
 ```python
-import nlweb_core
+from nlweb_core.config import get_config
 
-# Initialize
-nlweb_core.init(config_path="./config.yaml")
+# Get embedding provider by name
+embedding_provider = get_config().get_embedding_provider("default")
+vector = await embedding_provider.get_embedding("Text to embed")
 
-# Use LLM
-from nlweb_core import llm
-
-result = await llm.ask_llm(
-    prompt="Summarize this text",
-    schema={"type": "object", "properties": {"summary": {"type": "string"}}},
-    level="high"
-)
-
-# Use embeddings
-from nlweb_core import embedding
-
-vector = await embedding.get_embedding(
-    text="Text to embed"
-)
+# Batch embeddings
+vectors = await embedding_provider.get_batch_embeddings(["Text 1", "Text 2"])
 ```
 
 ## Features
@@ -230,30 +216,30 @@ llm:
     low: gpt-35-turbo
 
 embedding:
-  provider: azure_openai
-  import_path: nlweb_azure_models.embedding.azure_oai_embedding
-  class_name: get_azure_embedding
-  endpoint_env: AZURE_OPENAI_ENDPOINT
-  auth_method: azure_ad
-  model: text-embedding-ada-002
+  default:
+    import_path: nlweb_azure_models.embedding.azure_oai_embedding
+    class_name: AzureOpenAIEmbeddingProvider
+    endpoint_env: AZURE_OPENAI_ENDPOINT
+    auth_method: azure_ad
+    model: text-embedding-ada-002
 
 retrieval:
-  provider: azure_ai_search
-  import_path: nlweb_azure_vectordb.azure_search_client
-  class_name: AzureSearchClient
-  api_endpoint_env: AZURE_SEARCH_ENDPOINT
-  auth_method: azure_ad
-  index_name: my-index
+  default:
+    import_path: nlweb_azure_vectordb.azure_search_client
+    class_name: AzureSearchClient
+    api_endpoint_env: AZURE_SEARCH_ENDPOINT
+    auth_method: azure_ad
+    index_name: my-index
 
-scoring-llm-model:
-  llm_type: azure_openai
-  model: gpt-4.1-mini
-  endpoint_env: AZURE_OPENAI_ENDPOINT
-  api_key_env: AZURE_OPENAI_KEY
-  api_version: "2024-02-01"
-  auth_method: azure_ad
-  import_path: nlweb_azure_models.llm.azure_oai
-  class_name: AzureOpenAIScoringProvider
+scoring_model:
+  default:
+    model: gpt-4.1-mini
+    endpoint_env: AZURE_OPENAI_ENDPOINT
+    api_key_env: AZURE_OPENAI_KEY
+    api_version: "2024-02-01"
+    auth_method: azure_ad
+    import_path: nlweb_azure_models.llm.azure_oai
+    class_name: AzureOpenAIScoringProvider
 
 ranking_config:
   scoring_questions:
@@ -277,17 +263,21 @@ Use this package as a template:
            └── your_embedding.py
    ```
 
-2. **Implement provider interface**:
+2. **Implement provider interfaces** (inherit from ABCs in nlweb_core):
    ```python
-   # For LLM
-   async def get_completion(prompt, schema, model, timeout, max_tokens):
-       # Your implementation
-       pass
+   from nlweb_core.embedding import EmbeddingProvider
 
-   # For embedding
-   async def get_your_embeddings(text, model):
-       # Your implementation
-       return [0.1, 0.2, ...]  # List of floats
+   class YourEmbeddingProvider(EmbeddingProvider):
+       def __init__(self, api_key: str, model: str, **kwargs):
+           self.api_key = api_key
+           self.model = model
+
+       async def get_embedding(self, text, timeout=30.0):
+           # Your implementation
+           return [0.1, 0.2, ...]
+
+       async def close(self):
+           pass
    ```
 
 3. **Declare dependencies** in `pyproject.toml`

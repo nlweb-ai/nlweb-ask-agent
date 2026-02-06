@@ -14,8 +14,8 @@ import logging
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
-from nlweb_core.config import get_config, RankingConfig
-from nlweb_core.item_retriever import RetrievedItem
+from nlweb_core.config import get_config
+from nlweb_core.retrieved_item import RetrievedItem
 from nlweb_core.protocol.models import Query
 from nlweb_core.llm_exceptions import (
     LLMError,
@@ -24,7 +24,7 @@ from nlweb_core.llm_exceptions import (
     LLMConnectionError,
 )
 from nlweb_core.ranked_result import RankedResult
-from nlweb_core.scoring import get_scoring_provider, ScoringContext
+from nlweb_core.scoring import ScoringContext
 from nlweb_core.utils import trim_json
 
 logger = logging.getLogger(__name__)
@@ -207,9 +207,7 @@ class Ranking:
         freshness_enabled = False
         if site and site != "all":
             try:
-                from nlweb_core.site_config import get_site_config_lookup
-
-                site_config_lookup = get_site_config_lookup("default")
+                site_config_lookup = get_config().get_site_config_lookup("default")
                 if site_config_lookup:
                     freshness_config = await site_config_lookup.get_config_type(
                         site, "freshness_config"
@@ -249,14 +247,14 @@ class Ranking:
             for item, (date_str, age_days) in zip(items, date_info)
         ]
 
-        # Get config and scoring questions
+        # Get ranking config (checks contextvar for per-request override)
         config = get_config()
-        ranking_config = config.ranking or RankingConfig()
+        ranking_config = config.get_ranking_config()
         scoring_questions = ranking_config.scoring_questions
 
         try:
             # Get the scoring provider and score all items in batch
-            provider = get_scoring_provider("default")
+            provider = config.get_scoring_provider("default")
             scores = await provider.score_batch(
                 scoring_questions,
                 contexts,

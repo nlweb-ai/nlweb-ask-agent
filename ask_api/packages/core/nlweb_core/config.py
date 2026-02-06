@@ -8,14 +8,25 @@ WARNING: This code is under development and may undergo changes in future releas
 Backwards compatibility is not guaranteed at this time.
 """
 
-import copy
+from __future__ import annotations
+
 import os
 import yaml
 import logging
+from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from dotenv import load_dotenv
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+from nlweb_core.provider_map import ProviderMap
+
+if TYPE_CHECKING:
+    from nlweb_core.embedding import EmbeddingProvider
+    from nlweb_core.llm import GenerativeLLMProvider
+    from nlweb_core.scoring import ScoringLLMProvider
+    from nlweb_core.site_config.base import SiteConfigLookup
+    from nlweb_core.retriever import ObjectLookupProvider, RetrievalProvider
 
 logger = logging.getLogger(__name__)
 
@@ -26,32 +37,21 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class EmbeddingProviderConfig:
-    api_key: str | None = None
-    endpoint: str | None = None
-    api_version: str | None = None
-    model: str | None = None
-    config: dict[str, Any] | None = None
-    auth_method: str | None = None
-    import_path: str | None = None
-    class_name: str | None = None
+class EmbeddingConfig:
+    """Configuration for a single embedding provider."""
+
+    import_path: str
+    class_name: str
+    options: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
-class RetrievalProviderConfig:
-    api_key: str | None = None
-    api_key_env: str | None = None
-    api_endpoint: str | None = None
-    api_endpoint_env: str | None = None
-    database_path: str | None = None
-    index_name: str | None = None
-    db_type: str | None = None
-    use_knn: bool | None = None
-    enabled: bool = False
-    vector_type: dict[str, Any] | None = None
-    auth_method: str | None = None
-    import_path: str | None = None
-    class_name: str | None = None
+class RetrievalConfig:
+    """Configuration for a single retrieval provider."""
+
+    import_path: str
+    class_name: str
+    options: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -109,15 +109,12 @@ class ConversationStorageConfig:
 
 
 @dataclass
-class ObjectLookupConfig:
-    type: str
-    enabled: bool = True
-    endpoint: str | None = None
-    database_name: str | None = None
-    container_name: str | None = None
-    partition_key: str | None = None
-    import_path: str | None = None
-    class_name: str | None = None
+class ObjectStorageConfig:
+    """Configuration for a single object storage provider."""
+
+    import_path: str
+    class_name: str
+    options: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -189,16 +186,15 @@ class AppConfig:
     )
 
     # Embedding Configuration
-    embedding_providers: dict[str, EmbeddingProviderConfig] = field(
+    embedding_providers: dict[str, EmbeddingConfig] = field(
         default_factory=dict
     )
     preferred_embedding_provider: str | None = None
 
-    # Retrieval Configuration
-    retrieval_endpoints: dict[str, RetrievalProviderConfig] = field(
+    # Retrieval Providers
+    retrieval_providers: dict[str, RetrievalConfig] = field(
         default_factory=dict
     )
-    write_endpoint: str | None = None
 
     # Conversation Storage
     conversation_storage: ConversationStorageConfig | None = None
@@ -208,8 +204,10 @@ class AppConfig:
     )
     conversation_storage_default: str = "qdrant_local"
 
-    # Object Storage (Cosmos DB)
-    object_storage: ObjectLookupConfig | None = None
+    # Object Storage Providers
+    object_storage_providers: dict[str, ObjectStorageConfig] = field(
+        default_factory=dict
+    )
 
     # Site Config Providers
     site_config_providers: dict[str, SiteConfigStorageConfig] = field(
@@ -219,8 +217,8 @@ class AppConfig:
     # Scoring Model Providers
     scoring_model_providers: dict[str, ScoringModelConfig] = field(default_factory=dict)
 
-    # Ranking Configuration
-    ranking: RankingConfig | None = None
+    # Ranking Configuration (use get_ranking_config() to access)
+    _ranking: RankingConfig | None = None
 
     # NLWeb Configuration
     nlweb: NLWebConfig | None = None
@@ -252,9 +250,9 @@ class AppConfig:
         """Returns True if exceptions should be raised instead of caught."""
         return self.is_testing_mode() or self.is_development_mode()
 
-    def get_embedding_provider(
+    def get_embedding_config(
         self, provider_name: str | None = None
-    ) -> EmbeddingProviderConfig | None:
+    ) -> EmbeddingConfig | None:
         """Get the specified embedding provider config or the preferred one if not specified."""
         if provider_name and provider_name in self.embedding_providers:
             return self.embedding_providers[provider_name]
@@ -265,23 +263,50 @@ class AppConfig:
             return self.embedding_providers[self.preferred_embedding_provider]
         return None
 
-    def get_site_config_provider(
-        self, provider_name: str
-    ) -> SiteConfigStorageConfig | None:
-        """Get the specified site config provider by name."""
-        return self.site_config_providers.get(provider_name)
+    # Provider instance accessors (delegate to module-level ProviderMaps)
 
-    def get_scoring_model_provider(
-        self, provider_name: str
-    ) -> ScoringModelConfig | None:
-        """Get the specified scoring model provider by name."""
-        return self.scoring_model_providers.get(provider_name)
+    def get_embedding_provider(self, name: str) -> EmbeddingProvider:
+        """Get a cached embedding provider instance by name."""
+        if _embedding_provider_map is None:
+            raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+        return _embedding_provider_map.get(name)
 
-    def get_generative_model_provider(
-        self, provider_name: str
-    ) -> GenerativeModelConfig | None:
-        """Get the specified generative model provider by name."""
-        return self.generative_model_providers.get(provider_name)
+    def get_generative_provider(self, name: str) -> GenerativeLLMProvider:
+        """Get a cached generative LLM provider instance by name."""
+        if _generative_provider_map is None:
+            raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+        return _generative_provider_map.get(name)
+
+    def get_scoring_provider(self, name: str) -> ScoringLLMProvider:
+        """Get a cached scoring LLM provider instance by name."""
+        if _scoring_provider_map is None:
+            raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+        return _scoring_provider_map.get(name)
+
+    def get_site_config_lookup(self, name: str) -> SiteConfigLookup:
+        """Get a cached site config lookup instance by name."""
+        if _site_config_provider_map is None:
+            raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+        return _site_config_provider_map.get(name)
+
+    def get_object_lookup_provider(self, name: str) -> ObjectLookupProvider:
+        """Get a cached object lookup provider instance by name."""
+        if _object_storage_provider_map is None:
+            raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+        return _object_storage_provider_map.get(name)
+
+    def get_retrieval_provider(self, name: str) -> RetrievalProvider:
+        """Get a cached retrieval provider instance by name."""
+        if _retrieval_provider_map is None:
+            raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+        return _retrieval_provider_map.get(name)
+
+    def get_ranking_config(self) -> RankingConfig:
+        """Get ranking config, checking for per-request override first."""
+        try:
+            return _ranking_config_override.get()
+        except LookupError:
+            return self._ranking or RankingConfig()
 
 
 # =============================================================================
@@ -364,59 +389,60 @@ def _get_config_value(value: Any, default: Any = None) -> Any:
 
 def _load_embedding_config(
     data: dict,
-) -> tuple[dict[str, EmbeddingProviderConfig], str | None]:
+) -> tuple[dict[str, EmbeddingConfig], str | None]:
     """Load embedding configuration from config dict."""
     if "embedding" not in data:
         return {}, None
 
     emb_cfg = data["embedding"]
-    provider_name = emb_cfg.get("provider", "default")
+    if not isinstance(emb_cfg, dict):
+        raise ValueError("embedding must be a mapping of provider names to configs")
 
-    providers = {
-        provider_name: EmbeddingProviderConfig(
-            api_key=_get_config_value(emb_cfg.get("api_key_env")),
-            endpoint=_get_config_value(emb_cfg.get("endpoint_env")),
-            api_version=_get_config_value(emb_cfg.get("api_version")),
-            model=_get_config_value(emb_cfg.get("model")),
-            config=_get_config_value(emb_cfg.get("config")),
-            auth_method=_get_config_value(emb_cfg.get("auth_method"), "api_key"),
-            import_path=_get_config_value(emb_cfg.get("import_path")),
-            class_name=_get_config_value(emb_cfg.get("class_name")),
+    providers: dict[str, EmbeddingConfig] = {}
+    preferred = None
+    for provider_name, provider_cfg in emb_cfg.items():
+        if not isinstance(provider_cfg, dict):
+            raise ValueError(
+                f"embedding provider '{provider_name}' must be a mapping"
+            )
+        import_path, class_name = _extract_import_class(
+            provider_cfg, "embedding", provider_name
         )
-    }
+        providers[provider_name] = EmbeddingConfig(
+            import_path=import_path,
+            class_name=class_name,
+            options=_build_options(provider_cfg),
+        )
+        if preferred is None:
+            preferred = provider_name
+    return providers, preferred
 
-    return providers, provider_name
 
-
-def _load_retrieval_config(
-    data: dict,
-) -> tuple[dict[str, RetrievalProviderConfig], str | None]:
-    """Load retrieval configuration from config dict."""
+def _load_retrieval_provider_config(data: dict) -> dict[str, RetrievalConfig]:
+    """Load retrieval provider configuration from config dict."""
     if "retrieval" not in data:
-        return {}, None
+        return {}
 
     ret_cfg = data["retrieval"]
-    provider_name = ret_cfg.get("provider", "default")
+    if not isinstance(ret_cfg, dict):
+        raise ValueError("retrieval must be a mapping of provider names to configs")
 
-    endpoints = {
-        provider_name: RetrievalProviderConfig(
-            api_key=_get_config_value(ret_cfg.get("api_key_env")),
-            api_key_env=ret_cfg.get("api_key_env"),
-            api_endpoint=_get_config_value(ret_cfg.get("api_endpoint_env")),
-            api_endpoint_env=ret_cfg.get("api_endpoint_env"),
-            database_path=_get_config_value(ret_cfg.get("database_path")),
-            index_name=_get_config_value(ret_cfg.get("index_name")),
-            db_type=_get_config_value(ret_cfg.get("db_type", provider_name)),
-            enabled=ret_cfg.get("enabled", True),
-            use_knn=ret_cfg.get("use_knn"),
-            vector_type=ret_cfg.get("vector_type"),
-            auth_method=_get_config_value(ret_cfg.get("auth_method"), "api_key"),
-            import_path=_get_config_value(ret_cfg.get("import_path")),
-            class_name=_get_config_value(ret_cfg.get("class_name")),
+    providers: dict[str, RetrievalConfig] = {}
+    for provider_name, provider_cfg in ret_cfg.items():
+        if not isinstance(provider_cfg, dict):
+            raise ValueError(
+                f"retrieval provider '{provider_name}' must be a mapping"
+            )
+        import_path, class_name = _extract_import_class(
+            provider_cfg, "retrieval", provider_name
         )
-    }
+        providers[provider_name] = RetrievalConfig(
+            import_path=import_path,
+            class_name=class_name,
+            options=_build_options(provider_cfg),
+        )
 
-    return endpoints, provider_name
+    return providers
 
 
 def _load_conversation_storage(
@@ -474,34 +500,31 @@ def _load_conversation_storage(
     )
 
 
-def _load_object_storage(data: dict) -> ObjectLookupConfig:
-    """Load object storage configuration from config dict."""
+def _load_object_storage_config(data: dict) -> dict[str, ObjectStorageConfig]:
+    """Load object storage provider configuration from config dict."""
     if "object_storage" not in data:
-        return ObjectLookupConfig(type="cosmos", enabled=False)
+        return {}
 
     obj_cfg = data["object_storage"]
-    return ObjectLookupConfig(
-        type=obj_cfg.get("type", "cosmos"),
-        enabled=obj_cfg.get("enabled", True),
-        endpoint=(
-            _get_config_value(obj_cfg.get("endpoint_env"))
-            if "endpoint_env" in obj_cfg
-            else obj_cfg.get("endpoint")
-        ),
-        database_name=(
-            _get_config_value(obj_cfg.get("database_name_env"))
-            if "database_name_env" in obj_cfg
-            else obj_cfg.get("database_name")
-        ),
-        container_name=(
-            _get_config_value(obj_cfg.get("container_name_env"))
-            if "container_name_env" in obj_cfg
-            else obj_cfg.get("container_name")
-        ),
-        partition_key=obj_cfg.get("partition_key"),
-        import_path=_get_config_value(obj_cfg.get("import_path")),
-        class_name=_get_config_value(obj_cfg.get("class_name")),
-    )
+    if not isinstance(obj_cfg, dict):
+        raise ValueError("object_storage must be a mapping of provider names to configs")
+
+    providers: dict[str, ObjectStorageConfig] = {}
+    for provider_name, provider_cfg in obj_cfg.items():
+        if not isinstance(provider_cfg, dict):
+            raise ValueError(
+                f"object_storage provider '{provider_name}' must be a mapping"
+            )
+        import_path, class_name = _extract_import_class(
+            provider_cfg, "object_storage", provider_name
+        )
+        providers[provider_name] = ObjectStorageConfig(
+            import_path=import_path,
+            class_name=class_name,
+            options=_build_options(provider_cfg),
+        )
+
+    return providers
 
 
 def _extract_import_class(
@@ -792,11 +815,11 @@ def load_config() -> AppConfig:
         # Load all configurations from unified file
         generative_model_providers = _load_generative_model_config(data)
         embedding_providers, preferred_embedding_provider = _load_embedding_config(data)
-        retrieval_endpoints, write_endpoint = _load_retrieval_config(data)
+        retrieval_providers = _load_retrieval_provider_config(data)
         conversation_storage = _load_conversation_storage(
             data, config_directory, base_output_directory
         )
-        object_storage = _load_object_storage(data)
+        object_storage_providers = _load_object_storage_config(data)
         site_config_providers = _load_site_config_storage(data)
         scoring_model_providers = _load_scoring_model_config(data)
         ranking = _load_ranking_config(data)
@@ -830,16 +853,15 @@ def load_config() -> AppConfig:
             generative_model_providers=generative_model_providers,
             embedding_providers=embedding_providers,
             preferred_embedding_provider=preferred_embedding_provider,
-            retrieval_endpoints=retrieval_endpoints,
-            write_endpoint=write_endpoint,
+            retrieval_providers=retrieval_providers,
             conversation_storage=conversation_storage,
             conversation_storage_behavior=StorageBehaviorConfig(),
             conversation_storage_endpoints={},
             conversation_storage_default="qdrant_local",
-            object_storage=object_storage,
+            object_storage_providers=object_storage_providers,
             site_config_providers=site_config_providers,
             scoring_model_providers=scoring_model_providers,
-            ranking=ranking,
+            _ranking=ranking,
             nlweb=nlweb,
             server=server,
             port=data.get("port", 8080),
@@ -860,9 +882,8 @@ def load_config() -> AppConfig:
         nlweb=NLWebConfig(sites=[]),
         server=ServerConfig(),
         conversation_storage=ConversationStorageConfig(type="qdrant", enabled=False),
-        object_storage=ObjectLookupConfig(type="cosmos", enabled=False),
         site_config_providers={},
-        ranking=RankingConfig(),
+        _ranking=RankingConfig(),
         conversation_storage_behavior=StorageBehaviorConfig(),
     )
 
@@ -874,23 +895,8 @@ def load_config() -> AppConfig:
 # Module-private static config - None until initialize_config() is called
 _STATIC_CONFIG: AppConfig | None = None
 
-# Contextvar holds current config - no default, use get_config() to access
-_config_var: ContextVar[AppConfig] = ContextVar("config")
-
-
-# Attributes that can be overridden per-request
-OVERRIDABLE_ATTRS = frozenset(
-    {
-        "tool_selection_enabled",
-        "memory_enabled",
-        "analyze_query_enabled",
-        "decontextualize_enabled",
-        "required_info_enabled",
-        "aggregation_enabled",
-        "who_endpoint_enabled",
-        "scoring_questions",
-    }
-)
+# Per-request ranking config override (no default - falls back to static config)
+_ranking_config_override: ContextVar[RankingConfig] = ContextVar("ranking_config_override")
 
 
 def initialize_config() -> AppConfig:
@@ -907,66 +913,135 @@ def initialize_config() -> AppConfig:
 
 def get_config() -> AppConfig:
     """
-    Get the current config for this request context.
+    Get the application configuration.
 
-    Returns the request-specific config if set via set_config_overrides(),
-    otherwise returns the static config.
-    """
-    try:
-        return _config_var.get()
-    except LookupError:
-        if _STATIC_CONFIG is None:
-            raise RuntimeError(
-                "Configuration not initialized. Call initialize_config() at server startup."
-            )
-        return _STATIC_CONFIG
-
-
-def set_config_overrides(overrides: dict[str, Any]) -> None:
-    """
-    Create a deep copy of static config with overrides applied.
-
-    Called by middleware when request has config override params.
-    Only OVERRIDABLE_ATTRS are accepted; others are silently ignored.
+    Returns the static config loaded at server startup. For per-request
+    overrides of ranking config, use get_config().get_ranking_config()
+    which checks the ranking override contextvar.
     """
     if _STATIC_CONFIG is None:
         raise RuntimeError(
-            "Configuration not initialized. Call initialize_config() first."
+            "Configuration not initialized. Call initialize_config() at server startup."
         )
-
-    # Filter to only overridable attributes
-    filtered = {k: v for k, v in overrides.items() if k in OVERRIDABLE_ATTRS}
-
-    if not filtered:
-        return  # No valid overrides, keep pointing to static config
-
-    # Deep copy the static config
-    config_copy = copy.deepcopy(_STATIC_CONFIG)
-
-    # Apply overrides to the nlweb sub-config (where feature flags live)
-    if config_copy.nlweb:
-        for attr, value in filtered.items():
-            # Skip scoring_questions - it belongs to ranking config
-            if attr == "scoring_questions":
-                continue
-            if hasattr(config_copy.nlweb, attr):
-                setattr(config_copy.nlweb, attr, value)
-
-    # Apply scoring_questions to ranking config
-    if "scoring_questions" in filtered and config_copy.ranking:
-        config_copy.ranking.scoring_questions = filtered["scoring_questions"]
-
-    _config_var.set(config_copy)
+    return _STATIC_CONFIG
 
 
-def reset_config() -> None:
-    """Reset to static config. Called by middleware after request completes."""
-    # Reset by removing the contextvar value (will fall back to static)
+@contextmanager
+def override_ranking_config(ranking_config: RankingConfig):
+    """Temporarily override ranking config for the current context."""
+    token = _ranking_config_override.set(ranking_config)
     try:
-        _config_var.get()
-        # Token-based reset - set a temporary value then reset to remove it
-        if _STATIC_CONFIG is not None:
-            token = _config_var.set(_STATIC_CONFIG)
-            _config_var.reset(token)
-    except LookupError:
-        pass  # Already not set
+        yield
+    finally:
+        _ranking_config_override.reset(token)
+
+
+# =============================================================================
+# Provider Maps (module-level, initialized by initialize_providers() at startup)
+# =============================================================================
+
+_embedding_provider_map: ProviderMap | None = None
+_generative_provider_map: ProviderMap | None = None
+_scoring_provider_map: ProviderMap | None = None
+_site_config_provider_map: ProviderMap | None = None
+_object_storage_provider_map: ProviderMap | None = None
+_retrieval_provider_map: ProviderMap | None = None
+
+
+@contextmanager
+def override_embedding_provider(old_name: str, new_name: str):
+    """Temporarily remap an embedding provider name."""
+    if _embedding_provider_map is None:
+        raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+    with _embedding_provider_map.override(old_name, new_name):
+        yield
+
+
+@contextmanager
+def override_generative_provider(old_name: str, new_name: str):
+    """Temporarily remap a generative provider name."""
+    if _generative_provider_map is None:
+        raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+    with _generative_provider_map.override(old_name, new_name):
+        yield
+
+
+@contextmanager
+def override_scoring_provider(old_name: str, new_name: str):
+    """Temporarily remap a scoring provider name."""
+    if _scoring_provider_map is None:
+        raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+    with _scoring_provider_map.override(old_name, new_name):
+        yield
+
+
+@contextmanager
+def override_site_config_provider(old_name: str, new_name: str):
+    """Temporarily remap a site config provider name."""
+    if _site_config_provider_map is None:
+        raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+    with _site_config_provider_map.override(old_name, new_name):
+        yield
+
+
+@contextmanager
+def override_object_storage_provider(old_name: str, new_name: str):
+    """Temporarily remap an object storage provider name."""
+    if _object_storage_provider_map is None:
+        raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+    with _object_storage_provider_map.override(old_name, new_name):
+        yield
+
+
+@contextmanager
+def override_retrieval_provider(old_name: str, new_name: str):
+    """Temporarily remap a retrieval provider name."""
+    if _retrieval_provider_map is None:
+        raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+    with _retrieval_provider_map.override(old_name, new_name):
+        yield
+
+
+def initialize_providers(config: AppConfig) -> None:
+    """Eagerly create all provider instances from config. Call at server startup."""
+    global _embedding_provider_map, _generative_provider_map, _scoring_provider_map, _site_config_provider_map, _object_storage_provider_map, _retrieval_provider_map
+    _embedding_provider_map = ProviderMap(
+        config=config.embedding_providers,
+        error_prefix="Embedding provider",
+    )
+    _generative_provider_map = ProviderMap(
+        config=config.generative_model_providers,
+        error_prefix="Generative model provider",
+    )
+    _scoring_provider_map = ProviderMap(
+        config=config.scoring_model_providers,
+        error_prefix="Scoring model provider",
+    )
+    _site_config_provider_map = ProviderMap(
+        config=config.site_config_providers,
+        error_prefix="Site config provider",
+    )
+    _object_storage_provider_map = ProviderMap(
+        config=config.object_storage_providers,
+        error_prefix="Object storage provider",
+    )
+    _retrieval_provider_map = ProviderMap(
+        config=config.retrieval_providers,
+        error_prefix="Retrieval provider",
+    )
+
+
+async def close_all_providers() -> None:
+    """Close all cached provider instances. Call at server shutdown."""
+    if _embedding_provider_map is not None:
+        await _embedding_provider_map.close()
+    if _generative_provider_map is not None:
+        await _generative_provider_map.close()
+    if _scoring_provider_map is not None:
+        await _scoring_provider_map.close()
+    if _site_config_provider_map is not None:
+        await _site_config_provider_map.close()
+    if _object_storage_provider_map is not None:
+        await _object_storage_provider_map.close()
+    if _retrieval_provider_map is not None:
+        await _retrieval_provider_map.close()

@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from nlweb_core.item_retriever import RetrievedItem
+from nlweb_core.retrieved_item import RetrievedItem
 
 
 # Content types ranked by preference (most specific/valuable first)

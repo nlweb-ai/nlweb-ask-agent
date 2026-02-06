@@ -23,13 +23,14 @@ generative_model:
     class_name: AzureOpenAIProvider
 
 embedding:
-  provider: azure_openai
-  import_path: nlweb_azure_models.embedding.azure_oai_embedding
-  class_name: get_azure_embedding
-  endpoint_env: AZURE_OPENAI_ENDPOINT
-  api_key_env: AZURE_OPENAI_KEY
-  auth_method: api_key  # Use 'azure_ad' for managed identity
-  model: text-embedding-3-small
+  default:
+    import_path: nlweb_azure_models.embedding.azure_oai_embedding
+    class_name: AzureOpenAIEmbeddingProvider
+    endpoint_env: AZURE_OPENAI_ENDPOINT
+    api_key_env: AZURE_OPENAI_KEY
+    api_version: "2024-10-21"
+    auth_method: api_key  # Use 'azure_ad' for managed identity
+    model: text-embedding-3-small
 
 # Scoring model configuration - supports multiple named providers
 scoring_model:
@@ -50,23 +51,22 @@ scoring_model:
 
 
 retrieval:
-  provider: azure_ai_search
-  import_path: nlweb_azure_vectordb.azure_search_client
-  class_name: AzureSearchClient
-  api_endpoint_env: AZURE_SEARCH_ENDPOINT
-  api_key_env: AZURE_SEARCH_KEY
-  auth_method: api_key # Use 'azure_ad' for managed identity
-  index_name: crawler-vectors
+  default:
+    import_path: nlweb_azure_vectordb.azure_search_client
+    class_name: AzureSearchClient
+    api_endpoint_env: AZURE_SEARCH_ENDPOINT
+    api_key_env: AZURE_SEARCH_KEY
+    auth_method: api_key # Use 'azure_ad' for managed identity
+    index_name: crawler-vectors
 
 object_storage:
-  type: cosmos
-  enabled: true
-  endpoint_env: COSMOS_DB_ENDPOINT
-  database_name_env: COSMOS_DB_DATABASE_NAME
-  container_name_env: COSMOS_DB_CONTAINER_NAME
-  partition_key: /"@id"
-  import_path: nlweb_cosmos_object_db.cosmos_lookup
-  class_name: CosmosObjectLookup
+  default:
+    endpoint_env: COSMOS_DB_ENDPOINT
+    database_name_env: COSMOS_DB_DATABASE_NAME
+    container_name_env: COSMOS_DB_CONTAINER_NAME
+    partition_key: /"@id"
+    import_path: nlweb_cosmos_object_db.cosmos_lookup
+    class_name: CosmosObjectLookup
 
 site_config:
   default:

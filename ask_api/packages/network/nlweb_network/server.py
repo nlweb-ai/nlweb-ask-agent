@@ -21,9 +21,9 @@ from aiohttp.web_request import Request
 from aiohttp.web_exceptions import HTTPInternalServerError
 from nlweb_core.config import (
     get_config,
-    set_config_overrides,
-    reset_config,
     initialize_config,
+    override_ranking_config,
+    RankingConfig,
 )
 from nlweb_core.handler import SiteSelectingHandler
 from nlweb_network.interfaces import (
@@ -259,54 +259,20 @@ async def require_admin_api_key(app, handler):
     return middleware
 
 
-# Query param to config attribute mapping for per-request overrides
-_OVERRIDE_PARAM_MAP = {
-    "tool_selection": "tool_selection_enabled",
-    "memory": "memory_enabled",
-    "analyze_query": "analyze_query_enabled",
-    "decontextualize": "decontextualize_enabled",
-    "required_info": "required_info_enabled",
-    "aggregation": "aggregation_enabled",
-    "who_endpoint": "who_endpoint_enabled",
-}
-
-
-def _parse_bool(value: str) -> bool:
-    """Parse boolean from query param string."""
-    return value.lower() in ("true", "1", "yes", "on")
-
-
 async def config_override_middleware(app, handler):
     """
-    Middleware to set per-request config overrides from query params.
+    Middleware to set per-request ranking config overrides from query params.
 
     Supports:
-    - Boolean flags: ?memory=true&tool_selection=false
     - List params: ?scoring_questions=q1&scoring_questions=q2
     """
 
     async def middleware(request: Request):
-        overrides = {}
-
-        # Handle scoring_questions (list type, can appear multiple times)
         scoring_questions = request.query.getall("scoring_questions", default=[])
         if scoring_questions:
-            overrides["scoring_questions"] = scoring_questions
-
-        # Parse boolean flags from query params
-        for key, value in request.query.items():
-            if key in _OVERRIDE_PARAM_MAP:
-                overrides[_OVERRIDE_PARAM_MAP[key]] = _parse_bool(value)
-
-        # Set overrides (only does work if there are valid overrides)
-        if overrides:
-            set_config_overrides(overrides)
-
-        try:
-            return await handler(request)
-        finally:
-            # Always reset to static config after request
-            reset_config()
+            with override_ranking_config(RankingConfig(scoring_questions=scoring_questions)):
+                return await handler(request)
+        return await handler(request)
 
     return middleware
 
@@ -318,19 +284,21 @@ async def init_app(app):
 
     config = get_config()
 
-    # Validate that Cosmos DB (object storage) is enabled - REQUIRED
-    if not config.object_storage or not config.object_storage.enabled:
+    # Validate that object storage is configured - REQUIRED
+    if not config.object_storage_providers:
         print("\n" + "=" * 60)
-        print("FATAL ERROR: Cosmos DB (object_storage) is not enabled")
+        print("FATAL ERROR: No object_storage providers configured")
         print("=" * 60)
         print("Object storage is now mandatory for NLWeb to function.")
         print("Vector DB no longer stores full content - only Cosmos DB does.")
         print("\nPlease configure object_storage in your config.yaml:")
         print("  object_storage:")
-        print("    enabled: true")
-        print("    endpoint: https://your-cosmos.documents.azure.com:443/")
-        print("    database_name_env: your-database")
-        print("    container_name_env: your-container")
+        print("    default:")
+        print("      endpoint_env: COSMOS_DB_ENDPOINT")
+        print("      database_name_env: COSMOS_DB_DATABASE_NAME")
+        print("      container_name_env: COSMOS_DB_CONTAINER_NAME")
+        print("      import_path: nlweb_cosmos_object_db.cosmos_lookup")
+        print("      class_name: CosmosObjectLookup")
         print("=" * 60 + "\n")
         sys.exit(1)
 
@@ -353,18 +321,25 @@ async def init_app(app):
 
             traceback.print_exc()
 
-    # Initialize site config and elicitation handler if any provider is configured
+    # Eagerly initialize all provider instances (generative, scoring, site config)
+    try:
+        from nlweb_core.config import initialize_providers
+
+        initialize_providers(config)
+    except Exception as e:
+        print(f"Failed to initialize providers: {e}")
+        import traceback
+
+        traceback.print_exc()
+
+    # Initialize elicitation handler if site config providers are configured
     if config.site_config_providers:
         try:
-            from nlweb_core.site_config import (
-                initialize_site_config,
-                initialize_elicitation_handler,
-            )
+            from nlweb_core.site_config import initialize_elicitation_handler
 
-            initialize_site_config(config.site_config_providers)
             initialize_elicitation_handler()
         except Exception as e:
-            print(f"Failed to initialize site config: {e}")
+            print(f"Failed to initialize elicitation handler: {e}")
             import traceback
 
             traceback.print_exc()
@@ -380,32 +355,14 @@ async def cleanup_app(app):
         except Exception as e:
             print(f"Error closing conversation storage: {e}")
 
-    # Cleanup object lookup client (Cosmos DB)
+    # Cleanup all provider instances (generative, scoring, site config, retrieval)
     try:
-        from nlweb_core.retriever import close_object_lookup_client
+        from nlweb_core.config import close_all_providers
 
-        await close_object_lookup_client()
-        print("Object lookup client closed")
+        await close_all_providers()
+        print("All provider instances closed")
     except Exception as e:
-        print(f"Error closing object lookup client: {e}")
-
-    # Cleanup vector database clients (Azure Search, etc.)
-    try:
-        from nlweb_core.retriever import close_vectordb_clients
-
-        await close_vectordb_clients()
-        print("Vector database clients closed")
-    except Exception as e:
-        print(f"Error closing vector database clients: {e}")
-
-    # Cleanup site config lookup client (Cosmos DB)
-    try:
-        from nlweb_core.site_config import close_site_config_lookup
-
-        await close_site_config_lookup()
-        print("Site config lookup client closed")
-    except Exception as e:
-        print(f"Error closing site config lookup client: {e}")
+        print(f"Error closing provider instances: {e}")
 
 
 def create_app():
