@@ -1,5 +1,6 @@
 {
   "dashboard": {
+    "uid": "nlweb-crawler-overview",
     "title": "Crawler Overview",
     "tags": ["nlweb", "crawler", "prometheus"],
     "timezone": "utc",

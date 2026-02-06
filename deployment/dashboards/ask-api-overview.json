@@ -1,5 +1,6 @@
 {
   "dashboard": {
+    "uid": "nlweb-ask-api-overview",
     "title": "Ask API Overview",
     "tags": ["nlweb", "ask-api", "prometheus"],
     "timezone": "utc",
@@ -17,7 +18,7 @@
         "targets": [
           {
             "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-            "expr": "sum(rate(http_requests_total{kubernetes_namespace=\"ask-api\"}[5m])) by (endpoint)",
+            "expr": "sum(rate(http_requests_total{kubernetes_namespace=\"ask-api\", endpoint!~\"/health|/metrics\"}[5m])) by (endpoint)",
             "legendFormat": "{{ endpoint }}"
           }
         ],
@@ -35,7 +36,7 @@
         "targets": [
           {
             "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-            "expr": "sum(rate(http_requests_total{kubernetes_namespace=\"ask-api\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{kubernetes_namespace=\"ask-api\"}[5m]))",
+            "expr": "sum(rate(http_requests_total{kubernetes_namespace=\"ask-api\", endpoint!~\"/health|/metrics\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{kubernetes_namespace=\"ask-api\", endpoint!~\"/health|/metrics\"}[5m]))",
             "legendFormat": "Error Rate"
           }
         ],
@@ -55,17 +56,17 @@
         "targets": [
           {
             "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-            "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{kubernetes_namespace=\"ask-api\"}[5m])) by (le))",
+            "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{kubernetes_namespace=\"ask-api\", endpoint!~\"/health|/metrics\"}[5m])) by (le))",
             "legendFormat": "P50"
           },
           {
             "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{kubernetes_namespace=\"ask-api\"}[5m])) by (le))",
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{kubernetes_namespace=\"ask-api\", endpoint!~\"/health|/metrics\"}[5m])) by (le))",
             "legendFormat": "P95"
           },
           {
             "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-            "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{kubernetes_namespace=\"ask-api\"}[5m])) by (le))",
+            "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{kubernetes_namespace=\"ask-api\", endpoint!~\"/health|/metrics\"}[5m])) by (le))",
             "legendFormat": "P99"
           }
         ],
@@ -83,7 +84,7 @@
         "targets": [
           {
             "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-            "expr": "sum(http_requests_in_flight{kubernetes_namespace=\"ask-api\"}) by (endpoint)",
+            "expr": "sum(http_requests_in_flight{kubernetes_namespace=\"ask-api\", endpoint!~\"/health|/metrics\"}) by (endpoint)",
             "legendFormat": "{{ endpoint }}"
           }
         ]
@@ -96,7 +97,7 @@
         "targets": [
           {
             "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-            "expr": "sum(rate(ask_results_returned_bucket{kubernetes_namespace=\"ask-api\"}[5m])) by (le)",
+            "expr": "sum(rate(ask_results_returned_bucket{kubernetes_namespace=\"ask-api\", endpoint!~\"/health|/metrics\"}[5m])) by (le)",
             "legendFormat": "{{ le }}",
             "format": "heatmap"
           }
@@ -110,7 +111,7 @@
         "targets": [
           {
             "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-            "expr": "sum(rate(ask_query_length_chars_bucket{kubernetes_namespace=\"ask-api\"}[5m])) by (le)",
+            "expr": "sum(rate(ask_query_length_chars_bucket{kubernetes_namespace=\"ask-api\", endpoint!~\"/health|/metrics\"}[5m])) by (le)",
             "legendFormat": "{{ le }}",
             "format": "heatmap"
           }
@@ -124,12 +125,12 @@
         "targets": [
           {
             "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-            "expr": "histogram_quantile(0.95, sum(rate(ask_retrieval_duration_seconds_bucket{kubernetes_namespace=\"ask-api\"}[5m])) by (le))",
+            "expr": "histogram_quantile(0.95, sum(rate(ask_retrieval_duration_seconds_bucket{kubernetes_namespace=\"ask-api\", endpoint!~\"/health|/metrics\"}[5m])) by (le))",
             "legendFormat": "Retrieval P95"
           },
           {
             "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-            "expr": "histogram_quantile(0.95, sum(rate(ask_scoring_duration_seconds_bucket{kubernetes_namespace=\"ask-api\"}[5m])) by (le))",
+            "expr": "histogram_quantile(0.95, sum(rate(ask_scoring_duration_seconds_bucket{kubernetes_namespace=\"ask-api\", endpoint!~\"/health|/metrics\"}[5m])) by (le))",
             "legendFormat": "Scoring P95"
           }
         ],
@@ -147,7 +148,7 @@
         "targets": [
           {
             "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-            "expr": "histogram_quantile(0.95, sum(rate(ask_llm_call_duration_seconds_bucket{kubernetes_namespace=\"ask-api\"}[5m])) by (le, operation))",
+            "expr": "histogram_quantile(0.95, sum(rate(ask_llm_call_duration_seconds_bucket{kubernetes_namespace=\"ask-api\", endpoint!~\"/health|/metrics\"}[5m])) by (le, operation))",
             "legendFormat": "{{ operation }} P95"
           }
         ],
