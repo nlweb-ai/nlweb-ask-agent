@@ -18,7 +18,7 @@ from azure.search.documents.aio import SearchClient
 CredentialType = Union[DefaultAzureCredential, AzureKeyCredential]
 
 from nlweb_core.embedding import get_embedding
-from nlweb_core.retriever import VectorDBClientInterface
+from nlweb_core.retriever import RetrievalProvider
 from nlweb_core.item_retriever import RetrievedItem
 from nlweb_core.azure_credentials import get_azure_credential
 
@@ -26,51 +26,39 @@ from nlweb_core.azure_credentials import get_azure_credential
 logger = logging.getLogger(__name__)
 
 
-class AzureSearchClient(VectorDBClientInterface):
+class AzureSearchClient(RetrievalProvider):
     """
     Client for Azure AI Search operations, providing a unified interface for
     retrieving vector-based search results.
     """
 
-    def __init__(self, endpoint_config):
+    def __init__(
+        self,
+        api_endpoint: str,
+        auth_method: str,
+        index_name: str,
+        api_key: str | None = None,
+        **kwargs,
+    ):
         """
         Initialize the Azure Search client.
 
         Args:
-            endpoint_config: Endpoint configuration object with api_endpoint, api_key, index_name, etc.
+            api_endpoint: Azure Search endpoint URL.
+            auth_method: Authentication method ('api_key' or 'azure_ad').
+            api_key: API key (required when auth_method is 'api_key').
+            index_name: Default search index name.
+            **kwargs: Additional provider-specific configuration.
         """
-        super().__init__()
-        self.endpoint_config = endpoint_config
-
-        # Get authentication method
-        self.auth_method = (
-            endpoint_config.auth_method
-            if hasattr(endpoint_config, "auth_method") and endpoint_config.auth_method
-            else "api_key"
-        )
-
-        # Safely handle None values for endpoint
-        if (
-            not hasattr(endpoint_config, "api_endpoint")
-            or endpoint_config.api_endpoint is None
-        ):
-            raise ValueError("api_endpoint is not configured")
-
-        self.api_endpoint = endpoint_config.api_endpoint.strip('"')
-        self.default_index_name = (
-            endpoint_config.index_name
-            if hasattr(endpoint_config, "index_name") and endpoint_config.index_name
-            else "crawler-vectors"
-        )
+        self.auth_method = auth_method
+        self.api_endpoint = api_endpoint.strip('"')
+        self.default_index_name = index_name
 
         # API key is only required for api_key authentication
         if self.auth_method == "api_key":
-            if (
-                not hasattr(endpoint_config, "api_key")
-                or endpoint_config.api_key is None
-            ):
-                raise ValueError("api_key is not configured")
-            self.api_key = endpoint_config.api_key.strip('"')
+            if not api_key:
+                raise ValueError("api_key is required for api_key authentication")
+            self.api_key = api_key.strip('"')
         elif self.auth_method == "azure_ad":
             # No API key needed for managed identity
             self.api_key = None

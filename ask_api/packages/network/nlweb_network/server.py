@@ -355,16 +355,7 @@ async def cleanup_app(app):
         except Exception as e:
             print(f"Error closing conversation storage: {e}")
 
-    # Cleanup vector database clients (Azure Search, etc.)
-    try:
-        from nlweb_core.retriever import close_vectordb_clients
-
-        await close_vectordb_clients()
-        print("Vector database clients closed")
-    except Exception as e:
-        print(f"Error closing vector database clients: {e}")
-
-    # Cleanup all provider instances (generative, scoring, site config)
+    # Cleanup all provider instances (generative, scoring, site config, retrieval)
     try:
         from nlweb_core.config import close_all_providers
 

@@ -50,13 +50,13 @@ scoring_model:
 
 
 retrieval:
-  provider: azure_ai_search
-  import_path: nlweb_azure_vectordb.azure_search_client
-  class_name: AzureSearchClient
-  api_endpoint_env: AZURE_SEARCH_ENDPOINT
-  api_key_env: AZURE_SEARCH_KEY
-  auth_method: api_key # Use 'azure_ad' for managed identity
-  index_name: crawler-vectors
+  default:
+    import_path: nlweb_azure_vectordb.azure_search_client
+    class_name: AzureSearchClient
+    api_endpoint_env: AZURE_SEARCH_ENDPOINT
+    api_key_env: AZURE_SEARCH_KEY
+    auth_method: api_key # Use 'azure_ad' for managed identity
+    index_name: crawler-vectors
 
 object_storage:
   default:

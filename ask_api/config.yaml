@@ -38,25 +38,24 @@ scoring_model:
     class_name: PiLabsScoringProvider
     endpoint_env: PI_LABS_ENDPOINT
     api_key_env: PI_LABS_KEY
-  # Example: Additional Azure OpenAI scoring provider
-  # azure:
-  #   model: gpt-4.1-mini
-  #   endpoint_env: AZURE_OPENAI_ENDPOINT
-  #   api_key_env: AZURE_OPENAI_KEY
-  #   api_version: "2024-08-01-preview"
-  #   auth_method: api_key
-  #   import_path: nlweb_azure_models.llm.azure_oai
-  #   class_name: AzureOpenAIScoringProvider
+  4.1-mini:
+    model: gpt-4.1-mini
+    endpoint_env: AZURE_OPENAI_ENDPOINT
+    api_key_env: AZURE_OPENAI_KEY
+    api_version: "2024-08-01-preview"
+    auth_method: api_key
+    import_path: nlweb_azure_models.llm.azure_oai
+    class_name: AzureOpenAIScoringProvider
 
 
 retrieval:
-  provider: azure_ai_search
-  import_path: nlweb_azure_vectordb.azure_search_client
-  class_name: AzureSearchClient
-  api_endpoint_env: AZURE_SEARCH_ENDPOINT
-  api_key_env: AZURE_SEARCH_KEY
-  auth_method: api_key # Use 'azure_ad' for managed identity
-  index_name: crawler-vectors
+  default:
+    import_path: nlweb_azure_vectordb.azure_search_client
+    class_name: AzureSearchClient
+    api_endpoint_env: AZURE_SEARCH_ENDPOINT
+    api_key_env: AZURE_SEARCH_KEY
+    auth_method: api_key # Use 'azure_ad' for managed identity
+    index_name: crawler-vectors
 
 object_storage:
   default:

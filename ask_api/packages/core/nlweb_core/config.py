@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from nlweb_core.llm import GenerativeLLMProvider
     from nlweb_core.scoring import ScoringLLMProvider
     from nlweb_core.site_config.base import SiteConfigLookup
-    from nlweb_core.retriever import ObjectLookupProvider
+    from nlweb_core.retriever import ObjectLookupProvider, RetrievalProvider
 
 logger = logging.getLogger(__name__)
 
@@ -48,20 +48,12 @@ class EmbeddingProviderConfig:
 
 
 @dataclass
-class RetrievalProviderConfig:
-    api_key: str | None = None
-    api_key_env: str | None = None
-    api_endpoint: str | None = None
-    api_endpoint_env: str | None = None
-    database_path: str | None = None
-    index_name: str | None = None
-    db_type: str | None = None
-    use_knn: bool | None = None
-    enabled: bool = False
-    vector_type: dict[str, Any] | None = None
-    auth_method: str | None = None
-    import_path: str | None = None
-    class_name: str | None = None
+class RetrievalConfig:
+    """Configuration for a single retrieval provider."""
+
+    import_path: str
+    class_name: str
+    options: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -201,11 +193,10 @@ class AppConfig:
     )
     preferred_embedding_provider: str | None = None
 
-    # Retrieval Configuration
-    retrieval_endpoints: dict[str, RetrievalProviderConfig] = field(
+    # Retrieval Providers
+    retrieval_providers: dict[str, RetrievalConfig] = field(
         default_factory=dict
     )
-    write_endpoint: str | None = None
 
     # Conversation Storage
     conversation_storage: ConversationStorageConfig | None = None
@@ -299,6 +290,12 @@ class AppConfig:
         if _object_storage_provider_map is None:
             raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
         return _object_storage_provider_map.get(name)
+
+    def get_retrieval_provider(self, name: str) -> RetrievalProvider:
+        """Get a cached retrieval provider instance by name."""
+        if _retrieval_provider_map is None:
+            raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+        return _retrieval_provider_map.get(name)
 
     def get_ranking_config(self) -> RankingConfig:
         """Get ranking config, checking for per-request override first."""
@@ -412,35 +409,31 @@ def _load_embedding_config(
     return providers, provider_name
 
 
-def _load_retrieval_config(
-    data: dict,
-) -> tuple[dict[str, RetrievalProviderConfig], str | None]:
-    """Load retrieval configuration from config dict."""
+def _load_retrieval_provider_config(data: dict) -> dict[str, RetrievalConfig]:
+    """Load retrieval provider configuration from config dict."""
     if "retrieval" not in data:
-        return {}, None
+        return {}
 
     ret_cfg = data["retrieval"]
-    provider_name = ret_cfg.get("provider", "default")
+    if not isinstance(ret_cfg, dict):
+        raise ValueError("retrieval must be a mapping of provider names to configs")
 
-    endpoints = {
-        provider_name: RetrievalProviderConfig(
-            api_key=_get_config_value(ret_cfg.get("api_key_env")),
-            api_key_env=ret_cfg.get("api_key_env"),
-            api_endpoint=_get_config_value(ret_cfg.get("api_endpoint_env")),
-            api_endpoint_env=ret_cfg.get("api_endpoint_env"),
-            database_path=_get_config_value(ret_cfg.get("database_path")),
-            index_name=_get_config_value(ret_cfg.get("index_name")),
-            db_type=_get_config_value(ret_cfg.get("db_type", provider_name)),
-            enabled=ret_cfg.get("enabled", True),
-            use_knn=ret_cfg.get("use_knn"),
-            vector_type=ret_cfg.get("vector_type"),
-            auth_method=_get_config_value(ret_cfg.get("auth_method"), "api_key"),
-            import_path=_get_config_value(ret_cfg.get("import_path")),
-            class_name=_get_config_value(ret_cfg.get("class_name")),
+    providers: dict[str, RetrievalConfig] = {}
+    for provider_name, provider_cfg in ret_cfg.items():
+        if not isinstance(provider_cfg, dict):
+            raise ValueError(
+                f"retrieval provider '{provider_name}' must be a mapping"
+            )
+        import_path, class_name = _extract_import_class(
+            provider_cfg, "retrieval", provider_name
         )
-    }
+        providers[provider_name] = RetrievalConfig(
+            import_path=import_path,
+            class_name=class_name,
+            options=_build_options(provider_cfg),
+        )
 
-    return endpoints, provider_name
+    return providers
 
 
 def _load_conversation_storage(
@@ -813,7 +806,7 @@ def load_config() -> AppConfig:
         # Load all configurations from unified file
         generative_model_providers = _load_generative_model_config(data)
         embedding_providers, preferred_embedding_provider = _load_embedding_config(data)
-        retrieval_endpoints, write_endpoint = _load_retrieval_config(data)
+        retrieval_providers = _load_retrieval_provider_config(data)
         conversation_storage = _load_conversation_storage(
             data, config_directory, base_output_directory
         )
@@ -851,8 +844,7 @@ def load_config() -> AppConfig:
             generative_model_providers=generative_model_providers,
             embedding_providers=embedding_providers,
             preferred_embedding_provider=preferred_embedding_provider,
-            retrieval_endpoints=retrieval_endpoints,
-            write_endpoint=write_endpoint,
+            retrieval_providers=retrieval_providers,
             conversation_storage=conversation_storage,
             conversation_storage_behavior=StorageBehaviorConfig(),
             conversation_storage_endpoints={},
@@ -943,6 +935,7 @@ _generative_provider_map: ProviderMap | None = None
 _scoring_provider_map: ProviderMap | None = None
 _site_config_provider_map: ProviderMap | None = None
 _object_storage_provider_map: ProviderMap | None = None
+_retrieval_provider_map: ProviderMap | None = None
 
 
 @contextmanager
@@ -981,9 +974,18 @@ def override_object_storage_provider(old_name: str, new_name: str):
         yield
 
 
+@contextmanager
+def override_retrieval_provider(old_name: str, new_name: str):
+    """Temporarily remap a retrieval provider name."""
+    if _retrieval_provider_map is None:
+        raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+    with _retrieval_provider_map.override(old_name, new_name):
+        yield
+
+
 def initialize_providers(config: AppConfig) -> None:
     """Eagerly create all provider instances from config. Call at server startup."""
-    global _generative_provider_map, _scoring_provider_map, _site_config_provider_map, _object_storage_provider_map
+    global _generative_provider_map, _scoring_provider_map, _site_config_provider_map, _object_storage_provider_map, _retrieval_provider_map
     _generative_provider_map = ProviderMap(
         config=config.generative_model_providers,
         error_prefix="Generative model provider",
@@ -1000,6 +1002,10 @@ def initialize_providers(config: AppConfig) -> None:
         config=config.object_storage_providers,
         error_prefix="Object storage provider",
     )
+    _retrieval_provider_map = ProviderMap(
+        config=config.retrieval_providers,
+        error_prefix="Retrieval provider",
+    )
 
 
 async def close_all_providers() -> None:
@@ -1012,3 +1018,5 @@ async def close_all_providers() -> None:
         await _site_config_provider_map.close()
     if _object_storage_provider_map is not None:
         await _object_storage_provider_map.close()
+    if _retrieval_provider_map is not None:
+        await _retrieval_provider_map.close()
