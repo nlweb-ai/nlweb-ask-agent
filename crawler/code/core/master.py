@@ -9,6 +9,7 @@ import db
 import log
 import requests
 from get_queue import get_queue
+from metrics import CRAWLER_FILES_QUEUED_TOTAL
 
 log.configure(os.environ)
 logger = logging.getLogger("master")
@@ -318,6 +319,7 @@ def add_schema_map_to_site(
                 success = queue.send_message(job)
                 if success:
                     queued_count += 1
+                    CRAWLER_FILES_QUEUED_TOTAL.inc()
             except Exception as e:
                 logger.error(f"Error queuing file {file_url}: {e}")
 
@@ -341,6 +343,7 @@ def add_schema_map_to_site(
                     "queued_at": datetime.now(timezone.utc).isoformat(),
                 }
                 queue.send_message(job)
+                CRAWLER_FILES_QUEUED_TOTAL.inc()
             except Exception as e:
                 logger.error(f"Error queuing removal for {file_url}: {e}")
 

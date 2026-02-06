@@ -15,6 +15,10 @@ spec:
       labels:
         {{- include "crawler.masterSelectorLabels" . | nindent 8 }}
         azure.workload.identity/use: "true"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.master.port }}"
+        prometheus.io/path: "/metrics"
     spec:
       serviceAccountName: {{ include "crawler.serviceAccountName" . }}
       volumes:

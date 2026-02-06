@@ -1,0 +1,15 @@
+{{- if .Values.global.monitoring.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ama-metrics-settings-configmap
+  namespace: kube-system
+data:
+  schema-version: v1
+  config-version: ver1
+  prometheus-collector-settings: |-
+    [default-scrape-settings]
+      enabled = true
+    [pod-annotation-based-scraping]
+      podannotationnamespaceregex = ".*"
+{{- end }}

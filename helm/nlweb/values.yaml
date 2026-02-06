@@ -16,6 +16,9 @@ global:
   containerRegistry:
     server: ""    # Required: e.g., "myacr.azurecr.io"
 
+  monitoring:
+    enabled: true  # Enable Prometheus pod scraping via ama-metrics ConfigMap
+
 # Subchart enable flags
 ask-api:
   enabled: true

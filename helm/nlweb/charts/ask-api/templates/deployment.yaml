@@ -15,6 +15,10 @@ spec:
       labels:
         {{- include "ask-api.selectorLabels" . | nindent 8 }}
         azure.workload.identity/use: "true"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.service.targetPort }}"
+        prometheus.io/path: "/metrics"
     spec:
       serviceAccountName: {{ include "ask-api.serviceAccountName" . }}
       volumes:

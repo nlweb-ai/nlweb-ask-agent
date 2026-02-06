@@ -107,6 +107,8 @@ var crawlerIdentityName = '${abbrs.managedIdentityUserAssignedIdentities}crawler
 var kedaIdentityName = '${abbrs.managedIdentityUserAssignedIdentities}keda-${resourceToken}'
 var deployIdentityName = '${abbrs.managedIdentityUserAssignedIdentities}deploy-${resourceToken}'
 var albControllerIdentityName = '${abbrs.managedIdentityUserAssignedIdentities}alb-${resourceToken}'
+var monitorWorkspaceResolvedName = '${abbrs.monitorAccounts}${resourceToken}'
+var grafanaResolvedName = '${abbrs.dashboardGrafana}${resourceToken}'
 
 // Tags
 var tags = {
@@ -164,6 +166,29 @@ module appInsights 'modules/application-insights.bicep' = {
     name: appInsightsResolvedName
     location: location
     tags: tags
+  }
+}
+
+// Azure Monitor Workspace (for Managed Prometheus)
+module monitorWorkspace 'modules/monitor-workspace.bicep' = {
+  name: 'monitorWorkspace'
+  scope: rg
+  params: {
+    name: monitorWorkspaceResolvedName
+    location: location
+    tags: tags
+  }
+}
+
+// Azure Managed Grafana
+module grafana 'modules/grafana.bicep' = {
+  name: 'grafana'
+  scope: rg
+  params: {
+    name: grafanaResolvedName
+    location: location
+    tags: tags
+    monitorWorkspaceId: monitorWorkspace.outputs.id
   }
 }
 
@@ -332,6 +357,7 @@ module aks 'modules/aks.bicep' = {
     aksSystemSubnetId: network.outputs.aksSystemSubnetId
     aksUserSubnetId: network.outputs.aksUserSubnetId
     acrId: acr.outputs.id
+    monitorWorkspaceId: monitorWorkspace.outputs.id
   }
 }
 
@@ -468,6 +494,11 @@ output CRAWLER_IDENTITY_CLIENT_ID string = workloadIdentities.outputs.crawlerIde
 output KEDA_IDENTITY_CLIENT_ID string = workloadIdentities.outputs.kedaIdentityClientId
 output ALB_CONTROLLER_IDENTITY_CLIENT_ID string = workloadIdentities.outputs.albControllerIdentityClientId
 output HOSTNAME string = hostname
+
+// Monitoring Outputs
+output GRAFANA_ENDPOINT string = grafana.outputs.endpoint
+output GRAFANA_NAME string = grafana.outputs.name
+output MONITOR_WORKSPACE_NAME string = monitorWorkspace.outputs.name
 
 // Helm values JSON for post-provision script
 output HELM_VALUES_JSON string = string(helmValuesObject)

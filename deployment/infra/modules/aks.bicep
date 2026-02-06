@@ -36,6 +36,9 @@ param aksUserSubnetId string
 @description('Container Registry ID for AcrPull role assignment')
 param acrId string = ''
 
+@description('Azure Monitor Workspace ID for Prometheus metrics collection (empty to disable)')
+param monitorWorkspaceId string = ''
+
 // AKS Cluster
 resource aks 'Microsoft.ContainerService/managedClusters@2024-09-01' = {
   name: name
@@ -110,10 +113,69 @@ resource aks 'Microsoft.ContainerService/managedClusters@2024-09-01' = {
       }
     }
 
+    // Azure Monitor - Prometheus metrics collection
+    azureMonitorProfile: {
+      metrics: {
+        enabled: !empty(monitorWorkspaceId)
+      }
+    }
+
     // Auto-upgrade
     autoUpgradeProfile: {
       upgradeChannel: 'patch'
     }
+  }
+}
+
+// Prometheus Data Collection Resources (only when monitor workspace is provided)
+resource prometheusDataCollectionEndpoint 'Microsoft.Insights/dataCollectionEndpoints@2022-06-01' = if (!empty(monitorWorkspaceId)) {
+  name: '${name}-prometheus-dce'
+  location: location
+  tags: tags
+  properties: {
+    networkAcls: {
+      publicNetworkAccess: 'Enabled'
+    }
+  }
+}
+
+resource prometheusDataCollectionRule 'Microsoft.Insights/dataCollectionRules@2022-06-01' = if (!empty(monitorWorkspaceId)) {
+  name: '${name}-prometheus-dcr'
+  location: location
+  tags: tags
+  properties: {
+    dataCollectionEndpointId: prometheusDataCollectionEndpoint.id
+    dataSources: {
+      prometheusForwarder: [
+        {
+          name: 'PrometheusDataSource'
+          streams: ['Microsoft-PrometheusMetrics']
+          labelIncludeFilter: {}
+        }
+      ]
+    }
+    destinations: {
+      monitoringAccounts: [
+        {
+          name: 'MonitoringAccount'
+          accountResourceId: monitorWorkspaceId
+        }
+      ]
+    }
+    dataFlows: [
+      {
+        streams: ['Microsoft-PrometheusMetrics']
+        destinations: ['MonitoringAccount']
+      }
+    ]
+  }
+}
+
+resource prometheusRuleAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2022-06-01' = if (!empty(monitorWorkspaceId)) {
+  name: '${name}-prometheus-dcra'
+  scope: aks
+  properties: {
+    dataCollectionRuleId: prometheusDataCollectionRule.id
   }
 }
 

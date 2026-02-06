@@ -3,7 +3,7 @@
 
 include ../common.mk
 
-.PHONY: help login deploy destroy validate show-outputs grant-app-access setup-k8s build-images install-nlweb request-certificate check-certificate enable-tls load-synthetic
+.PHONY: help login deploy destroy validate show-outputs grant-app-access setup-k8s build-images install-nlweb request-certificate check-certificate enable-tls load-synthetic deploy-dashboards
 
 # Deployment-specific options
 LOCATION ?= centralus
@@ -246,3 +246,18 @@ load-synthetic:
 	@echo "  Split: $(SPLIT_NAME)"
 	@echo ""
 	HOSTNAME=$(HOSTNAME) SPLIT_NAME=$(SPLIT_NAME) ./scripts/load_synthetic.sh
+
+# Deploy Grafana dashboards to Azure Managed Grafana
+# Usage: make deploy-dashboards ENV_NAME=myenv
+deploy-dashboards:
+	@echo "Deploying Grafana dashboards..."
+	@echo "  Environment: $(ENV_NAME)"
+	@echo ""
+	$(call discover-azure-resources)
+	GRAFANA_NAME=$$(az grafana list -g $(RG_NAME) --query "[0].name" -o tsv) && \
+	if [ -z "$$GRAFANA_NAME" ]; then \
+		echo "Error: No Grafana instance found in resource group $(RG_NAME)"; \
+		exit 1; \
+	fi && \
+	echo "  Grafana: $$GRAFANA_NAME" && \
+	GRAFANA_NAME=$$GRAFANA_NAME AZURE_RESOURCE_GROUP=$(RG_NAME) ./scripts/deploy_dashboards.sh
