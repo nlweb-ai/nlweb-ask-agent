@@ -189,6 +189,8 @@ module grafana 'modules/grafana.bicep' = {
     location: location
     tags: tags
     monitorWorkspaceId: monitorWorkspace.outputs.id
+    adminPrincipalId: principalId
+    adminPrincipalType: principalType
   }
 }
 

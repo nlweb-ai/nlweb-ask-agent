@@ -12,6 +12,12 @@ param tags object = {}
 @description('Azure Monitor Workspace ID to use as Prometheus data source')
 param monitorWorkspaceId string
 
+@description('Principal ID to grant Grafana Admin role (e.g. deploying user)')
+param adminPrincipalId string = ''
+
+@description('Principal type for the admin (User or ServicePrincipal)')
+param adminPrincipalType string = 'User'
+
 resource grafana 'Microsoft.Dashboard/grafana@2023-09-01' = {
   name: name
   location: location
@@ -49,6 +55,19 @@ resource grafanaMonitorDataReader 'Microsoft.Authorization/roleAssignments@2022-
     principalType: 'ServicePrincipal'
     // Monitoring Data Reader role
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b0d8363b-8ddd-447d-831f-62ca05bff136')
+  }
+}
+
+// Grafana Admin role for the deploying user
+// This allows managing dashboards, data sources, etc. via the API
+resource grafanaAdminRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(adminPrincipalId)) {
+  name: guid(grafana.id, adminPrincipalId, 'grafana-admin')
+  scope: grafana
+  properties: {
+    principalId: adminPrincipalId
+    principalType: adminPrincipalType
+    // Grafana Admin role
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '22926164-76b3-42b3-bc55-97df8dab3e41')
   }
 }
 
