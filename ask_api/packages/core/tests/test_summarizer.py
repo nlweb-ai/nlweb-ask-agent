@@ -2,11 +2,11 @@
 Tests for NLWeb summarizer module.
 """
 
-import pytest
 from unittest.mock import AsyncMock
 
-from nlweb_core.summarizer import ResultsSummarizer, SummaryResult
+import pytest
 from nlweb_core.llm_models import SummaryResponse
+from nlweb_core.summarizer import ResultsSummarizer, SummaryResult
 
 
 class TestSummaryResult:
@@ -35,7 +35,9 @@ class TestResultsSummarizer:
     @pytest.fixture
     def mock_llm(self):
         """Create a mock LLM callable that returns SummaryResponse."""
-        mock = AsyncMock(return_value=SummaryResponse(summary="Mock summary of results"))
+        mock = AsyncMock(
+            return_value=SummaryResponse(summary="Mock summary of results")
+        )
         return mock
 
     @pytest.fixture
@@ -59,7 +61,9 @@ class TestResultsSummarizer:
         summarizer = ResultsSummarizer(llm=mock_llm, prompt_template=custom_prompt)
         assert summarizer._prompt_template == custom_prompt
 
-    def test_format_results_formats_all_provided_results(self, mock_llm, sample_results):
+    def test_format_results_formats_all_provided_results(
+        self, mock_llm, sample_results
+    ):
         """Test format_results formats all results provided by caller."""
         summarizer = ResultsSummarizer(llm=mock_llm)
         formatted = summarizer.format_results(sample_results)

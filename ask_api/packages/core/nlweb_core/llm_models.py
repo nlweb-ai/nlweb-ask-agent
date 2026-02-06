@@ -15,10 +15,13 @@ from pydantic import BaseModel, Field, field_validator
 
 class RankingResponse(BaseModel):
     """Response model for ranking/relevance scoring with description."""
-    score: int = Field(..., ge=0, le=100, description="Relevance score between 0 and 100")
+
+    score: int = Field(
+        ..., ge=0, le=100, description="Relevance score between 0 and 100"
+    )
     description: str = Field(..., description="Short description of the item")
 
-    @field_validator('score', mode='before')
+    @field_validator("score", mode="before")
     @classmethod
     def clamp_score(cls, v: int) -> int:
         """Clamp score to valid range 0-100."""
@@ -29,9 +32,10 @@ class RankingResponse(BaseModel):
 
 class ScoreResponse(BaseModel):
     """Response model for simple score-only responses (intent detection, elicitation checks)."""
+
     score: int = Field(..., ge=0, le=100, description="Score between 0 and 100")
 
-    @field_validator('score', mode='before')
+    @field_validator("score", mode="before")
     @classmethod
     def clamp_score(cls, v: int) -> int:
         """Clamp score to valid range 0-100."""
@@ -42,9 +46,13 @@ class ScoreResponse(BaseModel):
 
 class QuestionResponse(BaseModel):
     """Response model for generated follow-up questions."""
+
     question: str = Field(..., min_length=1, description="The generated question text")
 
 
 class SummaryResponse(BaseModel):
     """Response model for search result summaries."""
-    summary: str = Field(..., min_length=1, description="A 2-3 sentence summary of the AI results")
+
+    summary: str = Field(
+        ..., min_length=1, description="A 2-3 sentence summary of the AI results"
+    )

@@ -8,7 +8,8 @@ Implements MCP protocol using JSON-RPC 2.0 over standard HTTP.
 """
 
 import json
-from typing import Awaitable, Callable, Dict, Any
+from typing import Any, Awaitable, Callable, Dict
+
 from nlweb_core.handler import AskHandler
 from nlweb_core.protocol.models import AskRequest
 

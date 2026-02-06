@@ -5,7 +5,7 @@ SHELL := /bin/bash
 
 include ../common.mk
 
-.PHONY: help dev-master dev-worker env-check test build deploy down port-forward logs-master logs-worker init_environment
+.PHONY: help dev-master dev-worker env-check test lint format typecheck check build deploy down port-forward logs-master logs-worker init_environment
 
 DEFAULT_GOAL := help
 
@@ -46,6 +46,18 @@ test:
 	@echo ""
 	@echo "Running unit tests..."
 	@uv run pytest code/tests/ -vv
+
+lint:
+	uv run ruff check .
+
+format:
+	uv run ruff format .
+	uv run ruff check --fix --select I .
+
+typecheck:
+	uv run pyright
+
+check: lint typecheck test
 
 # Build single unified image
 build:

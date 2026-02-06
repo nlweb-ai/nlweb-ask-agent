@@ -103,7 +103,7 @@ Results:
             results_text.append(f"{i}. {name}: {description}")
         return "\n".join(results_text)
 
-    def build_prompt(self, query: str, results: List[Dict], start_num:int = 0) -> str:
+    def build_prompt(self, query: str, results: List[Dict], start_num: int = 0) -> str:
         """Build the full prompt for summarization.
 
         Args:
@@ -119,13 +119,11 @@ Results:
         if start_num:
             query_constraints = f"The query was issued again for more results, starting at the {start_num} entry. Start of the summary by indicating these items were retrieved after looking for additional items."
         return self._prompt_template.format(
-            query=query, 
-            results=results_text,
-            query_constraints=query_constraints
+            query=query, results=results_text, query_constraints=query_constraints
         )
 
     async def summarize(
-        self, query: str, results: List[Dict], start_num:int = 0
+        self, query: str, results: List[Dict], start_num: int = 0
     ) -> Optional[SummaryResult]:
         """Generate a summary of the search results.
 
@@ -149,9 +147,7 @@ Results:
 
         # Response is guaranteed to be a SummaryResponse Pydantic model
         if not isinstance(response, SummaryResponse):
-            raise ValueError(
-                f"Expected SummaryResponse, got {type(response).__name__}"
-            )
+            raise ValueError(f"Expected SummaryResponse, got {type(response).__name__}")
 
         return SummaryResult(
             summary=response.summary, raw_response={"summary": response.summary}
@@ -179,4 +175,6 @@ def create_hindi_summarizer() -> ResultsSummarizer:
     from nlweb_core.llm import ask_llm
 
     llm = partial(ask_llm, level="high", timeout=20)
-    return ResultsSummarizer(llm=llm, prompt_template=ResultsSummarizer.HINDI_PROMPT_TEMPLATE)
+    return ResultsSummarizer(
+        llm=llm, prompt_template=ResultsSummarizer.HINDI_PROMPT_TEMPLATE
+    )

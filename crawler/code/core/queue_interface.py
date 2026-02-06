@@ -2,16 +2,15 @@
 Queue abstraction layer that supports multiple backends
 """
 
-import config  # Load environment variables
-import os
-import json
 import abc
+import json
 import logging
+import os
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, Callable
+from typing import Any, Callable, Dict, Optional
 
+import config  # Load environment variables
 import log
-
 
 log.configure(os.environ)
 
@@ -64,7 +63,9 @@ class FileQueue(QueueInterface):
     def send_message(self, message: Dict[Any, Any]) -> bool:
         """Write a job file to the queue directory"""
         try:
-            job_id = f"job-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')}.json"
+            job_id = (
+                f"job-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')}.json"
+            )
             temp_path = os.path.join(self.queue_dir, f".tmp-{job_id}")
             final_path = os.path.join(self.queue_dir, job_id)
 

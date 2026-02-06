@@ -4,11 +4,12 @@ Start a worker process
 Run in terminal 3 (can run multiple workers in separate terminals)
 """
 
+import os
 import subprocess
 import sys
-import os
-from pathlib import Path
 import time
+from pathlib import Path
+
 
 def main():
     print("=" * 60)
@@ -21,6 +22,7 @@ def main():
     # Check dependencies
     try:
         import requests
+
         try:
             import pymssql
         except Exception as e:
@@ -34,10 +36,10 @@ def main():
         sys.exit(1)
 
     # Check queue status
-    queue_dir = Path(os.getenv('QUEUE_DIR', 'queue'))
+    queue_dir = Path(os.getenv("QUEUE_DIR", "queue"))
     if queue_dir.exists():
-        pending = len(list(queue_dir.glob('job-*.json')))
-        processing = len(list(queue_dir.glob('*.processing')))
+        pending = len(list(queue_dir.glob("job-*.json")))
+        processing = len(list(queue_dir.glob("*.processing")))
         print(f"\nQueue status:")
         print(f"  Pending jobs: {pending}")
         print(f"  Processing: {processing}")
@@ -55,6 +57,7 @@ def main():
         subprocess.run(["python3", "code/core/worker.py"])
     except KeyboardInterrupt:
         print("\nWorker stopped")
+
 
 if __name__ == "__main__":
     main()

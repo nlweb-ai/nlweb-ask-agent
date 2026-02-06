@@ -3,7 +3,8 @@ Elicitation checking - verifies if required information is present in query usin
 """
 
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 from nlweb_core.config import get_config
 from nlweb_core.llm import ask_llm_parallel
 from nlweb_core.llm_models import QuestionResponse

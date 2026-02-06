@@ -16,7 +16,6 @@ from typing import Any
 
 from nlweb_core.retrieved_item import RetrievedItem
 
-
 # Content types ranked by preference (most specific/valuable first)
 PREFERRED_TYPES: tuple[str, ...] = (
     # Articles & News

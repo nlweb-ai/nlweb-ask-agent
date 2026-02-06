@@ -7,17 +7,19 @@ This file contains the AskHandler ABC and DefaultAskHandler implementation.
 WARNING: This code is under development and may undergo changes in future releases.
 Backwards compatibility is not guaranteed at this time.
 """
+
 import importlib
 import logging
 from abc import ABC, abstractmethod
 from typing import Awaitable, Callable
+
+from nlweb_core.config import get_config
+from nlweb_core.protocol.models import AskRequest
 from nlweb_core.query_analysis.query_analysis import (
     DefaultQueryAnalysisHandler,
     query_analysis_tree,
 )
-from nlweb_core.protocol.models import AskRequest
 from nlweb_core.request_context import set_request_id
-from nlweb_core.config import get_config
 from nlweb_core.site_config import get_elicitation_handler
 
 logger = logging.getLogger(__name__)
@@ -105,7 +107,7 @@ class DefaultAskHandler(AskHandler):
         if request.meta and request.meta.start_num:
             return request.meta.start_num
         return 0
-    
+
     async def _run_query_body(
         self,
         request: AskRequest,
@@ -113,8 +115,8 @@ class DefaultAskHandler(AskHandler):
         site_config: dict[str, str],
     ) -> list[dict]:
         """Execute the query body by retrieving and ranking items."""
-        from nlweb_core.retriever import enrich_results_from_object_storage
         from nlweb_core.ranking import Ranking
+        from nlweb_core.retriever import enrich_results_from_object_storage
 
         config = get_config()
         vectordb_client = config.get_retrieval_provider("default")
@@ -137,7 +139,7 @@ class DefaultAskHandler(AskHandler):
             max_results=request.query.max_results,
             min_score=request.query.min_score,
             site=request.query.site,
-            start_num=self._get_result_offset(request)
+            start_num=self._get_result_offset(request),
         )
 
         await self._send_results(output_method, final_ranked_answers)
@@ -349,7 +351,9 @@ class SiteSelectingHandler(AskHandler):
         config = await lookup.get_config(site)
         if not config:
             # Site not in handler config - use default
-            logger.debug(f"No handler config for site '{site}', using DefaultAskHandler")
+            logger.debug(
+                f"No handler config for site '{site}', using DefaultAskHandler"
+            )
             return DefaultAskHandler
 
         # Check for handler configuration

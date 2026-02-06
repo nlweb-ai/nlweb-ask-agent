@@ -2,30 +2,29 @@
 Vector Database implementation with Azure Cognitive Search and embeddings support.
 """
 
-import config  # Load environment variables
-import os
-import json
 import asyncio
 import hashlib
-from typing import List, Dict, Any, Optional, Tuple
+import json
+import logging
+import os
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Tuple
+
+import config  # Load environment variables
+import log
+from azure.core.credentials import AzureKeyCredential
 from azure.search.documents import SearchClient
 from azure.search.documents.indexes import SearchIndexClient
 from azure.search.documents.indexes.models import (
-    SearchIndex,
-    SimpleField,
+    HnswAlgorithmConfiguration,
     SearchableField,
     SearchField,
     SearchFieldDataType,
+    SearchIndex,
+    SimpleField,
     VectorSearch,
     VectorSearchProfile,
-    HnswAlgorithmConfiguration,
 )
-from azure.core.credentials import AzureKeyCredential
-import logging
-
-import log
-
 
 log.configure(os.environ)
 logger = logging.getLogger("vector_db")
@@ -276,16 +275,12 @@ class VectorDB:
 
         vector_search = VectorSearch(
             profiles=[
-                VectorSearchProfile(
-                    name="default", algorithm_configuration_name="hnsw"
-                )
+                VectorSearchProfile(name="default", algorithm_configuration_name="hnsw")
             ],
             algorithms=[HnswAlgorithmConfiguration(name="hnsw")],
         )
 
-        index = SearchIndex(
-            name=index_name, fields=fields, vector_search=vector_search
-        )
+        index = SearchIndex(name=index_name, fields=fields, vector_search=vector_search)
 
         # This will create index if it doesn't exist, or update schema if it does
         self.index_client.create_or_update_index(index)
@@ -315,6 +310,7 @@ class VectorDB:
                 date_str = json_obj["datePublished"]
                 # Parse the date string and ensure it's timezone-aware UTC
                 from dateutil import parser
+
                 parsed_date = parser.parse(date_str)
                 # Convert to UTC if not already
                 if parsed_date.tzinfo is None:
@@ -323,7 +319,9 @@ class VectorDB:
                     parsed_date = parsed_date.astimezone(timezone.utc)
                 date_published = parsed_date.isoformat()
             except Exception as e:
-                logger.warning(f"Failed to parse datePublished '{json_obj.get('datePublished')}': {e}")
+                logger.warning(
+                    f"Failed to parse datePublished '{json_obj.get('datePublished')}': {e}"
+                )
                 date_published = None
 
         document = {
@@ -332,7 +330,9 @@ class VectorDB:
             "site": site,
             "type": obj_type,
             "content": content,  # Empty - full objects in Cosmos DB
-            "timestamp": datetime.now(timezone.utc).isoformat(),  # Timezone-aware UTC timestamp
+            "timestamp": datetime.now(
+                timezone.utc
+            ).isoformat(),  # Timezone-aware UTC timestamp
             "embedding": embedding,
         }
 
@@ -393,17 +393,17 @@ class VectorDB:
                 # Extract essential fields instead of using full JSON
                 texts = [extract_essential_fields(obj) for _, _, obj in batch_items]
                 logger.debug(
-                    f"Batch {i//embedding_batch_size + 1}: Generating embeddings for {len(batch_items)} items..."
+                    f"Batch {i // embedding_batch_size + 1}: Generating embeddings for {len(batch_items)} items..."
                 )
                 batch_embeddings = await self.embedding_wrapper.batch_get_embeddings(
                     texts
                 )
                 all_embeddings.extend(batch_embeddings)
                 logger.debug(
-                    f"Batch {i//embedding_batch_size + 1}: Successfully generated {len(batch_embeddings)} embeddings"
+                    f"Batch {i // embedding_batch_size + 1}: Successfully generated {len(batch_embeddings)} embeddings"
                 )
                 logger.debug(
-                    f"Generated embeddings for batch {i//embedding_batch_size + 1}/{(len(items) + embedding_batch_size - 1)//embedding_batch_size} ({len(batch_items)} items)"
+                    f"Generated embeddings for batch {i // embedding_batch_size + 1}/{(len(items) + embedding_batch_size - 1) // embedding_batch_size} ({len(batch_items)} items)"
                 )
 
                 # Add small delay between batches to avoid rate limits
@@ -429,11 +429,15 @@ class VectorDB:
 
                 # Upload to search index in batches of 100
                 upload_batch_size = 100
-                logger.debug(f"Uploading {len(documents)} documents to {self.index_name}...")
+                logger.debug(
+                    f"Uploading {len(documents)} documents to {self.index_name}..."
+                )
                 for i in range(0, len(documents), upload_batch_size):
                     batch = documents[i : i + upload_batch_size]
                     result = self.search_client.upload_documents(documents=batch)
-                    logger.debug(f"Uploaded batch {i//upload_batch_size + 1} to {self.index_name}")
+                    logger.debug(
+                        f"Uploaded batch {i // upload_batch_size + 1} to {self.index_name}"
+                    )
 
                 logger.debug(f"Successfully completed batch_add for {len(items)} items")
             else:

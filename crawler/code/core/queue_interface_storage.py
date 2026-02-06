@@ -3,13 +3,13 @@ Azure Storage Queue with Azure AD Authentication
 This version uses Workload Identity / Managed Identity instead of connection strings
 """
 
-import os
 import json
 import logging
-from typing import Optional, Dict, Any
-from queue_interface import QueueInterface, QueueMessage
-import log
+import os
+from typing import Any, Dict, Optional
 
+import log
+from queue_interface import QueueInterface, QueueMessage
 
 log.configure(os.environ)
 
@@ -112,9 +112,9 @@ def ensure_queue_exists(storage_account_name: str, queue_name: str = "crawler-jo
     Ensure the Azure Storage Queue exists, creating it if necessary.
     This should be called once at application startup.
     """
+    from azure.core.exceptions import ResourceExistsError
     from azure.identity import DefaultAzureCredential
     from azure.storage.queue import QueueServiceClient
-    from azure.core.exceptions import ResourceExistsError
 
     account_url = f"https://{storage_account_name}.queue.core.windows.net"
     credential = DefaultAzureCredential()

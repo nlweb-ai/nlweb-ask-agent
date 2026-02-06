@@ -12,8 +12,8 @@ Usage:
     python add_recency_boost_config.py blog.example.com --decay-rate 0.05 --max-age-days 180
 """
 
-import asyncio
 import argparse
+import asyncio
 import sys
 
 
@@ -37,6 +37,7 @@ async def add_recency_config(
     # Initialize config (required before using SiteConfigLookup)
     import os
     from pathlib import Path
+
     from nlweb_core.config import initialize_config
 
     # Set config directory and file if not specified
@@ -137,9 +138,7 @@ def main():
         default=True,
         help="Enable recency boost (default: True)",
     )
-    parser.add_argument(
-        "--disabled", action="store_true", help="Disable recency boost"
-    )
+    parser.add_argument("--disabled", action="store_true", help="Disable recency boost")
     parser.add_argument(
         "--recency-weight",
         type=float,

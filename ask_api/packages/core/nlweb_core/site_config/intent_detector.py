@@ -3,7 +3,8 @@ Intent detection for site-specific queries using LLM scoring.
 """
 
 import logging
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 from nlweb_core.config import get_config
 from nlweb_core.scoring import ScoringContext
 

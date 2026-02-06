@@ -7,12 +7,12 @@ Azure Cosmos DB implementation for object lookup.
 
 import hashlib
 import logging
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 from azure.cosmos.aio import CosmosClient
 from azure.cosmos.exceptions import CosmosResourceNotFoundError
-
-from nlweb_core.retriever import ObjectLookupProvider
 from nlweb_core.azure_credentials import get_azure_credential
+from nlweb_core.retriever import ObjectLookupProvider
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,9 @@ class CosmosObjectLookup(ObjectLookupProvider):
     Uses Azure AD authentication (DefaultAzureCredential) with native async client.
     """
 
-    def __init__(self, endpoint: str, database_name: str, container_name: str, **kwargs):
+    def __init__(
+        self, endpoint: str, database_name: str, container_name: str, **kwargs
+    ):
         """Initialize Cosmos DB configuration. Client is created lazily on first use."""
         self._endpoint = endpoint
         self._database_name = database_name
@@ -41,12 +43,8 @@ class CosmosObjectLookup(ObjectLookupProvider):
                 self._endpoint,
                 credential=credential,
             )
-            database = self._client.get_database_client(
-                self._database_name
-            )
-            self._container_client = database.get_container_client(
-                self._container_name
-            )
+            database = self._client.get_database_client(self._database_name)
+            self._container_client = database.get_container_client(self._container_name)
 
     async def get_by_id(self, object_id: str) -> Optional[Dict[str, Any]]:
         """

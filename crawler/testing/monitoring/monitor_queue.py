@@ -3,24 +3,27 @@
 Queue monitoring tool for the crawler system
 Supports file-based and Azure Storage queues
 """
+
+import json
 import os
 import sys
 import time
-import json
 from datetime import datetime
-sys.path.insert(0, 'code/core')
+
+sys.path.insert(0, "code/core")
 import config  # Load environment variables
+
 
 def monitor_file_queue():
     """Monitor file-based queue"""
-    queue_dir = os.getenv('QUEUE_DIR', 'queue')
+    queue_dir = os.getenv("QUEUE_DIR", "queue")
 
     if not os.path.exists(queue_dir):
         print(f"Queue directory {queue_dir} does not exist")
         return
 
     while True:
-        os.system('clear')
+        os.system("clear")
         print("=" * 70)
         print(f"FILE QUEUE MONITOR - {datetime.now().strftime('%H:%M:%S')}")
         print("=" * 70)
@@ -32,9 +35,9 @@ def monitor_file_queue():
 
         for filename in os.listdir(queue_dir):
             filepath = os.path.join(queue_dir, filename)
-            if filename.endswith('.processing'):
+            if filename.endswith(".processing"):
                 processing.append(filename)
-            elif filename.startswith('job-') and filename.endswith('.json'):
+            elif filename.startswith("job-") and filename.endswith(".json"):
                 pending.append(filename)
 
         # Show summary
@@ -50,7 +53,9 @@ def monitor_file_queue():
                 try:
                     with open(os.path.join(queue_dir, filename)) as f:
                         job = json.load(f)
-                        print(f"  • {job.get('type', 'unknown'):20} {job.get('file_url', 'N/A')[:60]}")
+                        print(
+                            f"  • {job.get('type', 'unknown'):20} {job.get('file_url', 'N/A')[:60]}"
+                        )
                 except:
                     print(f"  • Error reading {filename}")
             if len(pending) > 10:
@@ -67,7 +72,9 @@ def monitor_file_queue():
                     age = int(time.time() - mtime)
                     with open(filepath) as f:
                         job = json.load(f)
-                        print(f"  • {job.get('type', 'unknown'):20} {job.get('file_url', 'N/A')[:40]} (age: {age}s)")
+                        print(
+                            f"  • {job.get('type', 'unknown'):20} {job.get('file_url', 'N/A')[:40]} (age: {age}s)"
+                        )
                 except:
                     print(f"  • Error reading {filename}")
             if len(processing) > 5:
@@ -75,9 +82,15 @@ def monitor_file_queue():
             print()
 
         # Show errors directory
-        error_dir = os.path.join(queue_dir, 'errors')
+        error_dir = os.path.join(queue_dir, "errors")
         if os.path.exists(error_dir):
-            error_count = len([f for f in os.listdir(error_dir) if f.startswith('job-') or f.startswith('failed-')])
+            error_count = len(
+                [
+                    f
+                    for f in os.listdir(error_dir)
+                    if f.startswith("job-") or f.startswith("failed-")
+                ]
+            )
             if error_count > 0:
                 print(f"❌ ERROR JOBS: {error_count}")
                 print()
@@ -90,18 +103,22 @@ def monitor_azure_storage():
     """Monitor Azure Storage Queue"""
     from azure.storage.queue import QueueServiceClient
 
-    conn_str = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
+    conn_str = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     if not conn_str:
         # Use default Azurite connection string
         conn_str = "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;QueueEndpoint=http://127.0.0.1:10001/devstoreaccount1;"
 
     try:
-        queue_client = QueueServiceClient.from_connection_string(conn_str).get_queue_client("jobs")
+        queue_client = QueueServiceClient.from_connection_string(
+            conn_str
+        ).get_queue_client("jobs")
 
         while True:
-            os.system('clear')
+            os.system("clear")
             print("=" * 70)
-            print(f"AZURE STORAGE QUEUE MONITOR - {datetime.now().strftime('%H:%M:%S')}")
+            print(
+                f"AZURE STORAGE QUEUE MONITOR - {datetime.now().strftime('%H:%M:%S')}"
+            )
             print("=" * 70)
             print()
 
@@ -109,7 +126,9 @@ def monitor_azure_storage():
                 # Get queue properties
                 properties = queue_client.get_queue_properties()
                 print(f"📊 QUEUE STATUS")
-                print(f"  Approximate message count: {properties['approximate_message_count']}")
+                print(
+                    f"  Approximate message count: {properties['approximate_message_count']}"
+                )
                 print()
 
                 # Peek at messages
@@ -120,7 +139,9 @@ def monitor_azure_storage():
                     for msg in messages:
                         try:
                             content = json.loads(msg.content)
-                            print(f"  • {content.get('type', 'unknown'):20} {content.get('file_url', 'N/A')[:60]}")
+                            print(
+                                f"  • {content.get('type', 'unknown'):20} {content.get('file_url', 'N/A')[:60]}"
+                            )
                             print(f"    Inserted: {msg.inserted_on}")
                         except:
                             print(f"  • Error parsing message")
@@ -138,15 +159,15 @@ def monitor_azure_storage():
 
 
 def main():
-    queue_type = os.getenv('QUEUE_TYPE', 'file').lower()
+    queue_type = os.getenv("QUEUE_TYPE", "file").lower()
 
     print(f"Starting monitor for queue type: {queue_type}")
     print()
 
     try:
-        if queue_type == 'file':
+        if queue_type == "file":
             monitor_file_queue()
-        elif queue_type == 'storage':
+        elif queue_type == "storage":
             monitor_azure_storage()
         else:
             print(f"Unknown queue type: {queue_type}. Supported: 'file', 'storage'")
@@ -155,5 +176,5 @@ def main():
         print("\n\nMonitor stopped.")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

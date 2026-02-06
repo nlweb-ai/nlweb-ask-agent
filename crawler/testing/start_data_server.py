@@ -4,12 +4,13 @@ Start the data server to serve test schema files
 Run in terminal 1
 """
 
-import subprocess
 import os
+import subprocess
 import sys
 from pathlib import Path
 
 DATA_SERVER_PORT = 8000
+
 
 def main():
     print("=" * 60)
@@ -28,7 +29,11 @@ def main():
         sys.exit(1)
 
     # List available sites
-    sites = [d.name for d in data_dir.iterdir() if d.is_dir() and (d / "schema_map.xml").exists()]
+    sites = [
+        d.name
+        for d in data_dir.iterdir()
+        if d.is_dir() and (d / "schema_map.xml").exists()
+    ]
     if sites:
         print(f"Available sites ({len(sites)}):")
         for site in sites:
@@ -40,11 +45,11 @@ def main():
 
     try:
         subprocess.run(
-            ["python3", "-m", "http.server", str(DATA_SERVER_PORT)],
-            cwd="data"
+            ["python3", "-m", "http.server", str(DATA_SERVER_PORT)], cwd="data"
         )
     except KeyboardInterrupt:
         print("\nData server stopped")
+
 
 if __name__ == "__main__":
     main()

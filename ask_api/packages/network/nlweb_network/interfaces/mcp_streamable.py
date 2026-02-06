@@ -9,11 +9,14 @@ This is the recommended MCP transport for HTTP-based communication.
 """
 
 import json
-from typing import Dict, Any
+from typing import Any, Dict
+
 from aiohttp import web
-from .base import BaseInterface
 from nlweb_core.handler import AskHandler
 from nlweb_core.mcp_handler import MCPHandler
+
+from .base import BaseInterface
+
 
 class MCPStreamableInterface(BaseInterface):
     """
@@ -61,7 +64,9 @@ class MCPStreamableInterface(BaseInterface):
             "method": method,
             "params": params,
             "id": request_id,
-            "query_params": params.get("arguments", {}) if method == "tools/call" else {}
+            "query_params": params.get("arguments", {})
+            if method == "tools/call"
+            else {},
         }
 
     async def handle_request(
@@ -90,10 +95,7 @@ class MCPStreamableInterface(BaseInterface):
             response = {
                 "jsonrpc": "2.0",
                 "id": request_id,
-                "error": {
-                    "code": -32603,
-                    "message": f"Internal error: {str(e)}"
-                }
+                "error": {"code": -32603, "message": f"Internal error: {str(e)}"},
             }
             return web.json_response(response, status=500)
 

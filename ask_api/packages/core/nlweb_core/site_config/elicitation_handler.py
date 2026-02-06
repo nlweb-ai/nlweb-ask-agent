@@ -3,10 +3,10 @@ Main elicitation handler that orchestrates the complete elicitation flow.
 """
 
 import logging
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
-from .intent_detector import IntentDetector
 from .elicitation_checker import ElicitationChecker
+from .intent_detector import IntentDetector
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,9 @@ class ElicitationHandler:
         self.intent_detector = IntentDetector()
         self.elicitation_checker = ElicitationChecker()
 
-        logger.info("ElicitationHandler initialized (uses scoring LLM via ask_llm_parallel)")
+        logger.info(
+            "ElicitationHandler initialized (uses scoring LLM via ask_llm_parallel)"
+        )
 
     async def evaluate_query(
         self,
@@ -47,12 +49,13 @@ class ElicitationHandler:
             logger.debug("No intent_elicitations in site config")
             return None
 
-        logger.debug(f"Evaluating query with {len(intent_elicitations)} intent-elicitation pairs")
+        logger.debug(
+            f"Evaluating query with {len(intent_elicitations)} intent-elicitation pairs"
+        )
 
         # Step 1: Detect matching intents and get their required_info
         matching_required_info = await self.intent_detector.detect_intents(
-            query=query_text,
-            intent_elicitations=intent_elicitations
+            query=query_text, intent_elicitations=intent_elicitations
         )
 
         if not matching_required_info:
@@ -61,8 +64,7 @@ class ElicitationHandler:
 
         # Step 2: Evaluate required_info checks
         elicitation_prompt = await self.elicitation_checker.evaluate_elicitation(
-            query=query_text,
-            required_info_configs=matching_required_info
+            query=query_text, required_info_configs=matching_required_info
         )
 
         if elicitation_prompt:

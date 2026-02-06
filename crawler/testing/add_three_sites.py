@@ -3,9 +3,10 @@
 Script to add three sites to production: IMDB, Hebbarskitchen, and Backcountry
 """
 
-import requests
 import sys
 from urllib.parse import quote
+
+import requests
 
 # Production configuration
 API_BASE = "https://testing.nlweb.ai/api"
@@ -14,27 +15,28 @@ API_KEY = "tqYiq7xqxSb-iC5WPHi1ek341XCKhl4HLhN5OK9mPaUPBZfQykMoTbQX4jrQddr4"
 # Sites to add
 SITES = [
     {
-        'name': 'IMDB',
-        'site_url': 'imdb.com',
-        'schema_map_url': 'https://guha.com/data/imdb_com/schema_map.xml'
+        "name": "IMDB",
+        "site_url": "imdb.com",
+        "schema_map_url": "https://guha.com/data/imdb_com/schema_map.xml",
     },
     {
-        'name': 'Hebbarskitchen',
-        'site_url': 'hebbarskitchen.com',
-        'schema_map_url': 'https://guha.com/data/hebbarskitchen_com/schema_map.xml'
+        "name": "Hebbarskitchen",
+        "site_url": "hebbarskitchen.com",
+        "schema_map_url": "https://guha.com/data/hebbarskitchen_com/schema_map.xml",
     },
     {
-        'name': 'Backcountry',
-        'site_url': 'backcountry.com',
-        'schema_map_url': 'https://guha.com/data/backcountry_com/schema_map.xml'
-    }
+        "name": "Backcountry",
+        "site_url": "backcountry.com",
+        "schema_map_url": "https://guha.com/data/backcountry_com/schema_map.xml",
+    },
 ]
+
 
 def add_schema_map_to_site(site_name, site_url, schema_map_url, api_key):
     """Add a schema map to a site using the schema-files API"""
 
     # URL encode the site_url for the API path
-    encoded_site = quote(site_url, safe='')
+    encoded_site = quote(site_url, safe="")
 
     # Construct the API endpoint
     endpoint = f"{API_BASE}/sites/{encoded_site}/schema-files"
@@ -46,13 +48,8 @@ def add_schema_map_to_site(site_name, site_url, schema_map_url, api_key):
     try:
         response = requests.post(
             endpoint,
-            headers={
-                'X-API-Key': api_key,
-                'Content-Type': 'application/json'
-            },
-            json={
-                'schema_map_url': schema_map_url
-            }
+            headers={"X-API-Key": api_key, "Content-Type": "application/json"},
+            json={"schema_map_url": schema_map_url},
         )
 
         if response.status_code == 200:
@@ -70,6 +67,7 @@ def add_schema_map_to_site(site_name, site_url, schema_map_url, api_key):
         print(f"  ✗ Error: {e}")
         return False
 
+
 def main():
     print("=" * 60)
     print("ADD THREE SITES TO PRODUCTION")
@@ -77,7 +75,9 @@ def main():
 
     success_count = 0
     for site in SITES:
-        if add_schema_map_to_site(site['name'], site['site_url'], site['schema_map_url'], API_KEY):
+        if add_schema_map_to_site(
+            site["name"], site["site_url"], site["schema_map_url"], API_KEY
+        ):
             success_count += 1
 
     print("\n" + "=" * 60)
@@ -87,6 +87,7 @@ def main():
     print("  https://testing.nlweb.ai/profile")
 
     return 0 if success_count == len(SITES) else 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

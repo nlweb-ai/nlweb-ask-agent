@@ -9,11 +9,13 @@ This transport allows real-time streaming of tool execution results.
 """
 
 import json
-from typing import Dict, Any
+from typing import Any, Dict
+
 from aiohttp import web
-from .base import BaseInterface
 from nlweb_core.handler import AskHandler
 from nlweb_core.protocol.models import AskRequest
+
+from .base import BaseInterface
 
 
 class MCPSSEInterface(BaseInterface):

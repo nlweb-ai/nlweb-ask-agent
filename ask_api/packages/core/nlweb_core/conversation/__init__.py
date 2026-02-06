@@ -10,12 +10,12 @@ Backwards compatibility is not guaranteed at this time.
 
 from nlweb_core.conversation.models import ConversationMessage
 from nlweb_core.conversation.storage import (
+    ConversationStorageClient,
     ConversationStorageInterface,
-    ConversationStorageClient
 )
 
 __all__ = [
-    'ConversationMessage',
-    'ConversationStorageInterface',
-    'ConversationStorageClient'
+    "ConversationMessage",
+    "ConversationStorageInterface",
+    "ConversationStorageClient",
 ]

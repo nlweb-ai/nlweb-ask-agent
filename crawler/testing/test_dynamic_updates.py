@@ -6,56 +6,59 @@ Test dynamic updates to schema_map.xml files
 3. Remove some original files and trigger reload
 """
 
-import sys
-import os
-import time
-import requests
 import json
+import os
+import sys
+import time
 import xml.etree.ElementTree as ET
 from datetime import datetime
+
+import requests
 
 # Load environment variables
 # sys.path.insert(0, 'code/core')
 # import config  # Not needed for Azure deployment
 
 API_BASE = "http://172.193.209.48/api"
-TEST_SITES = ['backcountry_com', 'hebbarskitchen_com', 'imdb_com']
+TEST_SITES = ["backcountry_com", "hebbarskitchen_com", "imdb_com"]
 
 # Read API key from file
-API_KEY = open('.test_api_key').read().strip() if os.path.exists('.test_api_key') else None
+API_KEY = (
+    open(".test_api_key").read().strip() if os.path.exists(".test_api_key") else None
+)
 
 # Phases configuration
-INITIAL_FILES = [1, 2, 3, 4, 5]           # Start with files 1-5
-ADDED_FILES = [6, 7, 8]                   # Add files 6-8 in phase 2
-FILES_TO_REMOVE = [2, 4]                  # Remove files 2 and 4 in phase 3
-WAIT_TIME = 30                            # Seconds to wait between phases
+INITIAL_FILES = [1, 2, 3, 4, 5]  # Start with files 1-5
+ADDED_FILES = [6, 7, 8]  # Add files 6-8 in phase 2
+FILES_TO_REMOVE = [2, 4]  # Remove files 2 and 4 in phase 3
+WAIT_TIME = 30  # Seconds to wait between phases
 
 
 def update_schema_map(site, file_numbers):
     """Update schema_map.xml for a site with specific file numbers"""
-    schema_map_path = f'data/{site}/schema_map.xml'
+    schema_map_path = f"data/{site}/schema_map.xml"
 
-    if not os.path.exists(f'data/{site}'):
+    if not os.path.exists(f"data/{site}"):
         print(f"  ✗ Site directory not found: data/{site}")
         return False
 
     # Create schema_map with specified files
-    urlset = ET.Element('urlset', xmlns='http://www.sitemaps.org/schemas/sitemap/0.9')
+    urlset = ET.Element("urlset", xmlns="http://www.sitemaps.org/schemas/sitemap/0.9")
 
     for num in sorted(file_numbers):
-        url = ET.SubElement(urlset, 'url')
-        url.set('contentType', 'structuredData/schema.org')
-        loc = ET.SubElement(url, 'loc')
-        loc.text = f'http://localhost:8000/{site}/{num}.json'
+        url = ET.SubElement(urlset, "url")
+        url.set("contentType", "structuredData/schema.org")
+        loc = ET.SubElement(url, "loc")
+        loc.text = f"http://localhost:8000/{site}/{num}.json"
 
     # Write the file
     tree = ET.ElementTree(urlset)
-    ET.indent(tree, space='  ')
+    ET.indent(tree, space="  ")
 
-    with open(schema_map_path, 'wb') as f:
+    with open(schema_map_path, "wb") as f:
         f.write(b'<?xml version="1.0" encoding="utf-8"?>\n')
-        tree.write(f, encoding='utf-8', xml_declaration=False)
-        f.write(b'\n')
+        tree.write(f, encoding="utf-8", xml_declaration=False)
+        f.write(b"\n")
 
     print(f"  ✓ {site}: Updated schema_map.xml with files: {sorted(file_numbers)}")
     return True
@@ -73,7 +76,7 @@ def add_sites():
     """Add test sites via API"""
     print("\nAdding sites via API...")
 
-    headers = {'X-API-Key': API_KEY} if API_KEY else {}
+    headers = {"X-API-Key": API_KEY} if API_KEY else {}
 
     for site in TEST_SITES:
         site_url = f"http://localhost:8000/{site}"
@@ -83,7 +86,7 @@ def add_sites():
                 f"{API_BASE}/sites",
                 json={"site_url": site_url, "interval_hours": 24},
                 headers=headers,
-                timeout=5
+                timeout=5,
             )
 
             if response.status_code == 200:
@@ -101,18 +104,17 @@ def trigger_processing(sites=None):
 
     print("\nTriggering processing...")
 
-    headers = {'X-API-Key': API_KEY} if API_KEY else {}
+    headers = {"X-API-Key": API_KEY} if API_KEY else {}
 
     for site in sites:
         site_url = f"http://localhost:8000/{site}"
 
         try:
             import urllib.parse
-            encoded_url = urllib.parse.quote(site_url, safe='')
+
+            encoded_url = urllib.parse.quote(site_url, safe="")
             response = requests.post(
-                f"{API_BASE}/process/{encoded_url}",
-                headers=headers,
-                timeout=5
+                f"{API_BASE}/process/{encoded_url}", headers=headers, timeout=5
             )
 
             if response.status_code == 200:
@@ -127,23 +129,28 @@ def wait_for_processing(timeout=60):
     """Wait for all processing to complete"""
     print(f"\nWaiting for processing to complete...")
 
-    headers = {'X-API-Key': API_KEY} if API_KEY else {}
+    headers = {"X-API-Key": API_KEY} if API_KEY else {}
 
     start_time = time.time()
-    last_status = {'pending': -1, 'processing': -1}
+    last_status = {"pending": -1, "processing": -1}
 
     while time.time() - start_time < timeout:
         try:
-            response = requests.get(f"{API_BASE}/queue/status", headers=headers, timeout=5)
+            response = requests.get(
+                f"{API_BASE}/queue/status", headers=headers, timeout=5
+            )
             if response.status_code == 200:
                 data = response.json()
-                pending = data.get('pending_jobs', 0)
-                processing = data.get('processing_jobs', 0)
+                pending = data.get("pending_jobs", 0)
+                processing = data.get("processing_jobs", 0)
 
                 # Show status if changed
-                if pending != last_status['pending'] or processing != last_status['processing']:
+                if (
+                    pending != last_status["pending"]
+                    or processing != last_status["processing"]
+                ):
                     print(f"  Queue: {pending} pending, {processing} processing")
-                    last_status = {'pending': pending, 'processing': processing}
+                    last_status = {"pending": pending, "processing": processing}
 
                 if pending == 0 and processing == 0:
                     print("  ✓ All jobs completed")
@@ -163,33 +170,37 @@ def show_status():
     print("CURRENT STATUS")
     print("=" * 60)
 
-    headers = {'X-API-Key': API_KEY} if API_KEY else {}
+    headers = {"X-API-Key": API_KEY} if API_KEY else {}
 
     try:
         response = requests.get(f"{API_BASE}/status", headers=headers, timeout=5)
         if response.status_code == 200:
             data = response.json()
-            sites = data.get('sites', [])
+            sites = data.get("sites", [])
 
             total_files = 0
             total_ids = 0
 
             for site in sites:
-                site_name = site['site_url'].split('/')[-1]
+                site_name = site["site_url"].split("/")[-1]
                 if site_name not in TEST_SITES:
                     continue
 
-                total_files += site.get('total_files', 0)
-                total_ids += site.get('total_ids', 0)
+                total_files += site.get("total_files", 0)
+                total_ids += site.get("total_ids", 0)
 
-                last_proc = site.get('last_processed', 'Never')
-                if last_proc and last_proc != 'Never':
+                last_proc = site.get("last_processed", "Never")
+                if last_proc and last_proc != "Never":
                     # Parse and format the timestamp
                     try:
-                        dt = datetime.fromisoformat(last_proc.replace('Z', '+00:00'))
-                        last_proc = dt.strftime('%H:%M:%S')
+                        dt = datetime.fromisoformat(last_proc.replace("Z", "+00:00"))
+                        last_proc = dt.strftime("%H:%M:%S")
                     except:
-                        last_proc = last_proc.split('T')[1][:8] if 'T' in last_proc else last_proc
+                        last_proc = (
+                            last_proc.split("T")[1][:8]
+                            if "T" in last_proc
+                            else last_proc
+                        )
 
                 print(f"  {site_name}:")
                 print(f"    Active files: {site.get('total_files', 0)}")
@@ -226,7 +237,7 @@ def main():
         sys.exit(1)
 
     # Check services
-    headers = {'X-API-Key': API_KEY}
+    headers = {"X-API-Key": API_KEY}
     try:
         response = requests.get(f"{API_BASE}/status", headers=headers, timeout=2)
         if response.status_code != 200:
@@ -334,5 +345,5 @@ def main():
     print("  • Updating vector database accordingly")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

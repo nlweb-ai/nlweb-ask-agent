@@ -3,47 +3,51 @@
 Test script to demonstrate job recovery mechanism
 """
 
-import sys
-import os
 import json
+import os
+import sys
 import time
 from datetime import datetime
 
-sys.path.insert(0, 'code/core')
+sys.path.insert(0, "code/core")
+
 
 def create_test_job(queue_dir, site_name, will_hang=False):
     """Create a test job that optionally simulates a hang"""
     job = {
-        'type': 'process_file',
-        'site': f'http://localhost:8000/{site_name}',
-        'file_url': f'http://localhost:8000/{site_name}/test.json',
-        'queued_at': datetime.utcnow().isoformat(),
-        'test_hang': will_hang  # Special flag for testing
+        "type": "process_file",
+        "site": f"http://localhost:8000/{site_name}",
+        "file_url": f"http://localhost:8000/{site_name}/test.json",
+        "queued_at": datetime.utcnow().isoformat(),
+        "test_hang": will_hang,  # Special flag for testing
     }
 
-    timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S-%f')
-    job_file = os.path.join(queue_dir, f'job-{timestamp}.json')
+    timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S-%f")
+    job_file = os.path.join(queue_dir, f"job-{timestamp}.json")
 
-    with open(job_file, 'w') as f:
+    with open(job_file, "w") as f:
         json.dump(job, f)
 
-    print(f"Created {'hanging' if will_hang else 'normal'} job: {os.path.basename(job_file)}")
+    print(
+        f"Created {'hanging' if will_hang else 'normal'} job: {os.path.basename(job_file)}"
+    )
     return job_file
+
 
 def simulate_stuck_job(queue_dir):
     """Create a .processing file to simulate a stuck job"""
     job = {
-        'type': 'process_file',
-        'site': 'http://localhost:8000/stuck_site',
-        'file_url': 'http://localhost:8000/stuck_site/stuck.json',
-        'queued_at': datetime.utcnow().isoformat()
+        "type": "process_file",
+        "site": "http://localhost:8000/stuck_site",
+        "file_url": "http://localhost:8000/stuck_site/stuck.json",
+        "queued_at": datetime.utcnow().isoformat(),
     }
 
     # Create a .processing file directly
-    timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S-%f')
-    processing_file = os.path.join(queue_dir, f'job-{timestamp}.json.processing')
+    timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S-%f")
+    processing_file = os.path.join(queue_dir, f"job-{timestamp}.json.processing")
 
-    with open(processing_file, 'w') as f:
+    with open(processing_file, "w") as f:
         json.dump(job, f)
 
     # Modify the file time to make it look old (6 minutes ago)
@@ -54,11 +58,16 @@ def simulate_stuck_job(queue_dir):
     print(f"  Modified time: {datetime.fromtimestamp(old_time)}")
     return processing_file
 
+
 def check_queue_status(queue_dir):
     """Check current queue status"""
-    pending = [f for f in os.listdir(queue_dir) if f.endswith('.json') and not '.processing' in f]
-    processing = [f for f in os.listdir(queue_dir) if f.endswith('.processing')]
-    retry = [f for f in os.listdir(queue_dir) if '.retry' in f]
+    pending = [
+        f
+        for f in os.listdir(queue_dir)
+        if f.endswith(".json") and not ".processing" in f
+    ]
+    processing = [f for f in os.listdir(queue_dir) if f.endswith(".processing")]
+    retry = [f for f in os.listdir(queue_dir) if ".retry" in f]
 
     print(f"\n=== Queue Status ===")
     print(f"Pending jobs: {len(pending)}")
@@ -78,8 +87,9 @@ def check_queue_status(queue_dir):
         for f in retry:
             print(f"  - {f}")
 
+
 def main():
-    queue_dir = os.getenv('QUEUE_DIR', 'queue')
+    queue_dir = os.getenv("QUEUE_DIR", "queue")
     os.makedirs(queue_dir, exist_ok=True)
 
     print("=" * 60)
@@ -93,8 +103,8 @@ def main():
     stuck_file = simulate_stuck_job(queue_dir)
 
     print("\n2. Creating normal test jobs...")
-    create_test_job(queue_dir, 'test_site_1')
-    create_test_job(queue_dir, 'test_site_2')
+    create_test_job(queue_dir, "test_site_1")
+    create_test_job(queue_dir, "test_site_2")
 
     check_queue_status(queue_dir)
 
@@ -138,5 +148,6 @@ def main():
     print("  • Background cleanup daemon")
     print("  • Heartbeat mechanism for long-running jobs")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

@@ -1,10 +1,17 @@
-import db, sys, time, asyncio, json, log, logging, os
-import requests as req
-
-from azure.search.documents import SearchClient
-from azure.core.credentials import AzureKeyCredential
+import asyncio
+import json
+import logging
+import os
+import sys
+import time
 from datetime import datetime, timedelta, timezone
-from flask import Flask, request, jsonify, send_from_directory
+
+import db
+import log
+import requests as req
+from azure.core.credentials import AzureKeyCredential
+from azure.search.documents import SearchClient
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from get_queue import get_queue
 from master import process_site
@@ -101,7 +108,13 @@ def add_site():
 
         conn = db.get_connection()
         try:
-            db.add_site(conn, site_url, DEFAULT_USER_ID, interval_hours, refresh_mode=refresh_mode)
+            db.add_site(
+                conn,
+                site_url,
+                DEFAULT_USER_ID,
+                interval_hours,
+                refresh_mode=refresh_mode,
+            )
             # Process site immediately in background
             if event_loop:
                 try:
@@ -149,8 +162,6 @@ def get_site_details(site_url):
 
         # Get total vector DB count for this site
         try:
-
-
             search_client = SearchClient(
                 endpoint=os.getenv("AZURE_SEARCH_ENDPOINT"),
                 index_name=os.getenv("AZURE_SEARCH_INDEX_NAME", "crawler-vectors"),
@@ -198,7 +209,7 @@ def update_site(site_url):
         # Check if site exists
         cursor.execute(
             "SELECT site_url FROM sites WHERE site_url = %s AND user_id = %s",
-            (site_url, DEFAULT_USER_ID)
+            (site_url, DEFAULT_USER_ID),
         )
         if not cursor.fetchone():
             return jsonify({"error": "Site not found"}), 404
@@ -220,18 +231,24 @@ def update_site(site_url):
         params.extend([site_url, DEFAULT_USER_ID])
         cursor.execute(
             f"UPDATE sites SET {', '.join(updates)} WHERE site_url = %s AND user_id = %s",
-            tuple(params)
+            tuple(params),
         )
         conn.commit()
 
-        return jsonify({
-            "success": True,
-            "site_url": site_url,
-            "updated_fields": {
-                k: v for k, v in [("interval_hours", interval_hours), ("refresh_mode", refresh_mode)]
-                if v is not None
+        return jsonify(
+            {
+                "success": True,
+                "site_url": site_url,
+                "updated_fields": {
+                    k: v
+                    for k, v in [
+                        ("interval_hours", interval_hours),
+                        ("refresh_mode", refresh_mode),
+                    ]
+                    if v is not None
+                },
             }
-        })
+        )
     finally:
         try:
             conn.rollback()
@@ -358,7 +375,7 @@ def add_schema_file(site_url):
                 "refresh_mode": refresh_mode,
                 "files_discovered": files_added,  # New files discovered
                 "files_queued": files_queued,  # Total files queued for processing
-                "message": f"Processed successfully. {files_added} new files discovered, {files_queued} files queued for processing."
+                "message": f"Processed successfully. {files_added} new files discovered, {files_queued} files queued for processing.",
             }
         )
 
@@ -541,8 +558,8 @@ def get_queue_status():
         elif queue_type == "storage":
             # Azure Storage Queue status
             try:
-                from azure.storage.queue import QueueServiceClient
                 from azure.identity import DefaultAzureCredential
+                from azure.storage.queue import QueueServiceClient
 
                 storage_account = os.getenv("AZURE_STORAGE_ACCOUNT_NAME")
                 queue_name = os.getenv("AZURE_STORAGE_QUEUE_NAME", "crawler-jobs")
@@ -1079,16 +1096,17 @@ async def scheduler_loop():
                     # Use return_exceptions=True to prevent one site error from killing all
                     results = await asyncio.gather(*tasks, return_exceptions=True)
                     for i, result in enumerate(results):
-                        site_url, user_id = sites_to_process[i][0], sites_to_process[i][1]
+                        site_url, user_id = (
+                            sites_to_process[i][0],
+                            sites_to_process[i][1],
+                        )
                         if isinstance(result, Exception):
                             logger_scheduler.error(
                                 f"Error processing site {site_url}: {result}"
                             )
                         elif result is None:
                             # Error occurred (process_site returned None)
-                            logger_scheduler.error(
-                                f"Failed to process site {site_url}"
-                            )
+                            logger_scheduler.error(f"Failed to process site {site_url}")
                         else:
                             # Successfully processed (result >= 0)
                             # Always update last_processed to prevent re-queueing within interval
@@ -1098,16 +1116,22 @@ async def scheduler_loop():
                                 update_cursor = update_conn.cursor()
                                 update_cursor.execute(
                                     "UPDATE sites SET last_processed = GETUTCDATE() WHERE site_url = %s AND user_id = %s",
-                                    (site_url, user_id)
+                                    (site_url, user_id),
                                 )
                                 update_conn.commit()
                                 update_conn.close()
                                 if result == 0:
-                                    logger_scheduler.info(f"Updated last_processed for {site_url} (0 files queued)")
+                                    logger_scheduler.info(
+                                        f"Updated last_processed for {site_url} (0 files queued)"
+                                    )
                                 else:
-                                    logger_scheduler.info(f"Updated last_processed for {site_url} ({result} files queued)")
+                                    logger_scheduler.info(
+                                        f"Updated last_processed for {site_url} ({result} files queued)"
+                                    )
                             except Exception as e:
-                                logger_scheduler.error(f"Failed to update last_processed for {site_url}: {e}")
+                                logger_scheduler.error(
+                                    f"Failed to update last_processed for {site_url}: {e}"
+                                )
 
         except Exception as e:
             logger_scheduler.error(f"Error in scheduler loop: {e}")
@@ -1185,8 +1209,8 @@ if __name__ == "__main__":
     if queue_type == "storage":
         print("[STARTUP] Testing Storage Queue connection...")
         try:
-            from azure.storage.queue import QueueServiceClient
             from azure.identity import DefaultAzureCredential
+            from azure.storage.queue import QueueServiceClient
 
             storage_account = os.getenv("AZURE_STORAGE_ACCOUNT_NAME")
             queue_name = os.getenv("AZURE_STORAGE_QUEUE_NAME", "crawler-jobs")

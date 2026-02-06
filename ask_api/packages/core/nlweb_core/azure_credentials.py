@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Callable, Coroutine, Any
+from typing import TYPE_CHECKING, Any, Callable, Coroutine
 
 if TYPE_CHECKING:
     from azure.identity.aio import DefaultAzureCredential
@@ -22,7 +22,9 @@ logger = logging.getLogger(__name__)
 
 # Lazy imports to avoid requiring azure-identity when not used
 _DefaultAzureCredential: type[DefaultAzureCredential] | None = None
-_get_bearer_token_provider: Callable[..., Callable[[], Coroutine[Any, Any, str]]] | None = None
+_get_bearer_token_provider: (
+    Callable[..., Callable[[], Coroutine[Any, Any, str]]] | None
+) = None
 
 # Singleton state
 _credential: DefaultAzureCredential | None = None
@@ -34,6 +36,7 @@ def _ensure_imports():
     global _DefaultAzureCredential, _get_bearer_token_provider
     if _DefaultAzureCredential is None:
         from azure.identity.aio import DefaultAzureCredential, get_bearer_token_provider
+
         _DefaultAzureCredential = DefaultAzureCredential
         _get_bearer_token_provider = get_bearer_token_provider
 

@@ -4,14 +4,13 @@
 """Tests for RankedResult class and helper functions."""
 
 import pytest
-
-from nlweb_core.retrieved_item import RetrievedItem
 from nlweb_core.ranked_result import (
-    RankedResult,
-    select_best_from_graph,
     PREFERRED_TYPES,
     SKIP_TYPES,
+    RankedResult,
+    select_best_from_graph,
 )
+from nlweb_core.retrieved_item import RetrievedItem
 
 
 class TestSelectBestFromGraph:
@@ -219,10 +218,12 @@ class TestRankedResultDescription:
         assert result.description == "Event details"
 
     def test_description_takes_priority(self):
-        result = self._make_result({
-            "description": "Primary",
-            "abstract": "Secondary",
-        })
+        result = self._make_result(
+            {
+                "description": "Primary",
+                "abstract": "Secondary",
+            }
+        )
         assert result.description == "Primary"
 
     def test_returns_empty_string_when_no_description(self):
@@ -246,33 +247,42 @@ class TestRankedResultImage:
         assert result.image == "https://example.com/image.jpg"
 
     def test_extracts_url_from_imageobject(self):
-        result = self._make_result({
-            "image": {"@type": "ImageObject", "url": "https://example.com/img.jpg"}
-        })
+        result = self._make_result(
+            {"image": {"@type": "ImageObject", "url": "https://example.com/img.jpg"}}
+        )
         assert result.image == "https://example.com/img.jpg"
 
     def test_extracts_contenturl_from_imageobject(self):
-        result = self._make_result({
-            "image": {"@type": "ImageObject", "contentUrl": "https://example.com/content.jpg"}
-        })
+        result = self._make_result(
+            {
+                "image": {
+                    "@type": "ImageObject",
+                    "contentUrl": "https://example.com/content.jpg",
+                }
+            }
+        )
         assert result.image == "https://example.com/content.jpg"
 
     def test_prefers_url_over_contenturl(self):
-        result = self._make_result({
-            "image": {
-                "url": "https://example.com/url.jpg",
-                "contentUrl": "https://example.com/content.jpg",
+        result = self._make_result(
+            {
+                "image": {
+                    "url": "https://example.com/url.jpg",
+                    "contentUrl": "https://example.com/content.jpg",
+                }
             }
-        })
+        )
         assert result.image == "https://example.com/url.jpg"
 
     def test_extracts_first_from_image_list(self):
-        result = self._make_result({
-            "image": [
-                "https://example.com/first.jpg",
-                "https://example.com/second.jpg",
-            ]
-        })
+        result = self._make_result(
+            {
+                "image": [
+                    "https://example.com/first.jpg",
+                    "https://example.com/second.jpg",
+                ]
+            }
+        )
         assert result.image == "https://example.com/first.jpg"
 
     def test_extracts_photo_field(self):
@@ -284,9 +294,9 @@ class TestRankedResultImage:
         assert result.image == "https://example.com/logo.png"
 
     def test_extracts_thumbnail_field(self):
-        result = self._make_result({
-            "thumbnail": {"url": "https://example.com/thumb.jpg"}
-        })
+        result = self._make_result(
+            {"thumbnail": {"url": "https://example.com/thumb.jpg"}}
+        )
         assert result.image == "https://example.com/thumb.jpg"
 
     def test_extracts_thumbnailurl_field(self):
@@ -294,10 +304,12 @@ class TestRankedResultImage:
         assert result.image == "https://example.com/thumb.jpg"
 
     def test_image_takes_priority_over_others(self):
-        result = self._make_result({
-            "image": "https://example.com/image.jpg",
-            "logo": "https://example.com/logo.png",
-        })
+        result = self._make_result(
+            {
+                "image": "https://example.com/image.jpg",
+                "logo": "https://example.com/logo.png",
+            }
+        )
         assert result.image == "https://example.com/image.jpg"
 
     def test_returns_none_when_no_image(self):
@@ -317,11 +329,13 @@ class TestRankedResultToDict:
         return RankedResult(item=item, score=score)
 
     def test_includes_basic_fields(self):
-        result = self._make_result({
-            "@type": "Article",
-            "name": "Test Article",
-            "description": "Test description",
-        })
+        result = self._make_result(
+            {
+                "@type": "Article",
+                "name": "Test Article",
+                "description": "Test description",
+            }
+        )
         d = result.to_dict()
 
         assert d["@type"] == "Article"
@@ -332,42 +346,40 @@ class TestRankedResultToDict:
         assert d["description"] == "Test description"
 
     def test_includes_normalized_image(self):
-        result = self._make_result({
-            "image": {"url": "https://example.com/img.jpg"}
-        })
+        result = self._make_result({"image": {"url": "https://example.com/img.jpg"}})
         d = result.to_dict()
         assert d["image"] == "https://example.com/img.jpg"
 
     def test_includes_grounding_url(self):
-        result = self._make_result({
-            "url": "https://example.com/article"
-        })
+        result = self._make_result({"url": "https://example.com/article"})
         d = result.to_dict()
         assert d["grounding"] == {"source_urls": ["https://example.com/article"]}
 
     def test_includes_grounding_from_id(self):
-        result = self._make_result({
-            "@id": "https://example.com/article#main"
-        })
+        result = self._make_result({"@id": "https://example.com/article#main"})
         d = result.to_dict()
         assert d["grounding"] == {"source_urls": ["https://example.com/article#main"]}
 
     def test_includes_extra_schema_fields(self):
-        result = self._make_result({
-            "@type": "Recipe",
-            "name": "Cookies",
-            "cookTime": "PT30M",
-            "recipeYield": "24 cookies",
-        })
+        result = self._make_result(
+            {
+                "@type": "Recipe",
+                "name": "Cookies",
+                "cookTime": "PT30M",
+                "recipeYield": "24 cookies",
+            }
+        )
         d = result.to_dict()
         assert d["cookTime"] == "PT30M"
         assert d["recipeYield"] == "24 cookies"
 
     def test_excludes_raw_url_and_image(self):
-        result = self._make_result({
-            "url": "https://example.com/article",
-            "image": {"url": "https://example.com/complex-image.jpg"},
-        })
+        result = self._make_result(
+            {
+                "url": "https://example.com/article",
+                "image": {"url": "https://example.com/complex-image.jpg"},
+            }
+        )
         d = result.to_dict()
         # url should not be duplicated in extra fields (it's in grounding)
         # image should be normalized, not the raw complex object
@@ -398,10 +410,12 @@ class TestRankedResultProperties:
         assert result.grounding_url == "https://example.com/page#section"
 
     def test_grounding_url_prefers_url_over_id(self):
-        result = self._make_result({
-            "url": "https://example.com/url",
-            "@id": "https://example.com/id",
-        })
+        result = self._make_result(
+            {
+                "url": "https://example.com/url",
+                "@id": "https://example.com/id",
+            }
+        )
         assert result.grounding_url == "https://example.com/url"
 
     def test_grounding_url_returns_none_when_missing(self):

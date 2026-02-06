@@ -4,17 +4,19 @@
 """
 Aajtak-specific AskHandler with Hindi/Hinglish transliteration support.
 """
+
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
+
+from nlweb_core.config import get_config, override_scoring_provider
 from nlweb_core.handler import AskHandler, OutputMethod
+from nlweb_core.protocol.models import AskRequest
 from nlweb_core.query_analysis.query_analysis import (
     DefaultQueryAnalysisHandler,
     query_analysis_tree,
 )
-from nlweb_core.protocol.models import AskRequest
 from nlweb_core.request_context import set_request_id
-from nlweb_core.config import get_config, override_scoring_provider
 from nlweb_core.site_config import get_elicitation_handler
 
 logger = logging.getLogger(__name__)
@@ -84,8 +86,8 @@ class AajtakAskHandler(AskHandler):
         site_config: dict[str, str],
     ) -> list[dict]:
         """Execute the query body with dual-query strategy for fresh + regular results."""
-        from nlweb_core.retriever import enrich_results_from_object_storage
         from nlweb_core.ranking import Ranking
+        from nlweb_core.retriever import enrich_results_from_object_storage
 
         config = get_config()
         vectordb_client = config.get_retrieval_provider("default")

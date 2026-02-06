@@ -3,12 +3,13 @@
 Remove foreign key constraint from ids table to allow flexible deletion
 """
 
-import sys
 import os
+import sys
 
-sys.path.insert(0, 'code/core')
+sys.path.insert(0, "code/core")
 import config
 import db
+
 
 def remove_foreign_key_constraint():
     """Remove the foreign key constraint from ids table"""
@@ -65,5 +66,5 @@ def remove_foreign_key_constraint():
         conn.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     remove_foreign_key_constraint()

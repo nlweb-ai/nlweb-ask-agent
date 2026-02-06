@@ -1,6 +1,7 @@
 """
 Logging configuration for NLWeb server.
 """
+
 import logging
 
 # Configure root logger

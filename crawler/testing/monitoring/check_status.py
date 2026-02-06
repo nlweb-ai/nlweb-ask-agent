@@ -3,13 +3,15 @@
 Check the status of the crawler system to verify if testing succeeded
 """
 
-import sys
-import os
-import requests
 import json
+import os
+import sys
 from datetime import datetime
 
-sys.path.insert(0, 'code/core')
+import requests
+
+sys.path.insert(0, "code/core")
+
 
 def check_api_status():
     """Check if API server is running"""
@@ -19,6 +21,7 @@ def check_api_status():
     except:
         return False
 
+
 def check_data_server():
     """Check if data server is running"""
     try:
@@ -26,6 +29,7 @@ def check_data_server():
         return response.status_code in [200, 301, 302]
     except:
         return False
+
 
 def check_database_status():
     """Check database for processing results"""
@@ -54,33 +58,52 @@ def check_database_status():
 
     return results
 
+
 def check_queue_status():
     """Check queue directory status"""
-    queue_dir = os.getenv('QUEUE_DIR', 'queue')
+    queue_dir = os.getenv("QUEUE_DIR", "queue")
 
     if not os.path.exists(queue_dir):
         return 0, 0, 0
 
-    pending = len([f for f in os.listdir(queue_dir) if f.endswith('.json') and '.processing' not in f])
-    processing = len([f for f in os.listdir(queue_dir) if f.endswith('.processing')])
+    pending = len(
+        [
+            f
+            for f in os.listdir(queue_dir)
+            if f.endswith(".json") and ".processing" not in f
+        ]
+    )
+    processing = len([f for f in os.listdir(queue_dir) if f.endswith(".processing")])
 
-    error_dir = os.path.join(queue_dir, 'errors')
+    error_dir = os.path.join(queue_dir, "errors")
     failed = 0
     if os.path.exists(error_dir):
-        failed = len([f for f in os.listdir(error_dir) if os.path.isfile(os.path.join(error_dir, f))])
+        failed = len(
+            [
+                f
+                for f in os.listdir(error_dir)
+                if os.path.isfile(os.path.join(error_dir, f))
+            ]
+        )
 
     return pending, processing, failed
+
 
 def check_worker_processes():
     """Check if worker processes are running"""
     import subprocess
 
     try:
-        result = subprocess.run("ps aux | grep -E 'python.*worker.py' | grep -v grep",
-                              shell=True, capture_output=True, text=True)
-        return len(result.stdout.strip().split('\n')) if result.stdout.strip() else 0
+        result = subprocess.run(
+            "ps aux | grep -E 'python.*worker.py' | grep -v grep",
+            shell=True,
+            capture_output=True,
+            text=True,
+        )
+        return len(result.stdout.strip().split("\n")) if result.stdout.strip() else 0
     except:
         return 0
+
 
 def main():
     print("=" * 70)
@@ -95,8 +118,12 @@ def main():
     data_running = check_data_server()
     worker_count = check_worker_processes()
 
-    print(f"   API Server (port 5001):  {'✓ Running' if api_running else '✗ Not running'}")
-    print(f"   Data Server (port 8000): {'✓ Running' if data_running else '✗ Not running'}")
+    print(
+        f"   API Server (port 5001):  {'✓ Running' if api_running else '✗ Not running'}"
+    )
+    print(
+        f"   Data Server (port 8000): {'✓ Running' if data_running else '✗ Not running'}"
+    )
     print(f"   Worker Processes:        {worker_count} running")
 
     # Check queue
@@ -123,12 +150,14 @@ def main():
             all_processed = True
 
             for site_url, last_processed, file_count, id_count in results:
-                site_name = site_url.split('/')[-1] if site_url else "Unknown"
+                site_name = site_url.split("/")[-1] if site_url else "Unknown"
                 total_files += file_count or 0
                 total_ids += id_count or 0
 
                 if last_processed:
-                    last_proc_str = datetime.fromisoformat(str(last_processed)).strftime("%Y-%m-%d %H:%M:%S")
+                    last_proc_str = datetime.fromisoformat(
+                        str(last_processed)
+                    ).strftime("%Y-%m-%d %H:%M:%S")
                 else:
                     last_proc_str = "Never"
                     all_processed = False
@@ -163,9 +192,11 @@ def main():
         failures.append("✗ No services running")
 
     # Check if data was processed
-    if 'results' in locals() and results:
+    if "results" in locals() and results:
         if total_ids > 0:
-            success_criteria.append(f"✓ Successfully processed {total_ids} IDs from {total_files} files")
+            success_criteria.append(
+                f"✓ Successfully processed {total_ids} IDs from {total_files} files"
+            )
         else:
             failures.append("✗ No IDs were extracted")
 
@@ -214,5 +245,6 @@ def main():
         print("\nThe system did not process data successfully.")
         return 2
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     sys.exit(main())

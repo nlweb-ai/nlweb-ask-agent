@@ -4,13 +4,14 @@ Migrate database schema to add authentication tables and user_id columns.
 Run this once to update the existing database.
 """
 
-import sys
 import os
+import sys
 
 # Add code/core to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'code', 'core'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "code", "core"))
 
 import db
+
 
 def migrate_database():
     """Run database migration"""
@@ -37,7 +38,9 @@ def migrate_database():
 
         print("✓ Migration completed successfully!")
         print("\nNew tables and columns:")
-        print("  - users table (user_id, email, name, provider, api_key, created_at, last_login)")
+        print(
+            "  - users table (user_id, email, name, provider, api_key, created_at, last_login)"
+        )
         print("  - sites.user_id column (with foreign key to users)")
         print("  - files.user_id column (with foreign key to users)")
         print("  - ids.user_id column (with foreign key to users)")
@@ -47,12 +50,14 @@ def migrate_database():
     except Exception as e:
         print(f"\n✗ Migration failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
     finally:
         conn.close()
         print("\nDatabase connection closed.")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     success = migrate_database()
     sys.exit(0 if success else 1)

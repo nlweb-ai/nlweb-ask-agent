@@ -7,9 +7,9 @@ This script processes JSONL files, chunks them, and creates test directories wit
 import json
 import os
 import sys
-from urllib.parse import urlparse
-from pathlib import Path
 import xml.etree.ElementTree as ET
+from pathlib import Path
+from urllib.parse import urlparse
 
 # Configuration
 SOURCE_DIR = Path.home() / "mahi" / "data" / "sites" / "jsonl"
@@ -21,14 +21,15 @@ TARGET_FILES = [
     "backcountry_schemas.txt",
     "hebbarskitchen_schemas.txt",
     "imdb_schemas.txt",
-    "seattle_schemas.txt"
+    "seattle_schemas.txt",
 ]
+
 
 def parse_jsonl_line(line):
     """Parse a single JSONL line to extract URL and schema data."""
     try:
         # Split by tab - format is: URL\tJSON
-        parts = line.strip().split('\t', 1)
+        parts = line.strip().split("\t", 1)
         if len(parts) != 2:
             return None, None
 
@@ -53,9 +54,9 @@ def parse_jsonl_line(line):
         for idx, item in enumerate(flattened):
             if isinstance(item, dict):
                 # If no @id, create one from URL and index
-                if '@id' not in item:
+                if "@id" not in item:
                     # Create a synthetic ID from the page URL and item index
-                    item['@id'] = f"{url}#schema-{idx}"
+                    item["@id"] = f"{url}#schema-{idx}"
                 items_with_id.append(item)
 
         return url, items_with_id
@@ -63,16 +64,18 @@ def parse_jsonl_line(line):
         print(f"Error parsing line: {e}")
         return None, None
 
+
 def extract_site_from_url(url):
     """Extract site domain from URL."""
     try:
         parsed = urlparse(url)
         # Clean the domain for use as directory name
-        domain = parsed.netloc.replace('www.', '')
-        domain = domain.replace(':', '_').replace('.', '_')
+        domain = parsed.netloc.replace("www.", "")
+        domain = domain.replace(":", "_").replace(".", "_")
         return domain
     except:
         return None
+
 
 def process_file(file_path, output_dir):
     """Process a single JSONL file and generate chunked output."""
@@ -83,11 +86,13 @@ def process_file(file_path, output_dir):
     line_count = 0
     items_count = 0
 
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         for line in f:
             line_count += 1
             if line_count % 1000 == 0:
-                print(f"  Processed {line_count} lines, found {items_count} items with @id...")
+                print(
+                    f"  Processed {line_count} lines, found {items_count} items with @id..."
+                )
 
             url, schema_items = parse_jsonl_line(line)
             if not url or not schema_items:
@@ -117,7 +122,7 @@ def process_file(file_path, output_dir):
         # Chunk the items
         chunks = []
         for i in range(0, len(items), CHUNK_SIZE):
-            chunk = items[i:i + CHUNK_SIZE]
+            chunk = items[i : i + CHUNK_SIZE]
             chunks.append(chunk)
 
         print(f"    Created {len(chunks)} chunks")
@@ -126,7 +131,7 @@ def process_file(file_path, output_dir):
         chunk_files = []
         for i, chunk in enumerate(chunks, 1):
             chunk_file = site_dir / f"{i}.json"
-            with open(chunk_file, 'w', encoding='utf-8') as f:
+            with open(chunk_file, "w", encoding="utf-8") as f:
                 json.dump(chunk, f, indent=2, ensure_ascii=False)
             chunk_files.append(f"{i}.json")
             print(f"    Wrote {chunk_file.name} ({len(chunk)} items)")
@@ -135,6 +140,7 @@ def process_file(file_path, output_dir):
         create_schema_map(site_dir, chunk_files[:2], site)
 
     return sites_data.keys()
+
 
 def create_schema_map(site_dir, files_to_list, site_domain, num_files=2):
     """Create a schema_map.xml file listing the schema files.
@@ -147,32 +153,35 @@ def create_schema_map(site_dir, files_to_list, site_domain, num_files=2):
     """
 
     # Create the root element
-    urlset = ET.Element('urlset', xmlns="http://www.sitemaps.org/schemas/sitemap/0.9")
+    urlset = ET.Element("urlset", xmlns="http://www.sitemaps.org/schemas/sitemap/0.9")
 
     # Add URL entries for each file
     base_url = f"http://localhost:8000/{site_domain}/"
 
     # Only include up to num_files in the schema_map
     for file_name in files_to_list[:num_files]:
-        url = ET.SubElement(urlset, 'url')
-        url.set('contentType', 'structuredData/schema.org')
-        loc = ET.SubElement(url, 'loc')
+        url = ET.SubElement(urlset, "url")
+        url.set("contentType", "structuredData/schema.org")
+        loc = ET.SubElement(url, "loc")
         loc.text = base_url + file_name
 
     # Write XML file with pretty formatting
     # ET.indent is available in Python 3.9+
-    if hasattr(ET, 'indent'):
+    if hasattr(ET, "indent"):
         ET.indent(urlset, space="  ")  # This adds proper indentation
 
     tree = ET.ElementTree(urlset)
     schema_map_file = site_dir / "schema_map.xml"
 
-    with open(schema_map_file, 'wb') as f:
+    with open(schema_map_file, "wb") as f:
         f.write(b'<?xml version="1.0" encoding="utf-8"?>\n')
-        tree.write(f, encoding='utf-8', xml_declaration=False)
-        f.write(b'\n')  # Add final newline
+        tree.write(f, encoding="utf-8", xml_declaration=False)
+        f.write(b"\n")  # Add final newline
 
-    print(f"    Created schema_map.xml listing {min(len(files_to_list), num_files)} files")
+    print(
+        f"    Created schema_map.xml listing {min(len(files_to_list), num_files)} files"
+    )
+
 
 def main():
     """Main function to process all target files."""
@@ -196,7 +205,7 @@ def main():
 
         # Get file size
         size_mb = file_path.stat().st_size / (1024 * 1024)
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"File: {file_name} ({size_mb:.1f} MB)")
 
         sites = process_file(file_path, OUTPUT_DIR)
@@ -207,13 +216,13 @@ def main():
     summary = {
         "sites": sorted(list(all_sites)),
         "base_url": "http://localhost:8000/",
-        "instructions": "Run 'python3 -m http.server 8000' in the data/ directory to serve these files"
+        "instructions": "Run 'python3 -m http.server 8000' in the data/ directory to serve these files",
     }
 
-    with open(summary_file, 'w') as f:
+    with open(summary_file, "w") as f:
         json.dump(summary, f, indent=2)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Test data generation complete!")
     print(f"Created data for {len(all_sites)} sites:")
     for site in sorted(all_sites):
@@ -223,6 +232,7 @@ def main():
     print(f"  python3 -m http.server 8000")
     print(f"\nThen add sites to crawler with URLs like:")
     print(f"  http://localhost:8000/<site_name>/schema_map.xml")
+
 
 if __name__ == "__main__":
     main()

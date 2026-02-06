@@ -3,8 +3,9 @@
 Test script to fetch and parse a schema.org JSON file
 """
 
-import requests
 import json
+
+import requests
 
 URL = "https://guha.com/data/backcountry_com/1.json"
 
@@ -30,8 +31,8 @@ if response.status_code == 200:
             # Extract @id values
             ids_found = []
             for i, item in enumerate(data):
-                if isinstance(item, dict) and '@id' in item:
-                    ids_found.append(item['@id'])
+                if isinstance(item, dict) and "@id" in item:
+                    ids_found.append(item["@id"])
                     if i < 5:  # Show first 5
                         print(f"Item {i}: @id = {item['@id']}")
                         print(f"  @type = {item.get('@type', 'N/A')}")
@@ -47,11 +48,13 @@ if response.status_code == 200:
 
         elif isinstance(data, dict):
             print("Single object")
-            if '@id' in data:
+            if "@id" in data:
                 print(f"@id: {data['@id']}")
-            if '@graph' in data:
+            if "@graph" in data:
                 print(f"Has @graph with {len(data['@graph'])} items")
-                ids_found = [item.get('@id') for item in data['@graph'] if '@id' in item]
+                ids_found = [
+                    item.get("@id") for item in data["@graph"] if "@id" in item
+                ]
                 print(f"Total @id values in @graph: {len(ids_found)}")
                 if ids_found:
                     print()

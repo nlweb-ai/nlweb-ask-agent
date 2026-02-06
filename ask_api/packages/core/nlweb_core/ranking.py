@@ -15,15 +15,15 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
 from nlweb_core.config import get_config
-from nlweb_core.retrieved_item import RetrievedItem
-from nlweb_core.protocol.models import Query
 from nlweb_core.llm_exceptions import (
-    LLMError,
-    LLMTimeoutError,
-    LLMRateLimitError,
     LLMConnectionError,
+    LLMError,
+    LLMRateLimitError,
+    LLMTimeoutError,
 )
+from nlweb_core.protocol.models import Query
 from nlweb_core.ranked_result import RankedResult
+from nlweb_core.retrieved_item import RetrievedItem
 from nlweb_core.scoring import ScoringContext
 from nlweb_core.utils import trim_json
 
@@ -171,7 +171,6 @@ def _apply_recency_boost(
 
 
 class Ranking:
-
     def __init__(self) -> None:
         pass
 
@@ -183,7 +182,7 @@ class Ranking:
         max_results: int,
         min_score: int,
         start_num: int = 0,
-        site: str = "all"
+        site: str = "all",
     ) -> list[dict]:
         """
         Rank retrieved items by relevance to the query with freshness-aware scoring.
@@ -267,7 +266,6 @@ class Ranking:
         # Process results - collect valid scored items
         scored_items = []
         for score, item, (date_str, age_days) in zip(scores, items, date_info):
-
             # Handle exceptions from score_batch
             if isinstance(score, BaseException):
                 if isinstance(score, LLMTimeoutError):
@@ -300,7 +298,9 @@ class Ranking:
             import math
 
             # Get boost parameters from config (with sensible defaults)
-            boost_magnitude = recency_config.get("recency_weight", 1.0)  # Max boost at age=0
+            boost_magnitude = recency_config.get(
+                "recency_weight", 1.0
+            )  # Max boost at age=0
             decay_rate = recency_config.get("decay_rate", 0.5)  # How fast boost decays
             age_threshold = 8  # Days - boost becomes ~1.0x after this
 
@@ -317,7 +317,9 @@ class Ranking:
             for score, item, age_days in scored_items:
                 if age_days is not None and age_days <= age_threshold:
                     # Exponential boost: (1 + magnitude) at age=0, 1.0x at age=threshold
-                    boost_factor = 1.0 + (boost_magnitude * math.exp(-calculated_decay * age_days))
+                    boost_factor = 1.0 + (
+                        boost_magnitude * math.exp(-calculated_decay * age_days)
+                    )
 
                     final_score = score * boost_factor
                     final_score = max(0, min(100, final_score))  # Clamp to 0-100

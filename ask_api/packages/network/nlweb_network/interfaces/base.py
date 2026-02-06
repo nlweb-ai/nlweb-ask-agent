@@ -8,7 +8,7 @@ All transport adapters (HTTP, MCP, A2A) inherit from this base class.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Callable, Awaitable
+from typing import Any, Awaitable, Callable, Dict
 
 
 class BaseInterface(ABC):

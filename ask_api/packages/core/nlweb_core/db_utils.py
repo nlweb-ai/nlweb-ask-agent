@@ -8,12 +8,14 @@ Database utility functions including retry logic for transient failures.
 import asyncio
 import logging
 from functools import wraps
-from typing import Callable, Any
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
 
-def with_db_retry(max_retries: int = 3, initial_backoff: float = 0.5, max_backoff: float = 10.0):
+def with_db_retry(
+    max_retries: int = 3, initial_backoff: float = 0.5, max_backoff: float = 10.0
+):
     """
     Decorator that adds retry logic with exponential backoff for database operations.
 
@@ -36,6 +38,7 @@ def with_db_retry(max_retries: int = 3, initial_backoff: float = 0.5, max_backof
         Attempt 3 fails -> wait 2.0s
         Attempt 4 fails -> raise exception
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args, **kwargs) -> Any:
@@ -55,13 +58,17 @@ def with_db_retry(max_retries: int = 3, initial_backoff: float = 0.5, max_backof
                     # Don't retry on last attempt or non-transient errors
                     if attempt >= max_retries or not is_transient:
                         if not is_transient:
-                            logger.error(f"{func.__name__} failed with non-transient error: {e}")
+                            logger.error(
+                                f"{func.__name__} failed with non-transient error: {e}"
+                            )
                         else:
-                            logger.error(f"{func.__name__} failed after {max_retries + 1} attempts: {e}")
+                            logger.error(
+                                f"{func.__name__} failed after {max_retries + 1} attempts: {e}"
+                            )
                         raise
 
                     # Calculate backoff time with exponential growth
-                    wait_time = min(initial_backoff * (2 ** attempt), max_backoff)
+                    wait_time = min(initial_backoff * (2**attempt), max_backoff)
 
                     logger.warning(
                         f"{func.__name__} failed (attempt {attempt + 1}/{max_retries + 1}), "
@@ -75,6 +82,7 @@ def with_db_retry(max_retries: int = 3, initial_backoff: float = 0.5, max_backof
             raise last_exception
 
         return wrapper
+
     return decorator
 
 
@@ -104,46 +112,53 @@ def _is_transient_error(error: Exception) -> bool:
 
     # Transient error patterns
     transient_patterns = [
-        'connection',
-        'timeout',
-        'network',
-        'broken pipe',
-        'connection reset',
-        'connection refused',
-        'too many connections',
-        'pool',
-        'deadlock',
-        'lock timeout',
-        'server closed the connection',
-        'cannot connect',
-        'could not connect',
-        'no route to host',
-        'temporary failure',
+        "connection",
+        "timeout",
+        "network",
+        "broken pipe",
+        "connection reset",
+        "connection refused",
+        "too many connections",
+        "pool",
+        "deadlock",
+        "lock timeout",
+        "server closed the connection",
+        "cannot connect",
+        "could not connect",
+        "no route to host",
+        "temporary failure",
     ]
 
     # Check for asyncpg-specific transient errors
     try:
         import asyncpg
-        if isinstance(error, (
-            asyncpg.TooManyConnectionsError,
-            asyncpg.ConnectionDoesNotExistError,
-            asyncpg.CannotConnectNowError,
-            asyncpg.ConnectionRejectionError,
-        )):
+
+        if isinstance(
+            error,
+            (
+                asyncpg.TooManyConnectionsError,
+                asyncpg.ConnectionDoesNotExistError,
+                asyncpg.CannotConnectNowError,
+                asyncpg.ConnectionRejectionError,
+            ),
+        ):
             return True
     except ImportError:
         pass
 
     # Check for general connection/timeout errors
-    if isinstance(error, (
-        ConnectionError,
-        ConnectionRefusedError,
-        ConnectionResetError,
-        BrokenPipeError,
-        TimeoutError,
-        asyncio.TimeoutError,
-        OSError,
-    )):
+    if isinstance(
+        error,
+        (
+            ConnectionError,
+            ConnectionRefusedError,
+            ConnectionResetError,
+            BrokenPipeError,
+            TimeoutError,
+            asyncio.TimeoutError,
+            OSError,
+        ),
+    ):
         return True
 
     # Check error message for transient patterns
@@ -153,18 +168,18 @@ def _is_transient_error(error: Exception) -> bool:
 
     # Non-transient error patterns (explicitly not retryable)
     non_transient_patterns = [
-        'constraint',
-        'unique',
-        'foreign key',
-        'null value',
-        'invalid',
-        'permission',
-        'denied',
-        'authentication',
-        'syntax error',
-        'column',
-        'table',
-        'does not exist',
+        "constraint",
+        "unique",
+        "foreign key",
+        "null value",
+        "invalid",
+        "permission",
+        "denied",
+        "authentication",
+        "syntax error",
+        "column",
+        "table",
+        "does not exist",
     ]
 
     for pattern in non_transient_patterns:

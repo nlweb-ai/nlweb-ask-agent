@@ -8,8 +8,9 @@ This test verifies the AzureOpenAIScoringProvider implementation
 without requiring actual Azure OpenAI credentials.
 """
 
-import pytest
 from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
 from nlweb_azure_models.llm.azure_oai import AzureOpenAIScoringProvider
 from nlweb_core.scoring import ScoringContext
 
@@ -24,7 +25,7 @@ class TestAzureOpenAIScoringProvider:
             api_key="test-key",
             model="gpt-4.1-mini",
             api_version="2024-02-01",
-            auth_method="api_key"
+            auth_method="api_key",
         )
 
         assert provider.endpoint == "https://test.openai.azure.com"
@@ -40,13 +41,13 @@ class TestAzureOpenAIScoringProvider:
             api_version="2024-02-01",
             auth_method="api_key",
             model="gpt-4.1-mini",
-            api_key="test-key"
+            api_key="test-key",
         )
 
         context = ScoringContext(
             query="best pizza restaurants",
             item_description='{"name": "Pizza Place", "type": "Restaurant"}',
-            item_type="Restaurant"
+            item_type="Restaurant",
         )
 
         prompt = provider._build_scoring_prompt(context)
@@ -66,13 +67,10 @@ class TestAzureOpenAIScoringProvider:
             api_version="2024-02-01",
             auth_method="api_key",
             model="gpt-4.1-mini",
-            api_key="test-key"
+            api_key="test-key",
         )
 
-        context = ScoringContext(
-            query="I want to order pizza",
-            intent="order_food"
-        )
+        context = ScoringContext(query="I want to order pizza", intent="order_food")
 
         prompt = provider._build_scoring_prompt(context)
 
@@ -88,7 +86,7 @@ class TestAzureOpenAIScoringProvider:
             api_version="2024-02-01",
             auth_method="api_key",
             model="gpt-4.1-mini",
-            api_key="test-key"
+            api_key="test-key",
         )
 
         # Mock the client and response
@@ -96,7 +94,9 @@ class TestAzureOpenAIScoringProvider:
         mock_response = Mock()
         mock_response.choices = [Mock()]
         mock_response.choices[0].message = Mock()
-        mock_response.choices[0].message.content = '{"score": 85, "description": "Highly relevant"}'
+        mock_response.choices[
+            0
+        ].message.content = '{"score": 85, "description": "Highly relevant"}'
 
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
@@ -106,7 +106,7 @@ class TestAzureOpenAIScoringProvider:
         context = ScoringContext(
             query="best pizza",
             item_description='{"name": "Pizza Place"}',
-            item_type="Restaurant"
+            item_type="Restaurant",
         )
         questions = ["Is this relevant?"]
 
@@ -123,7 +123,7 @@ class TestAzureOpenAIScoringProvider:
             api_version="2024-02-01",
             auth_method="api_key",
             model="gpt-4.1-mini",
-            api_key="test-key"
+            api_key="test-key",
         )
 
         # Test score above 100
@@ -155,7 +155,7 @@ class TestAzureOpenAIScoringProvider:
             api_version="2024-02-01",
             auth_method="api_key",
             model="gpt-4.1-mini",
-            api_key="test-key"
+            api_key="test-key",
         )
 
         # Mock the client to return different scores
@@ -168,7 +168,7 @@ class TestAzureOpenAIScoringProvider:
             mock_response.choices[0].message = Mock()
 
             # Alternate between scores
-            if not hasattr(mock_create, 'call_count'):
+            if not hasattr(mock_create, "call_count"):
                 mock_create.call_count = 0
 
             scores = [75, 90, 60]
@@ -189,7 +189,9 @@ class TestAzureOpenAIScoringProvider:
             ScoringContext(query="test3", item_description="item3"),
         ]
 
-        results = await provider.score_batch(["Is this relevant?"], contexts, timeout=10.0)
+        results = await provider.score_batch(
+            ["Is this relevant?"], contexts, timeout=10.0
+        )
 
         assert len(results) == 3
         assert all(isinstance(r, float) for r in results)

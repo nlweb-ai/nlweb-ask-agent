@@ -3,9 +3,8 @@ Tests for NLWeb protocol models.
 """
 
 import pytest
-from pydantic import ValidationError
-
 from nlweb_core.protocol import AskRequest, Query
+from pydantic import ValidationError
 
 
 def test_valid_minimal_request():

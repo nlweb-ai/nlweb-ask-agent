@@ -1,14 +1,13 @@
-import pymssql
-from datetime import datetime
+import logging
 import os
+import re
 import threading
 from collections import defaultdict
-import re
+from datetime import datetime
+
 import config  # This will automatically load .env file
-import logging
-
 import log
-
+import pymssql
 
 log.configure(os.environ)
 logger = logging.getLogger("db")
@@ -150,7 +149,7 @@ def create_tables(conn: pymssql.Connection):
     """
     )
     result = cursor.fetchone()
-    if result and result[0] == 'CREATED':
+    if result and result[0] == "CREATED":
         logger.info("✓ Created index idx_ids_user_id on ids(user_id, id)")
     else:
         logger.info("✓ Index idx_ids_user_id already exists")
@@ -167,7 +166,7 @@ def create_tables(conn: pymssql.Connection):
     """
     )
     result = cursor.fetchone()
-    if result and result[0] == 'CREATED':
+    if result and result[0] == "CREATED":
         logger.info("✓ Created index idx_ids_file_url on ids(file_url, user_id)")
     else:
         logger.info("✓ Index idx_ids_file_url already exists")
@@ -185,7 +184,7 @@ def create_tables(conn: pymssql.Connection):
     """
     )
     result = cursor.fetchone()
-    if result and result[0] == 'CREATED':
+    if result and result[0] == "CREATED":
         logger.info("✓ Created index idx_sites_schema_map on sites(schema_map_url)")
     else:
         logger.info("✓ Index idx_sites_schema_map already exists")
@@ -375,13 +374,13 @@ def update_file_ids(
             batch_size = 500
             for i in range(0, len(added_list), batch_size):
                 batch = added_list[i : i + batch_size]
-                placeholders = ','.join(['(%s, %s, %s)'] * len(batch))
+                placeholders = ",".join(["(%s, %s, %s)"] * len(batch))
                 values = []
                 for id in batch:
                     values.extend([file_url, user_id, id])
                 cursor.execute(
                     f"INSERT INTO #temp_insert_ids (file_url, user_id, id) VALUES {placeholders}",
-                    tuple(values)
+                    tuple(values),
                 )
 
             # Bulk insert from temp table
@@ -432,7 +431,9 @@ def count_id_references(conn: pymssql.Connection, id: str, user_id: str):
     return cursor.fetchone()[0]
 
 
-def batch_count_id_references(conn: pymssql.Connection, ids: list[str], user_id: str) -> dict[str, int]:
+def batch_count_id_references(
+    conn: pymssql.Connection, ids: list[str], user_id: str
+) -> dict[str, int]:
     """
     Count references for multiple IDs in a single query using a temp table.
     Returns a dict mapping id -> count.
@@ -441,13 +442,16 @@ def batch_count_id_references(conn: pymssql.Connection, ids: list[str], user_id:
         return {}
 
     import time
+
     start_time = time.time()
 
     cursor = conn.cursor()
 
     # Use temp table approach instead of large IN clause
     # This is much faster for large numbers of IDs (100+)
-    logger.debug(f"batch_count_id_references: Querying {len(ids)} IDs using temp table...")
+    logger.debug(
+        f"batch_count_id_references: Querying {len(ids)} IDs using temp table..."
+    )
 
     # Create temp table
     temp_table_start = time.time()
@@ -458,22 +462,29 @@ def batch_count_id_references(conn: pymssql.Connection, ids: list[str], user_id:
     # Batch insert into temp table (avoid 2100 parameter limit)
     batch_size = 1000
     for i in range(0, len(ids), batch_size):
-        batch = ids[i:i + batch_size]
-        placeholders = ','.join(['(%s)'] * len(batch))
-        cursor.execute(f"INSERT INTO #temp_ids (id) VALUES {placeholders}", tuple(batch))
+        batch = ids[i : i + batch_size]
+        placeholders = ",".join(["(%s)"] * len(batch))
+        cursor.execute(
+            f"INSERT INTO #temp_ids (id) VALUES {placeholders}", tuple(batch)
+        )
 
     temp_table_time = time.time() - temp_table_start
-    logger.debug(f"batch_count_id_references: Temp table created in {temp_table_time:.2f}s")
+    logger.debug(
+        f"batch_count_id_references: Temp table created in {temp_table_time:.2f}s"
+    )
 
     # Query using JOIN instead of IN clause
     query_start = time.time()
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT i.id, COUNT(*) as ref_count
         FROM ids i
         INNER JOIN #temp_ids t ON i.id = t.id
         WHERE i.user_id = %s
         GROUP BY i.id
-    """, (user_id,))
+    """,
+        (user_id,),
+    )
 
     query_time = time.time() - query_start
     logger.debug(f"batch_count_id_references: Query executed in {query_time:.2f}s")
@@ -481,7 +492,9 @@ def batch_count_id_references(conn: pymssql.Connection, ids: list[str], user_id:
     fetch_start = time.time()
     rows = cursor.fetchall()
     fetch_time = time.time() - fetch_start
-    logger.debug(f"batch_count_id_references: Fetched {len(rows)} results in {fetch_time:.2f}s")
+    logger.debug(
+        f"batch_count_id_references: Fetched {len(rows)} results in {fetch_time:.2f}s"
+    )
 
     # Clean up temp table
     cursor.execute("DROP TABLE #temp_ids")
@@ -492,7 +505,9 @@ def batch_count_id_references(conn: pymssql.Connection, ids: list[str], user_id:
         result[row[0]] = row[1]
 
     total_time = time.time() - start_time
-    logger.info(f"batch_count_id_references: Total time {total_time:.2f}s for {len(ids)} IDs")
+    logger.info(
+        f"batch_count_id_references: Total time {total_time:.2f}s for {len(ids)} IDs"
+    )
 
     return result
 
@@ -540,7 +555,12 @@ def get_all_sites(conn: pymssql.Connection, user_id: str = None):
 
 
 def add_site(
-    conn: pymssql.Connection, site_url: str, user_id: str, interval_hours: int = 720, schema_map_url: str = None, refresh_mode: str = "diff"
+    conn: pymssql.Connection,
+    site_url: str,
+    user_id: str,
+    interval_hours: int = 720,
+    schema_map_url: str = None,
+    refresh_mode: str = "diff",
 ):
     """Add a new site to monitor"""
     # Normalize site URL

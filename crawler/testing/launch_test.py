@@ -3,12 +3,13 @@
 Launch script to start all services and add test sites
 """
 
-import subprocess
-import time
-import sys
 import os
 import signal
+import subprocess
+import sys
+import time
 from pathlib import Path
+
 
 # Check and install requirements first
 def check_requirements():
@@ -36,6 +37,7 @@ def check_requirements():
 
     try:
         import pymssql
+
         print("  ✓ pymssql installed (database connections enabled)")
     except ImportError:
         optional_missing.append("pymssql")
@@ -49,7 +51,9 @@ def check_requirements():
 
         if req_file.exists():
             try:
-                subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", str(req_file)])
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install", "-r", str(req_file)]
+                )
                 print("  ✓ Required dependencies installed")
             except subprocess.CalledProcessError as e:
                 print(f"  ✗ Failed to install dependencies: {e}")
@@ -58,7 +62,17 @@ def check_requirements():
                 sys.exit(1)
         else:
             try:
-                subprocess.check_call([sys.executable, "-m", "pip", "install", "flask", "flask-cors", "requests"])
+                subprocess.check_call(
+                    [
+                        sys.executable,
+                        "-m",
+                        "pip",
+                        "install",
+                        "flask",
+                        "flask-cors",
+                        "requests",
+                    ]
+                )
                 print("  ✓ Required dependencies installed")
             except subprocess.CalledProcessError as e:
                 print(f"  ✗ Failed to install dependencies: {e}")
@@ -70,12 +84,14 @@ def check_requirements():
         print("\n  Note: Running in test mode without database connections")
         print("  The system will use file queue but won't persist to SQL")
 
+
 # Check requirements before importing
 check_requirements()
 
 # Now import the modules we need
-import requests
 import json
+
+import requests
 
 # Configuration
 API_SERVER_PORT = 5001  # Changed from 5000 to avoid macOS AirPlay conflict
@@ -84,6 +100,7 @@ DATA_SERVER_PORT = 8000
 
 # Track processes for cleanup
 processes = []
+
 
 def cleanup(signum=None, frame=None):
     """Clean up all processes on exit"""
@@ -96,9 +113,11 @@ def cleanup(signum=None, frame=None):
             proc.kill()
     sys.exit(0)
 
+
 # Register cleanup handlers
 signal.signal(signal.SIGINT, cleanup)
 signal.signal(signal.SIGTERM, cleanup)
+
 
 def start_data_server():
     """Start the HTTP server to serve test data"""
@@ -107,11 +126,12 @@ def start_data_server():
         ["python3", "-m", "http.server", str(DATA_SERVER_PORT)],
         cwd="data",
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
+        stderr=subprocess.PIPE,
     )
     processes.append(proc)
     print(f"  Data server started (PID: {proc.pid})")
     return proc
+
 
 def start_api_server():
     """Start the Flask API server"""
@@ -120,11 +140,12 @@ def start_api_server():
         ["python3", "code/core/api.py"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        env={**os.environ, 'FLASK_ENV': 'development'}
+        env={**os.environ, "FLASK_ENV": "development"},
     )
     processes.append(proc)
     print(f"  API server started (PID: {proc.pid})")
     return proc
+
 
 def start_worker():
     """Start a worker process"""
@@ -132,11 +153,12 @@ def start_worker():
     proc = subprocess.Popen(
         ["python3", "code/core/worker.py"],
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
+        stderr=subprocess.PIPE,
     )
     processes.append(proc)
     print(f"  Worker started (PID: {proc.pid})")
     return proc
+
 
 def wait_for_server(url, name, max_attempts=30):
     """Wait for a server to be ready"""
@@ -156,6 +178,7 @@ def wait_for_server(url, name, max_attempts=30):
     print(f"  ERROR: {name} failed to start after {max_attempts} seconds")
     return False
 
+
 def add_test_site(site_name, base_url="http://localhost:8000"):
     """Add a test site using the API"""
     site_url = f"{base_url}/{site_name}"
@@ -165,11 +188,7 @@ def add_test_site(site_name, base_url="http://localhost:8000"):
     # First add the site
     try:
         response = requests.post(
-            f"{API_BASE}/sites",
-            json={
-                "site_url": site_url,
-                "interval_hours": 24
-            }
+            f"{API_BASE}/sites", json={"site_url": site_url, "interval_hours": 24}
         )
         if response.status_code == 200:
             print(f"  ✓ Site added: {site_url}")
@@ -195,6 +214,7 @@ def add_test_site(site_name, base_url="http://localhost:8000"):
         print(f"  ✗ Error triggering processing: {e}")
         return False
 
+
 def check_status():
     """Check the current system status"""
     try:
@@ -208,10 +228,12 @@ def check_status():
             print(f"  Failed jobs:      {data['failed_jobs']}")
             print(f"  Total jobs:       {data['total_jobs']}")
 
-            if data['jobs']:
+            if data["jobs"]:
                 print("\n  Recent jobs:")
-                for job in data['jobs'][:5]:  # Show first 5
-                    print(f"    - [{job['status']}] {job['type']} for {job.get('site', 'N/A')}")
+                for job in data["jobs"][:5]:  # Show first 5
+                    print(
+                        f"    - [{job['status']}] {job['type']} for {job.get('site', 'N/A')}"
+                    )
 
         # Get site status
         response = requests.get(f"{API_BASE}/status")
@@ -226,6 +248,7 @@ def check_status():
     except Exception as e:
         print(f"Error checking status: {e}")
 
+
 def run_worker_mode():
     """Run in worker mode - just the worker process"""
     print("=" * 60)
@@ -239,10 +262,12 @@ def run_worker_mode():
 
     # Run worker directly without capturing output
     import subprocess
+
     try:
         subprocess.run(["python3", "code/core/worker.py"])
     except KeyboardInterrupt:
         print("\nWorker stopped")
+
 
 def run_master_mode(clear_db=False, add_sites=True):
     """Run in master mode - starts servers and optionally adds sites"""
@@ -281,7 +306,8 @@ def run_master_mode(clear_db=False, add_sites=True):
         try:
             # Import db module
             import sys
-            sys.path.insert(0, 'code/core')
+
+            sys.path.insert(0, "code/core")
             import db
 
             conn = db.get_connection()
@@ -290,7 +316,7 @@ def run_master_mode(clear_db=False, add_sites=True):
         except Exception as e:
             print(f"Warning: Could not clear database: {e}")
             response = input("\nContinue anyway? (y/n): ")
-            if response.lower() != 'y':
+            if response.lower() != "y":
                 print("Exiting...")
                 sys.exit(0)
 
@@ -307,7 +333,9 @@ def run_master_mode(clear_db=False, add_sites=True):
     api_proc = start_api_server()
 
     # Wait for API server to be ready
-    if not wait_for_server(f"http://localhost:{API_SERVER_PORT}/api/status", "API server"):
+    if not wait_for_server(
+        f"http://localhost:{API_SERVER_PORT}/api/status", "API server"
+    ):
         cleanup()
 
     # Don't start worker in master mode - it will run separately
@@ -344,12 +372,13 @@ def run_master_mode(clear_db=False, add_sites=True):
 
     cleanup()
 
+
 def main():
     """Main entry point with argument parsing"""
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Launch crawler components for testing',
+        description="Launch crawler components for testing",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -359,25 +388,30 @@ Examples:
 Options for master mode:
   --clear-db     Clear database before starting
   --no-add-sites Don't automatically add test sites
-        """
+        """,
     )
 
-    parser.add_argument('mode', choices=['master', 'worker'],
-                        help='Run as master (servers) or worker')
-    parser.add_argument('--clear-db', action='store_true',
-                        help='Clear database before starting (master only)')
-    parser.add_argument('--no-add-sites', action='store_true',
-                        help="Don't automatically add test sites (master only)")
+    parser.add_argument(
+        "mode", choices=["master", "worker"], help="Run as master (servers) or worker"
+    )
+    parser.add_argument(
+        "--clear-db",
+        action="store_true",
+        help="Clear database before starting (master only)",
+    )
+    parser.add_argument(
+        "--no-add-sites",
+        action="store_true",
+        help="Don't automatically add test sites (master only)",
+    )
 
     args = parser.parse_args()
 
-    if args.mode == 'worker':
+    if args.mode == "worker":
         run_worker_mode()
     else:  # master mode
-        run_master_mode(
-            clear_db=args.clear_db,
-            add_sites=not args.no_add_sites
-        )
+        run_master_mode(clear_db=args.clear_db, add_sites=not args.no_add_sites)
+
 
 if __name__ == "__main__":
     main()
