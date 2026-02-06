@@ -125,11 +125,11 @@ function App() {
       endpoint: endpoint,
       site: site.url,
       maxResults: 9,
-      pages: PAGES
+      numRetrievalResults: 50,
     });
     const localSessions = useSearchSessions();
     const [sessionId, setSessionId] = useState<string>(crypto.randomUUID());
-    const {results, addSearch, addResults} = useSearchSession(sessionId);
+    const {searches, addSearch, addResults} = useSearchSession(sessionId);
      async function startSearch(query: string) {
       nlweb.clearResults();
       const newId = localSessions.sessions.some(s => s.sessionId === sessionId) ? crypto.randomUUID() : sessionId ;
@@ -167,7 +167,7 @@ function App() {
               sessionId={sessionId}
               startSession={startSearch}
               endSession={endSearch}
-              searches={results}
+              searches={searches}
               addSearch={addSearch}
               addResults={addResults}
               nlweb={nlweb}
@@ -181,18 +181,16 @@ function App() {
             >
               <div className='absolute z-50 top-2 right-16'>
                 <DebugTool 
-                  site={site.url}
-                  maxResults={50}
                   streamingState={nlweb}
-                  results={results}
-                  pages={PAGES}
+                  searches={searches}
+                  config={config}
                 />
               </div>
             </ChatSearch>
             <SiteDropdown 
               sites={SITES} 
               selected={site} 
-              onSelect={url => setSite(SITES.find(s => s.url == url) || ({
+              onSelect={(url) => setSite(SITES.find(s => s.url == url) || ({
                 url: url || ''
               }))}
             />

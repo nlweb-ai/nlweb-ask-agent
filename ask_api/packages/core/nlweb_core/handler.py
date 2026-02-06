@@ -100,6 +100,11 @@ class DefaultAskHandler(AskHandler):
         )
         await self._post_results(ask_request, output_method, final_ranked_answers)
 
+    def _get_result_offset(self, request: AskRequest) -> int:
+        if request.meta and request.meta.start_num:
+            return request.meta.start_num
+        return 0
+    
     async def _run_query_body(
         self,
         request: AskRequest,
@@ -127,6 +132,7 @@ class DefaultAskHandler(AskHandler):
             max_results=request.query.max_results,
             min_score=request.query.min_score,
             site=request.query.site,
+            start_num=self._get_result_offset(request)
         )
 
         await self._send_results(output_method, final_ranked_answers)
