@@ -109,7 +109,6 @@ const SITES = [
   {url: 'ambitiouskitchen.com'},
 ];
 
-const PAGES = 3;
 function App() {
   const [site, setSite] = useState(SITES[0]);
     // Append URL query parameters to the endpoint for config overrides

@@ -11,6 +11,7 @@ COPY package.json pnpm-lock.yaml .npmrc ./
 
 # Install dependencies (requires GIT_TOKEN at build time for GitHub Packages)
 ARG GIT_TOKEN
+ENV GIT_TOKEN=$GIT_TOKEN
 RUN pnpm install --frozen-lockfile
 
 # Copy source and build
