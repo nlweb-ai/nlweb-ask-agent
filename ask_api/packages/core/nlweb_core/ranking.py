@@ -107,6 +107,9 @@ def _apply_recency_boost(
     """
     Apply site-specific recency boost to LLM score.
 
+    NOTE: Currently unused in favor of relative age re-ranking in rank() method.
+    Kept for future revisit/refactoring.
+
     Hybrid scoring formula:
     final_score = (llm_score * llm_weight) + (recency_score * recency_weight)
     where llm_weight = 1 - recency_weight
@@ -145,22 +148,26 @@ def _apply_recency_boost(
     # Clamp recency_weight to valid range
     recency_weight = max(0.0, min(1.0, recency_weight))
 
-    # Calculate llm_weight (ensures they sum to 1.0)
-    llm_weight = 1.0 - recency_weight
-
-    # Clamp age to max_age_days
-    effective_age = min(age_days, max_age_days)
-
-    # Calculate recency score with exponential decay
     import math
 
-    recency_score = 100 * math.exp(-decay_rate * effective_age / 100)
+    # HACK: Age-dominant scoring
+    # Age becomes primary ranking factor, LLM is tiebreaker
+    # recency_weight controls how much age matters (0.9-0.98 recommended)
 
-    # Hybrid score
-    boosted = (score * llm_weight) + (recency_score * recency_weight)
+    # Calculate age score: recent=100, old=0
+    if age_days <= max_age_days:
+        age_score = 100 * (1 - age_days / max_age_days)
+    else:
+        # Very old articles: give them a floor score to avoid crushing them
+        # Use 50% of LLM score as minimum (prevents scores from dropping below threshold)
+        return score * 0.5
+
+    # Weighted combination: age dominates
+    llm_weight = 1.0 - recency_weight
+    final = (age_score * recency_weight) + (score * llm_weight)
 
     # Clamp to 0-100
-    return max(0, min(100, boosted))
+    return max(0, min(100, final))
 
 
 class Ranking:
@@ -259,8 +266,8 @@ class Ranking:
             logger.error(f"Ranking failed: {e}", exc_info=True)
             raise
 
-        # Process results
-        ranked_answers: list[RankedResult] = []
+        # Process results - collect valid scored items
+        scored_items = []
         for score, item, (date_str, age_days) in zip(scores, items, date_info):
 
             # Handle exceptions from score_batch
@@ -285,18 +292,52 @@ class Ranking:
                         raise score
                 continue
 
-            # Apply site-specific recency boost
-            boosted_score = _apply_recency_boost(score, age_days, recency_config)
+            scored_items.append((score, item, age_days))
 
-            if boosted_score != score:
-                logger.debug(
-                    f"Recency boost applied for {item.url}: "
-                    f"LLM={score:.1f}, boosted={boosted_score:.1f}, age={age_days}d"
-                )
+        # Apply exponential recency boost for recent articles
+        # Clean approach: multiplicative boost that decays exponentially with age
+        ranked_answers: list[RankedResult] = []
 
-            # Create RankedResult with boosted score
-            result = RankedResult(item=item, score=int(boosted_score))
-            ranked_answers.append(result)
+        if freshness_enabled and scored_items:
+            import math
+
+            # Get boost parameters from config (with sensible defaults)
+            boost_magnitude = recency_config.get("recency_weight", 1.0)  # Max boost at age=0
+            decay_rate = recency_config.get("decay_rate", 0.5)  # How fast boost decays
+            age_threshold = 8  # Days - boost becomes ~1.0x after this
+
+            # Calculate decay_rate to reach 1.0x at age_threshold
+            # We want: boost_magnitude * exp(-lambda * age_threshold) ≈ 0
+            # So: lambda = -ln(0.01) / age_threshold ≈ 0.576 for threshold=8
+            calculated_decay = -math.log(0.01) / age_threshold
+
+            logger.debug(
+                f"Freshness boost enabled for {site}: "
+                f"magnitude={boost_magnitude:.2f}, decay={decay_rate:.3f}, threshold={age_threshold}d"
+            )
+
+            for score, item, age_days in scored_items:
+                if age_days is not None and age_days <= age_threshold:
+                    # Exponential boost: (1 + magnitude) at age=0, 1.0x at age=threshold
+                    boost_factor = 1.0 + (boost_magnitude * math.exp(-calculated_decay * age_days))
+
+                    final_score = score * boost_factor
+                    final_score = max(0, min(100, final_score))  # Clamp to 0-100
+
+                    if boost_factor > 1.01:  # Only log significant boosts
+                        logger.debug(
+                            f"Recency boost for {item.url}: "
+                            f"LLM={score:.1f}, age={age_days}d, boost={boost_factor:.2f}x, final={final_score:.1f}"
+                        )
+                else:
+                    # No boost for articles > threshold or without age
+                    final_score = score
+
+                ranked_answers.append(RankedResult(item=item, score=int(final_score)))
+        else:
+            # No freshness: use LLM scores as-is
+            for score, item, age_days in scored_items:
+                ranked_answers.append(RankedResult(item=item, score=int(score)))
 
         # Filter and sort by score
         filtered = [r for r in ranked_answers if r.score > min_score]

@@ -109,6 +109,9 @@ class RetrievalParams:
     num_results: int = 50
     """Maximum number of results to retrieve. Defaults to 50."""
 
+    date_filter: str | None = None
+    """Optional date filter (e.g., 'datePublished ge 2026-02-01T00:00:00Z')."""
+
 
 class ItemRetriever(ABC):
     """Abstract base class for item retrievers."""

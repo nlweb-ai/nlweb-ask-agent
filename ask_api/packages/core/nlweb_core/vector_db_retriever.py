@@ -24,7 +24,7 @@ class VectorDBRetriever(ItemRetriever):
         Perform vector database search and return results.
 
         Args:
-            params: RetrievalParams with query_text, site, num_results.
+            params: RetrievalParams with query_text, site, num_results, date_filter.
 
         Returns:
             List of RetrievedItem objects.
@@ -32,7 +32,7 @@ class VectorDBRetriever(ItemRetriever):
         # Get the vector DB client and perform search
         vectordb_client = await get_vectordb_client()
         results = await vectordb_client.search(
-            params.query_text, params.site, params.num_results
+            params.query_text, params.site, params.num_results, date_filter=params.date_filter
         )
 
         # Enrich with full content from object storage if configured

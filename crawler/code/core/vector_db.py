@@ -227,60 +227,69 @@ class VectorDB:
         if self.search_endpoint and self.search_key:
             credential = AzureKeyCredential(self.search_key)
             self.index_client = SearchIndexClient(self.search_endpoint, credential)
+
             self.search_client = SearchClient(
                 self.search_endpoint, self.index_name, credential
             )
-            self._ensure_index_exists()
+            self._ensure_index_exists(self.index_name)
+
+            logger.info(f"Initialized Azure Search index: {self.index_name}")
         else:
             self.index_client = None
             self.search_client = None
 
-    def _ensure_index_exists(self):
-        """Create the search index if it doesn't exist"""
-        try:
-            # Check if index exists
-            self.index_client.get_index(self.index_name)
-        except:
-            # Create index with vector search configuration
-            fields = [
-                SimpleField(
-                    name="id", type=SearchFieldDataType.String, key=True
-                ),  # Hash of URL for Azure Search key
-                SearchableField(
-                    name="url", type=SearchFieldDataType.String
-                ),  # Original URL (was @id in JSON-LD)
-                SearchField(
-                    name="site",
-                    type=SearchFieldDataType.String,
-                    searchable=True,
-                    filterable=True,
-                ),  # Make site searchable and filterable
-                SearchableField(name="type", type=SearchFieldDataType.String),
-                SearchableField(name="content", type=SearchFieldDataType.String),
-                SimpleField(name="timestamp", type=SearchFieldDataType.DateTimeOffset),
-                SearchField(
-                    name="embedding",
-                    type=SearchFieldDataType.Collection(SearchFieldDataType.Single),
-                    searchable=True,
-                    vector_search_dimensions=1536,
-                    vector_search_profile_name="default",
-                ),
-            ]
+    def _ensure_index_exists(self, index_name):
+        """Create or update the search index with the latest schema"""
+        logger.info(f"Ensuring index '{index_name}' exists with latest schema...")
 
-            vector_search = VectorSearch(
-                profiles=[
-                    VectorSearchProfile(
-                        name="default", algorithm_configuration_name="hnsw"
-                    )
-                ],
-                algorithms=[HnswAlgorithmConfiguration(name="hnsw")],
-            )
+        # Define index schema with vector search configuration
+        fields = [
+            SimpleField(
+                name="id", type=SearchFieldDataType.String, key=True
+            ),  # Hash of URL for Azure Search key
+            SearchableField(
+                name="url", type=SearchFieldDataType.String
+            ),  # Original URL (was @id in JSON-LD)
+            SearchField(
+                name="site",
+                type=SearchFieldDataType.String,
+                searchable=True,
+                filterable=True,
+            ),  # Make site searchable and filterable
+            SearchableField(name="type", type=SearchFieldDataType.String),
+            SearchableField(name="content", type=SearchFieldDataType.String),
+            SimpleField(name="timestamp", type=SearchFieldDataType.DateTimeOffset),
+            SimpleField(
+                name="datePublished",
+                type=SearchFieldDataType.DateTimeOffset,
+                filterable=True,
+                sortable=True,
+            ),  # Publication date from schema.org for filtering fresh articles
+            SearchField(
+                name="embedding",
+                type=SearchFieldDataType.Collection(SearchFieldDataType.Single),
+                searchable=True,
+                vector_search_dimensions=1536,
+                vector_search_profile_name="default",
+            ),
+        ]
 
-            index = SearchIndex(
-                name=self.index_name, fields=fields, vector_search=vector_search
-            )
+        vector_search = VectorSearch(
+            profiles=[
+                VectorSearchProfile(
+                    name="default", algorithm_configuration_name="hnsw"
+                )
+            ],
+            algorithms=[HnswAlgorithmConfiguration(name="hnsw")],
+        )
 
-            self.index_client.create_index(index)
+        index = SearchIndex(
+            name=index_name, fields=fields, vector_search=vector_search
+        )
+
+        # This will create index if it doesn't exist, or update schema if it does
+        self.index_client.create_or_update_index(index)
+        logger.info(f"Index '{index_name}' ready with latest schema")
 
     def _prepare_document(
         self, id: str, site: str, json_obj: dict, embedding: List[float]
@@ -299,7 +308,25 @@ class VectorDB:
         # Using SHA-256 and taking first 32 hex chars (128 bits) for reasonable key length
         url_hash = hashlib.sha256(id.encode("utf-8")).hexdigest()[:32]
 
-        return {
+        # Extract datePublished from schema.org object
+        date_published = None
+        if "datePublished" in json_obj:
+            try:
+                date_str = json_obj["datePublished"]
+                # Parse the date string and ensure it's timezone-aware UTC
+                from dateutil import parser
+                parsed_date = parser.parse(date_str)
+                # Convert to UTC if not already
+                if parsed_date.tzinfo is None:
+                    parsed_date = parsed_date.replace(tzinfo=timezone.utc)
+                else:
+                    parsed_date = parsed_date.astimezone(timezone.utc)
+                date_published = parsed_date.isoformat()
+            except Exception as e:
+                logger.warning(f"Failed to parse datePublished '{json_obj.get('datePublished')}': {e}")
+                date_published = None
+
+        document = {
             "id": url_hash,  # Hash of URL for Azure Search key
             "url": id,  # Original URL unmodified
             "site": site,
@@ -308,6 +335,12 @@ class VectorDB:
             "timestamp": datetime.now(timezone.utc).isoformat(),  # Timezone-aware UTC timestamp
             "embedding": embedding,
         }
+
+        # Only add datePublished if it exists (for backward compatibility with existing docs)
+        if date_published:
+            document["datePublished"] = date_published
+
+        return document
 
     async def add(self, id: str, site: str, json_obj: dict):
         """Add or update an item in the vector database"""
@@ -396,19 +429,11 @@ class VectorDB:
 
                 # Upload to search index in batches of 100
                 upload_batch_size = 100
-                logger.debug(
-                    f"Starting upload to search index in batches of {upload_batch_size}..."
-                )
+                logger.debug(f"Uploading {len(documents)} documents to {self.index_name}...")
                 for i in range(0, len(documents), upload_batch_size):
                     batch = documents[i : i + upload_batch_size]
-                    logger.debug(
-                        f"Uploading batch {i//upload_batch_size + 1}/{(len(documents) + upload_batch_size - 1)//upload_batch_size} ({len(batch)} documents)..."
-                    )
                     result = self.search_client.upload_documents(documents=batch)
-                    logger.debug(f"Upload result: {result}")
-                    logger.debug(
-                        f"Uploaded batch {i//upload_batch_size + 1}/{(len(documents) + upload_batch_size - 1)//upload_batch_size} ({len(batch)} documents)"
-                    )
+                    logger.debug(f"Uploaded batch {i//upload_batch_size + 1} to {self.index_name}")
 
                 logger.debug(f"Successfully completed batch_add for {len(items)} items")
             else:
