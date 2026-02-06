@@ -1,7 +1,7 @@
 # Chat App Makefile
 # For AKS deployment, uses environment-based resource discovery
 
-include ../common.mk
+include ../../common.mk
 
 .PHONY: help dev build deploy down port-forward logs
 
@@ -20,20 +20,15 @@ help:
 dev:
 	pnpm dev
 
-# Build Docker image to ACR
+# Build Docker image to ACR (context is repo root for workspace access)
 build:
 	$(call discover-azure-resources)
 	$(call validate-azure-resources)
-	@if [ -z "$$GIT_TOKEN" ]; then \
-		echo "Error: GIT_TOKEN is required for GitHub Packages auth"; \
-		exit 1; \
-	fi
 	az acr build \
 		--registry $(ACR_LOGIN_SERVER) \
 		--image chat-app:latest \
-		--build-arg GIT_TOKEN="$$GIT_TOKEN" \
-		--file Dockerfile \
-		.
+		--file chat-app/Dockerfile \
+		..
 
 # Deploy to AKS using Helm (upgrades chat-app image only)
 deploy:
@@ -41,7 +36,7 @@ deploy:
 	$(call validate-azure-resources)
 	$(call aks-login)
 	$(eval DIGEST := $(shell az acr manifest list-metadata --registry $(ACR_NAME) --name chat-app --query "[?tags[?@=='latest']].digest | [0]" -o tsv))
-	helm upgrade chat-app ../helm/chat-app \
+	helm upgrade chat-app ../../helm/chat-app \
 		--set image.tag=$(DIGEST) \
 		--reuse-values
 	@echo ""

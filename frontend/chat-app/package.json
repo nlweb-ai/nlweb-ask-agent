@@ -13,7 +13,7 @@
   "dependencies": {
     "@headlessui/react": "^2.2.9",
     "@heroicons/react": "^2.2.0",
-    "@nlweb-ai/search-components": "^0.1.9",
+    "@nlweb-ai/search-components": "workspace:*",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
@@ -32,10 +32,5 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "npm:rolldown-vite@7.2.5"
-  },
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:rolldown-vite@7.2.5"
-    }
   }
 }

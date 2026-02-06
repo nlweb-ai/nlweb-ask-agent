@@ -6,24 +6,23 @@ React frontend for NLWeb semantic search.
 
 **Via Docker Compose (from repo root):**
 ```bash
-export GIT_TOKEN=<github-classic-pat-with-read:packages>
-make frontend
+make ask
 ```
 Open http://localhost:5173
 
-**Native:**
+**Native (from frontend/ directory):**
 ```bash
-export GIT_TOKEN=<your-token>
 pnpm install
-pnpm dev
+pnpm --filter @nlweb-ai/chat-app dev
 ```
 Requires ask-api running on port 8000.
 
 ## Build
 
 ```bash
-pnpm build
-pnpm start  # serves on port 3000
+# From frontend/ directory
+pnpm --filter @nlweb-ai/chat-app build
+pnpm --filter @nlweb-ai/chat-app start  # serves on port 3000
 ```
 
 ## Stack
@@ -32,4 +31,4 @@ pnpm start  # serves on port 3000
 - Vite (rolldown)
 - Tailwind CSS 4
 - Headless UI
-- `@nlweb-ai/search-components` (GitHub Packages)
+- `@nlweb-ai/search-components` (workspace package)

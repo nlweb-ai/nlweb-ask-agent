@@ -7,7 +7,8 @@ Distributed question-answering system with semantic search over crawled web cont
 | Directory | Description |
 |-----------|-------------|
 | `/ask_api` | REST API with MCP/A2A protocol support |
-| `/chat-app` | React frontend |
+| `/frontend/chat-app` | React frontend |
+| `/frontend/search-components` | Shared React component library |
 | `/crawler` | Web crawler for schema.org data |
 | `/deployment` | Azure infrastructure (Bicep) |
 | `/helm` | Kubernetes Helm charts |
@@ -16,12 +17,13 @@ Distributed question-answering system with semantic search over crawled web cont
 
 ```bash
 # Generate .env files (requires Azure CLI + Key Vault access)
-cd ask_api && make init_environment && cd ..
-cd crawler && make init_environment && cd ..
+make init_environment
 
-# Start frontend (ask-api + chat-app)
-export GIT_TOKEN=<github-classic-pat-with-read:packages>
-make frontend
+# Install frontend dependencies (pnpm workspace)
+cd frontend && pnpm install && cd ..
+
+# Start ask-api + chat-app
+make ask
 ```
 
 - Chat UI: http://localhost:5173
@@ -31,15 +33,14 @@ make frontend
 
 | Command | Description |
 |---------|-------------|
-| `make frontend` | Start ask-api + chat-app |
+| `make init_environment` | Generate .env files for ask-api and crawler |
+| `make ask` | Start ask-api + chat-app |
 | `make fullstack` | Start all services (+ crawler) |
 | `make down` | Stop all services |
 | `make logs` | Tail logs |
-| `make install` | Deploy to AKS |
-| `make status` | Check AKS deployment |
 
 ## Requirements
 
 - Docker & Docker Compose
-- GitHub PAT with `read:packages` scope (for `@nlweb-ai/search-components`)
+- Node.js + pnpm (for native frontend development)
 - Azure CLI (for `init_environment` and AKS deployment)
