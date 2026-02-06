@@ -380,6 +380,8 @@ def augment_object(obj: dict[str, Any]) -> dict[str, Any]:
 
 def process_job(conn, job):
     """Process a single job from the queue"""
+    from metrics import CRAWLER_EXTERNAL_CALL_DURATION, CRAWLER_ITEMS_PER_JOB
+
     try:
         # Extract user_id from job, default to 'system' for legacy jobs
         user_id = job.get("user_id")
@@ -415,9 +417,13 @@ def process_job(conn, job):
             # Download the file content
             logger.info(f"Downloading file: {job['file_url']}")
             try:
+                download_start = time.time()
                 response = requests.get(job["file_url"], timeout=30)
                 response.raise_for_status()
                 file_content = response.text
+                CRAWLER_EXTERNAL_CALL_DURATION.labels(service="download").observe(
+                    time.time() - download_start
+                )
                 content_type = job.get("content_type")
 
                 # For RSS: parse first, then hash the stable schema.org objects
@@ -561,6 +567,7 @@ def process_job(conn, job):
 
             prep_time = time.time() - prep_start
             logger.info(f"  → Prepared {len(items_to_add)} items in {prep_time:.2f}s")
+            CRAWLER_ITEMS_PER_JOB.observe(len(items_to_add))
 
             if skipped_breadcrumbs > 0:
                 logger.info(f"Skipped {skipped_breadcrumbs} BreadcrumbList items")
@@ -605,6 +612,9 @@ def process_job(conn, job):
                     objects_to_upsert = [obj for _, _, obj in items_to_add]
                     cosmos_db_batch_add(objects_to_upsert)
                     cosmos_db_time = time.time() - cosmos_db_start
+                    CRAWLER_EXTERNAL_CALL_DURATION.labels(
+                        service="cosmos_db"
+                    ).observe(cosmos_db_time)
                     logger.info(
                         f"⏱️  Cosmos DB upsert completed for {len(objects_to_upsert)} items in {cosmos_db_time:.2f}s"
                     )
@@ -642,6 +652,9 @@ def process_job(conn, job):
                 try:
                     vector_db_batch_add(items_to_add)
                     vector_db_time = time.time() - vector_db_start
+                    CRAWLER_EXTERNAL_CALL_DURATION.labels(
+                        service="vector_db"
+                    ).observe(vector_db_time)
                     logger.info(
                         f"⏱️  Vector DB upsert completed for {len(items_to_add)} items in {vector_db_time:.2f}s"
                     )
@@ -880,6 +893,12 @@ def start_status_server():
     def health():
         return jsonify({"status": "healthy"})
 
+    @app.route("/metrics")
+    def metrics():
+        from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+        return generate_latest(), 200, {"Content-Type": CONTENT_TYPE_LATEST}
+
     # Run Flask in a separate thread
     port = int(os.getenv("WORKER_STATUS_PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
@@ -933,6 +952,12 @@ def worker_loop():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
+    from metrics import (
+        CRAWLER_JOB_DURATION,
+        CRAWLER_JOBS_PROCESSED_TOTAL,
+        CRAWLER_WORKER_IDLE,
+    )
+
     try:
         logger.info(
             f"Started worker with queue type: {os.getenv('QUEUE_TYPE', 'file')}"
@@ -947,6 +972,7 @@ def worker_loop():
             try:
                 # Receive message from queue
                 worker_status["status"] = "waiting"
+                CRAWLER_WORKER_IDLE.set(1)
 
                 # Log queue status periodically
                 current_time = time.time()
@@ -967,6 +993,8 @@ def worker_loop():
 
                 job = message.content
                 worker_status["status"] = "processing"
+                CRAWLER_WORKER_IDLE.set(0)
+                job_metric_start = time.time()
                 worker_status["current_job"] = job
                 logger.info(
                     f"Processing: {job.get('file_url', job.get('type', 'unknown'))}"
@@ -1003,6 +1031,16 @@ def worker_loop():
                             pass
                         conn = None
                     success = False
+
+                # Record metrics
+                job_type = job.get("type", "unknown")
+                result_label = "success" if success else "failure"
+                CRAWLER_JOBS_PROCESSED_TOTAL.labels(
+                    job_type=job_type, result=result_label
+                ).inc()
+                CRAWLER_JOB_DURATION.labels(job_type=job_type).observe(
+                    time.time() - job_metric_start
+                )
 
                 # Update status
                 worker_status["last_job_at"] = datetime.now(timezone.utc).isoformat()

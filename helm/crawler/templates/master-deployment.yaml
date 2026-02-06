@@ -1,22 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "crawler.workerName" . }}
+  name: {{ include "crawler.masterName" . }}
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "crawler.labels" . | nindent 4 }}
 spec:
-  {{- if not .Values.autoscaling.enabled }}
-  replicas: {{ .Values.worker.replicaCount }}
-  {{- end }}
+  replicas: {{ .Values.master.replicaCount }}
   selector:
     matchLabels:
-      {{- include "crawler.workerSelectorLabels" . | nindent 6 }}
+      {{- include "crawler.masterSelectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "crawler.workerSelectorLabels" . | nindent 8 }}
+        {{- include "crawler.masterSelectorLabels" . | nindent 8 }}
         azure.workload.identity/use: "true"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.master.port }}"
+        prometheus.io/path: "/metrics"
     spec:
       serviceAccountName: {{ include "crawler.serviceAccountName" . }}
       volumes:
@@ -27,15 +29,14 @@ spec:
             volumeAttributes:
               secretProviderClass: {{ include "crawler.secretProviderClassName" . | quote }}
       containers:
-        - name: worker
+        - name: master
           image: {{ include "crawler.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
-            {{- toYaml .Values.worker.command | nindent 12 }}
+            {{- toYaml .Values.master.command | nindent 12 }}
           ports:
-            - containerPort: {{ .Values.worker.port }}
-              name: status
-              protocol: TCP
+            - containerPort: {{ .Values.master.port }}
+              name: api
           volumeMounts:
             - name: secrets-store
               mountPath: "/mnt/secrets-store"
@@ -119,4 +120,16 @@ spec:
                   name: {{ include "crawler.secretName" . }}
                   key: COSMOS-DB-CONTAINER-NAME
           resources:
-            {{- toYaml .Values.worker.resources | nindent 12 }}
+            {{- toYaml .Values.master.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.master.probes.liveness.path }}
+              port: {{ .Values.master.port }}
+            initialDelaySeconds: {{ .Values.master.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.master.probes.liveness.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.master.probes.readiness.path }}
+              port: {{ .Values.master.port }}
+            initialDelaySeconds: {{ .Values.master.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.master.probes.readiness.periodSeconds }}

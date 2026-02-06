@@ -64,6 +64,8 @@ services:
       context: ./crawler
       dockerfile: Dockerfile
     command: [".venv/bin/python", "code/core/worker.py"]
+    ports:
+      - "8080:8080"
     env_file:
       - ./crawler/.env
     environment:

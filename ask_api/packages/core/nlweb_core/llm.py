@@ -17,6 +17,7 @@ Backwards compatibility is not guaranteed at this time.
 
 import asyncio
 import logging
+import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Type, TypeVar
 
@@ -160,6 +161,9 @@ async def ask_llm_parallel(
 
         logger.debug(f"Calling LLM provider {provider_instance} at level {level}")
 
+        from nlweb_core.metrics import ASK_LLM_CALL_DURATION
+
+        llm_start = time.monotonic()
         raw_results = await asyncio.wait_for(
             provider_instance.get_completions(
                 prompts,
@@ -169,6 +173,9 @@ async def ask_llm_parallel(
                 kwargs_list=query_params_list,
             ),
             timeout=timeout,
+        )
+        ASK_LLM_CALL_DURATION.labels(operation=level).observe(
+            time.monotonic() - llm_start
         )
 
         # Validate and convert results to Pydantic models
@@ -240,8 +247,11 @@ async def ask_llm(
 
         logger.debug(f"Calling LLM provider {provider_instance} at level {level}")
 
+        from nlweb_core.metrics import ASK_LLM_CALL_DURATION
+
         # Call the provider's get_completion method
         # Provider has model config from __init__
+        llm_start = time.monotonic()
         raw_result = await asyncio.wait_for(
             provider_instance.get_completion(
                 prompt,
@@ -251,6 +261,9 @@ async def ask_llm(
                 **(query_params or {}),
             ),
             timeout=timeout,
+        )
+        ASK_LLM_CALL_DURATION.labels(operation=level).observe(
+            time.monotonic() - llm_start
         )
 
         # Validate and return Pydantic model instance

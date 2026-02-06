@@ -1,0 +1,153 @@
+{
+  "dashboard": {
+    "title": "Crawler Overview",
+    "tags": ["nlweb", "crawler", "prometheus"],
+    "timezone": "utc",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "title": "Queue Depth by Status",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+        "targets": [
+          {
+            "expr": "crawler_queue_depth{job=~\".*crawler-master.*\"}",
+            "legendFormat": "{{ status }}"
+          }
+        ]
+      },
+      {
+        "title": "Files Queued Rate",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "targets": [
+          {
+            "expr": "sum(rate(crawler_files_queued_total[5m]))",
+            "legendFormat": "Files/sec"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops"
+          }
+        }
+      },
+      {
+        "title": "Scheduler Run Duration P95",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(crawler_scheduler_run_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P95"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "title": "Scheduler Runs Total",
+        "type": "stat",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+        "targets": [
+          {
+            "expr": "crawler_scheduler_runs_total",
+            "legendFormat": "Total runs"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "title": "Worker Job Throughput",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+        "targets": [
+          {
+            "expr": "sum(rate(crawler_jobs_processed_total[5m])) by (job_type, result)",
+            "legendFormat": "{{ job_type }} - {{ result }}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops"
+          }
+        }
+      },
+      {
+        "title": "Job Duration P95 by Type",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(crawler_job_duration_seconds_bucket[5m])) by (le, job_type))",
+            "legendFormat": "{{ job_type }} P95"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "title": "External Call Latency P95 by Service",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(crawler_external_call_duration_seconds_bucket[5m])) by (le, service))",
+            "legendFormat": "{{ service }} P95"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "title": "Items Per Job Distribution",
+        "type": "histogram",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+        "targets": [
+          {
+            "expr": "sum(rate(crawler_items_per_job_bucket[5m])) by (le)",
+            "legendFormat": "{{ le }}",
+            "format": "heatmap"
+          }
+        ]
+      },
+      {
+        "title": "Worker Status (Idle/Processing)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 32 },
+        "targets": [
+          {
+            "expr": "crawler_worker_idle",
+            "legendFormat": "{{ pod }}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              { "type": "value", "options": { "0": { "text": "Processing" } } },
+              { "type": "value", "options": { "1": { "text": "Idle" } } }
+            ]
+          }
+        }
+      }
+    ],
+    "schemaVersion": 39
+  }
+}

@@ -1,0 +1,144 @@
+{
+  "dashboard": {
+    "title": "Ask API Overview",
+    "tags": ["nlweb", "ask-api", "prometheus"],
+    "timezone": "utc",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "title": "Request Rate by Endpoint",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{job=~\".*ask-api.*\"}[5m])) by (endpoint)",
+            "legendFormat": "{{ endpoint }}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps"
+          }
+        }
+      },
+      {
+        "title": "Error Rate (5xx)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{job=~\".*ask-api.*\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=~\".*ask-api.*\"}[5m]))",
+            "legendFormat": "Error Rate"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "min": 0,
+            "max": 1
+          }
+        }
+      },
+      {
+        "title": "Request Latency P50 / P95 / P99",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{job=~\".*ask-api.*\"}[5m])) by (le))",
+            "legendFormat": "P50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=~\".*ask-api.*\"}[5m])) by (le))",
+            "legendFormat": "P95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=~\".*ask-api.*\"}[5m])) by (le))",
+            "legendFormat": "P99"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "title": "In-Flight Requests",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+        "targets": [
+          {
+            "expr": "sum(http_requests_in_flight{job=~\".*ask-api.*\"}) by (endpoint)",
+            "legendFormat": "{{ endpoint }}"
+          }
+        ]
+      },
+      {
+        "title": "Results Per Query",
+        "type": "histogram",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+        "targets": [
+          {
+            "expr": "sum(rate(ask_results_returned_bucket{job=~\".*ask-api.*\"}[5m])) by (le)",
+            "legendFormat": "{{ le }}",
+            "format": "heatmap"
+          }
+        ]
+      },
+      {
+        "title": "Query Length Distribution",
+        "type": "histogram",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+        "targets": [
+          {
+            "expr": "sum(rate(ask_query_length_chars_bucket{job=~\".*ask-api.*\"}[5m])) by (le)",
+            "legendFormat": "{{ le }}",
+            "format": "heatmap"
+          }
+        ]
+      },
+      {
+        "title": "Retrieval vs Scoring Latency P95",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(ask_retrieval_duration_seconds_bucket{job=~\".*ask-api.*\"}[5m])) by (le))",
+            "legendFormat": "Retrieval P95"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(ask_scoring_duration_seconds_bucket{job=~\".*ask-api.*\"}[5m])) by (le))",
+            "legendFormat": "Scoring P95"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "title": "LLM Call Latency by Operation P95",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(ask_llm_call_duration_seconds_bucket{job=~\".*ask-api.*\"}[5m])) by (le, operation))",
+            "legendFormat": "{{ operation }} P95"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      }
+    ],
+    "schemaVersion": 39
+  }
+}

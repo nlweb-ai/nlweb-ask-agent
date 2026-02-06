@@ -17,6 +17,7 @@ formatting while routing to the appropriate NLWeb handler.
 """
 
 import os
+import time
 
 from aiohttp import request, web
 from aiohttp.web_exceptions import HTTPInternalServerError
@@ -51,6 +52,13 @@ from nlweb_network.interfaces import (
 async def health_handler(request):
     """Simple health check endpoint."""
     return web.json_response({"status": "ok"})
+
+
+async def metrics_handler(request):
+    """Expose Prometheus metrics in text format."""
+    from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+    return web.Response(body=generate_latest(), headers={"Content-Type": CONTENT_TYPE_LATEST})
 
 
 async def config_handler(request):
@@ -209,6 +217,43 @@ async def await_handler(request):
             },
             status=500,
         )
+
+
+async def metrics_middleware(app, handler):
+    """Middleware to track HTTP request metrics for Prometheus."""
+    from nlweb_network.metrics import (
+        HTTP_REQUEST_DURATION,
+        HTTP_REQUESTS_IN_FLIGHT,
+        HTTP_REQUESTS_TOTAL,
+    )
+
+    async def middleware(request: Request):
+        endpoint = request.path
+        method = request.method
+        HTTP_REQUESTS_IN_FLIGHT.labels(endpoint=endpoint).inc()
+        start = time.monotonic()
+        status = "500"
+        try:
+            response = await handler(request)
+            status = str(response.status)
+            return response
+        except web.HTTPException as exc:
+            status = str(exc.status)
+            raise
+        except Exception:
+            status = "500"
+            raise
+        finally:
+            duration = time.monotonic() - start
+            HTTP_REQUEST_DURATION.labels(
+                method=method, endpoint=endpoint, status=status
+            ).observe(duration)
+            HTTP_REQUESTS_TOTAL.labels(
+                method=method, endpoint=endpoint, status=status
+            ).inc()
+            HTTP_REQUESTS_IN_FLIGHT.labels(endpoint=endpoint).dec()
+
+    return middleware
 
 
 async def profile_request(app, handler):
@@ -373,7 +418,12 @@ async def cleanup_app(app):
 def create_app():
     """Create and configure the aiohttp application."""
     app = web.Application(
-        middlewares=[config_override_middleware, require_admin_api_key, profile_request]
+        middlewares=[
+            metrics_middleware,
+            config_override_middleware,
+            require_admin_api_key,
+            profile_request,
+        ]
     )
 
     # Add startup and cleanup hooks
@@ -384,6 +434,7 @@ def create_app():
     app.router.add_post("/ask", ask_handler)
     app.router.add_post("/await", await_handler)
     app.router.add_get("/health", health_handler)
+    app.router.add_get("/metrics", metrics_handler)
     app.router.add_get("/config", config_handler)
 
     # Add MCP routes

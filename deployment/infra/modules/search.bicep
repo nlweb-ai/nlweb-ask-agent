@@ -11,7 +11,7 @@ param tags object = {}
 
 @description('SKU name')
 @allowed(['free', 'basic', 'standard', 'standard2', 'standard3'])
-param sku string = 'basic'
+param sku string = 'standard'
 
 @description('Semantic search tier')
 @allowed(['disabled', 'free', 'standard'])

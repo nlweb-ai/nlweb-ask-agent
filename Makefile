@@ -60,39 +60,53 @@ install:
 	$(call discover-azure-resources)
 	$(call validate-azure-resources)
 	$(call aks-login)
-	helm install nlweb ./helm/nlweb \
-		--set global.azure.tenantId=$(TENANT_ID) \
+	helm install ask-api ./helm/ask-api \
 		--set global.keyVault.name=$(KEYVAULT_NAME) \
 		--set global.keyVault.tenantId=$(TENANT_ID) \
 		--set global.containerRegistry.server=$(ACR_LOGIN_SERVER) \
-		--set ask-api.workloadIdentity.clientId=$(ASK_API_ID) \
-		--set crawler.workloadIdentity.clientId=$(CRAWLER_ID) \
-		--set crawler.workloadIdentity.kedaIdentityId=$(KEDA_ID) \
-		--set crawler.autoscaling.storageAccountName=$(STORAGE_NAME)
+		--set workloadIdentity.clientId=$(ASK_API_ID)
+	helm install chat-app ./helm/chat-app \
+		--set global.containerRegistry.server=$(ACR_LOGIN_SERVER)
+	helm install crawler ./helm/crawler \
+		--set global.keyVault.name=$(KEYVAULT_NAME) \
+		--set global.keyVault.tenantId=$(TENANT_ID) \
+		--set global.containerRegistry.server=$(ACR_LOGIN_SERVER) \
+		--set workloadIdentity.clientId=$(CRAWLER_ID) \
+		--set workloadIdentity.kedaIdentityId=$(KEDA_ID) \
+		--set autoscaling.storageAccountName=$(STORAGE_NAME)
 
 upgrade:
 	$(call discover-azure-resources)
 	$(call validate-azure-resources)
 	$(call aks-login)
-	helm upgrade nlweb ./helm/nlweb \
-		--set global.azure.tenantId=$(TENANT_ID) \
+	helm upgrade ask-api ./helm/ask-api \
 		--set global.keyVault.name=$(KEYVAULT_NAME) \
 		--set global.keyVault.tenantId=$(TENANT_ID) \
 		--set global.containerRegistry.server=$(ACR_LOGIN_SERVER) \
-		--set ask-api.workloadIdentity.clientId=$(ASK_API_ID) \
-		--set crawler.workloadIdentity.clientId=$(CRAWLER_ID) \
-		--set crawler.workloadIdentity.kedaIdentityId=$(KEDA_ID) \
-		--set crawler.autoscaling.storageAccountName=$(STORAGE_NAME) \
+		--set workloadIdentity.clientId=$(ASK_API_ID) \
+		--reuse-values
+	helm upgrade chat-app ./helm/chat-app \
+		--set global.containerRegistry.server=$(ACR_LOGIN_SERVER) \
+		--reuse-values
+	helm upgrade crawler ./helm/crawler \
+		--set global.keyVault.name=$(KEYVAULT_NAME) \
+		--set global.keyVault.tenantId=$(TENANT_ID) \
+		--set global.containerRegistry.server=$(ACR_LOGIN_SERVER) \
+		--set workloadIdentity.clientId=$(CRAWLER_ID) \
+		--set workloadIdentity.kedaIdentityId=$(KEDA_ID) \
+		--set autoscaling.storageAccountName=$(STORAGE_NAME) \
 		--reuse-values
 
 uninstall:
 	$(call discover-azure-resources)
 	$(call aks-login)
-	helm uninstall nlweb
+	-helm uninstall ask-api
+	-helm uninstall chat-app
+	-helm uninstall crawler
 
 status:
-	@echo "=== Helm Release ==="
-	@helm list -A | grep nlweb || echo "No release found"
+	@echo "=== Helm Releases ==="
+	@helm list -A | grep -E 'ask-api|chat-app|crawler|nlweb-gateway' || echo "No releases found"
 	@echo ""
 	@echo "=== Pods ==="
-	@kubectl get pods -A | grep -E 'gateway|ask-api|crawler' || echo "No pods found"
+	@kubectl get pods -A | grep -E 'gateway|ask-api|chat-app|crawler' || echo "No pods found"

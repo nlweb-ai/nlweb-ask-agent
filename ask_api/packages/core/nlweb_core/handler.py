@@ -10,6 +10,7 @@ Backwards compatibility is not guaranteed at this time.
 
 import importlib
 import logging
+import time
 from abc import ABC, abstractmethod
 from typing import Awaitable, Callable
 
@@ -81,6 +82,10 @@ class DefaultAskHandler(AskHandler):
 
         site_config: dict[str, str] = {"item_type": item_type if item_type else "item"}
 
+        from nlweb_core.metrics import ASK_QUERY_LENGTH_CHARS
+
+        ASK_QUERY_LENGTH_CHARS.observe(len(ask_request.query.text))
+
         # Prepare first to determine if elicitation is needed
         ask_request.query.decontextualized_query = await self._decontextualize_query(
             ask_request, site_config
@@ -115,10 +120,18 @@ class DefaultAskHandler(AskHandler):
         site_config: dict[str, str],
     ) -> list[dict]:
         """Execute the query body by retrieving and ranking items."""
+        from nlweb_core.metrics import (
+            ASK_RESULTS_RETURNED,
+            ASK_RETRIEVAL_DURATION,
+            ASK_SCORING_DURATION,
+        )
         from nlweb_core.ranking import Ranking
         from nlweb_core.retriever import enrich_results_from_object_storage
 
         config = get_config()
+
+        # Retrieval stage
+        retrieval_start = time.monotonic()
         vectordb_client = config.get_retrieval_provider("default")
         retrieved_items = await vectordb_client.search(
             request.query.effective_query,
@@ -131,7 +144,10 @@ class DefaultAskHandler(AskHandler):
             retrieved_items = await enrich_results_from_object_storage(
                 retrieved_items, object_lookup_client
             )
+        ASK_RETRIEVAL_DURATION.observe(time.monotonic() - retrieval_start)
 
+        # Scoring/ranking stage
+        scoring_start = time.monotonic()
         final_ranked_answers = await Ranking().rank(
             items=retrieved_items,
             query_text=request.query.effective_query,
@@ -141,6 +157,9 @@ class DefaultAskHandler(AskHandler):
             site=request.query.site,
             start_num=self._get_result_offset(request),
         )
+        ASK_SCORING_DURATION.observe(time.monotonic() - scoring_start)
+
+        ASK_RESULTS_RETURNED.observe(len(final_ranked_answers))
 
         await self._send_results(output_method, final_ranked_answers)
         return final_ranked_answers

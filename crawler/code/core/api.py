@@ -22,6 +22,31 @@ DEFAULT_USER_ID = "system"
 app = Flask(__name__, static_folder="static")
 CORS(app)
 
+# --- Prometheus metrics hooks ---
+from metrics import CRAWLER_FILES_QUEUED_TOTAL, HTTP_REQUEST_DURATION, HTTP_REQUESTS_TOTAL
+
+
+@app.before_request
+def _metrics_before():
+    request._metrics_start = time.time()
+
+
+@app.after_request
+def _metrics_after(response):
+    start = getattr(request, "_metrics_start", None)
+    if start is not None:
+        duration = time.time() - start
+        endpoint = request.path
+        method = request.method
+        status = str(response.status_code)
+        HTTP_REQUEST_DURATION.labels(
+            method=method, endpoint=endpoint, status=status
+        ).observe(duration)
+        HTTP_REQUESTS_TOTAL.labels(
+            method=method, endpoint=endpoint, status=status
+        ).inc()
+    return response
+
 # Global scheduler task
 scheduler_task = None
 scheduler_running = False
@@ -66,6 +91,13 @@ def static_files(path):
 @app.route("/health")
 def health():
     return jsonify({"status": "healthy"})
+
+
+@app.route("/metrics")
+def prometheus_metrics():
+    from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+    return generate_latest(), 200, {"Content-Type": CONTENT_TYPE_LATEST}
 
 
 # API Routes
@@ -333,6 +365,7 @@ def _delete_schema_map_internal(conn, site_url, schema_map_url):
         if content_type:
             job["content_type"] = content_type
         queue.send_message(job)
+        CRAWLER_FILES_QUEUED_TOTAL.inc()
 
     # NOTE: Do NOT delete from files table here - workers will do that when they process the jobs
     # This ensures proper ordering: first vector DB cleaned, then files table cleaned
@@ -1040,8 +1073,17 @@ async def scheduler_loop():
 
     logger_scheduler.info("Started background scheduler")
 
+    from metrics import (
+        CRAWLER_QUEUE_DEPTH,
+        CRAWLER_SCHEDULER_RUN_DURATION,
+        CRAWLER_SCHEDULER_RUNS_TOTAL,
+    )
+
     while scheduler_running:
         try:
+            scheduler_run_start = time.time()
+            CRAWLER_SCHEDULER_RUNS_TOTAL.inc()
+
             conn = db.get_connection()
             cursor = conn.cursor()
 
@@ -1140,6 +1182,26 @@ async def scheduler_loop():
                 if "conn" in locals() and conn:
                     conn.close()
             except:
+                pass
+        finally:
+            CRAWLER_SCHEDULER_RUN_DURATION.observe(
+                time.time() - scheduler_run_start
+            )
+
+            # Update queue depth gauge
+            try:
+                q = get_queue()
+                if hasattr(q, "get_status"):
+                    qs = q.get_status()
+                    for key in ("pending", "processing", "failed"):
+                        CRAWLER_QUEUE_DEPTH.labels(status=key).set(
+                            qs.get(f"{key}_jobs", 0)
+                        )
+                elif hasattr(q, "get_message_count"):
+                    count = q.get_message_count()
+                    if count >= 0:
+                        CRAWLER_QUEUE_DEPTH.labels(status="pending").set(count)
+            except Exception:
                 pass
 
         # Sleep for 5 minutes between checks
