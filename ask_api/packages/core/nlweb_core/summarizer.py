@@ -57,12 +57,12 @@ class ResultsSummarizer:
     """
 
     DEFAULT_PROMPT_TEMPLATE = """Summarize the following AI results in 2-3 sentences (*DO NOT mention 'search results' or 'results' in your output*), highlighting the key information that answers the user's question: {query}
-
+{query_constraints}
 Results:
 {results}"""
 
     HINDI_PROMPT_TEMPLATE = """Summarize the following AI results in 2-3 sentences in Hindi. *Your output MUST be in Hindi.* (*DO NOT mention 'search results' or 'results' in your output*) Highlight the key information that answers the user's question: {query}
-
+{query_constraints}
 Results:
 {results}"""
 
@@ -103,7 +103,7 @@ Results:
             results_text.append(f"{i}. {name}: {description}")
         return "\n".join(results_text)
 
-    def build_prompt(self, query: str, results: List[Dict]) -> str:
+    def build_prompt(self, query: str, results: List[Dict], start_num:int = 0) -> str:
         """Build the full prompt for summarization.
 
         Args:
@@ -114,10 +114,18 @@ Results:
             Formatted prompt string ready for the LLM.
         """
         results_text = self.format_results(results)
-        return self._prompt_template.format(query=query, results=results_text)
+        # If some constraints on query, ie pagination, make sure summary aware of it.
+        query_constraints = ""
+        if start_num:
+            query_constraints = f"The query was issued again for more results, starting at the {start_num} entry. Start of the summary by indicating these items were retrieved after looking for additional items."
+        return self._prompt_template.format(
+            query=query, 
+            results=results_text,
+            query_constraints=query_constraints
+        )
 
     async def summarize(
-        self, query: str, results: List[Dict]
+        self, query: str, results: List[Dict], start_num:int = 0
     ) -> Optional[SummaryResult]:
         """Generate a summary of the search results.
 
@@ -132,7 +140,7 @@ Results:
         if not results:
             return None
 
-        prompt = self.build_prompt(query, results)
+        prompt = self.build_prompt(query, results, start_num)
 
         try:
             response = await self._llm(prompt, self.SCHEMA)

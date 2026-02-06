@@ -1,4 +1,4 @@
-import {ChatSearch, useNlWeb, DebugTool, SiteDropdown, useSearchSession, useSearchSessions, HistorySidebar} from '@nlweb-ai/search-components';
+import {ChatSearch, useNlWeb, DebugTool, SiteDropdown, useSearchSession, useSearchSessions, HistorySidebar, type SearchSession} from '@nlweb-ai/search-components';
 import { useState } from 'react';
 
 const SITES = [
@@ -109,34 +109,40 @@ const SITES = [
   {url: 'ambitiouskitchen.com'},
 ];
 
+const PAGES = 3;
 function App() {
   const [site, setSite] = useState(SITES[0]);
     // Append URL query parameters to the endpoint for config overrides
     const queryString = window.location.search;
     const endpoint = `/ask${queryString}`;
-
-    const nlweb = useNlWeb({
+    const config = {
       endpoint: endpoint,
       site: site.url,
-      maxResults: 50
-    });
+      maxResults: 9,
+      numRetrievalResults: 50,
+    }
+    const nlweb = useNlWeb(config);
     const localSessions = useSearchSessions();
     const [sessionId, setSessionId] = useState<string>(crypto.randomUUID());
-    const [sessionResults, setSessionResults] = useSearchSession(sessionId);
-    //@ts-ignore
-    function startSearch(firstResult) {
+    const {searches, addSearch, addResults} = useSearchSession(sessionId);
+     async function startSearch(query: string) {
+      nlweb.clearResults();
       const newId = localSessions.sessions.some(s => s.sessionId === sessionId) ? crypto.randomUUID() : sessionId ;
-      localSessions.startSession(newId, firstResult, {
+      await localSessions.startSession(newId, query, {
         site: site.url,
         endpoint: endpoint
       })
       setSessionId(newId);
+      return newId;
     }
     function endSearch() {
       setSessionId(crypto.randomUUID());
+      nlweb.clearResults();
+      nlweb.cancelSearch();
     }
-    //@ts-ignore
     function selectSession(session: SearchSession) {
+      nlweb.clearResults();
+      nlweb.cancelSearch();
       setSessionId(session.sessionId);
       setSite(SITES.find(s => s.url == session.backend.site) || {
         url: session.backend.site
@@ -153,12 +159,14 @@ function App() {
         <div className='p-8 flex-1'>
           <div className='max-w-3xl mx-auto'>
             <ChatSearch
-              key={sessionId}
+              sessionId={sessionId}
               startSession={startSearch}
               endSession={endSearch}
-              results={sessionResults}
-              setResults={setSessionResults}
+              searches={searches}
+              addSearch={addSearch}
+              addResults={addResults}
               nlweb={nlweb}
+              config={config}
               sidebar={<HistorySidebar
                 sessions={localSessions.sessions}
                 onSelect={selectSession}
@@ -168,17 +176,16 @@ function App() {
             >
               <div className='absolute z-50 top-2 right-16'>
                 <DebugTool 
-                  site={site.url}
-                  maxResults={50}
                   streamingState={nlweb}
-                  results={sessionResults}
+                  searches={searches}
+                  config={config}
                 />
               </div>
             </ChatSearch>
             <SiteDropdown 
               sites={SITES} 
               selected={site} 
-              onSelect={url => setSite(SITES.find(s => s.url == url) || ({
+              onSelect={(url) => setSite(SITES.find(s => s.url == url) || ({
                 url: url || ''
               }))}
             />

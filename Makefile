@@ -9,10 +9,13 @@ help:
 	@echo "NLWeb Development & Deployment"
 	@echo ""
 	@echo "Local Development:"
-	@echo "  make frontend  - Start ask-api + chat-app (no crawler)"
-	@echo "  make fullstack - Start all services (ask-api, chat-app, crawler)"
-	@echo "  make down      - Stop all services"
-	@echo "  make logs      - Tail logs from all services"
+	@echo "  make frontend  - Start ask-api (Docker) + chat-app (native)"
+	@echo "  make fullstack - Start all services in Docker"
+	@echo "  make down      - Stop Docker services"
+	@echo "  make logs      - Tail logs from Docker services"
+	@echo ""
+	@echo "Local Component Development:"
+	@echo "  Use 'pnpm link' to link search-components locally"
 	@echo ""
 	@echo "AKS Deployment:"
 	@echo "  make install   - Initial install of full stack to AKS"
@@ -26,34 +29,32 @@ help:
 	@echo "  cd crawler && make build && make deploy"
 	@echo ""
 	@echo "Environment options:"
-	@echo "  ENV_NAME=<name>   # Target environment (default: $(ENV_NAME))"
-	@echo "  GIT_TOKEN=<token> # GitHub token for chat-app npm packages"
-	@echo "  REFRESH=true|false # Use local search-components (default: true)"
+	@echo "  ENV_NAME=<name> # Target environment (default: $(ENV_NAME))"
 
-# Local development with Docker Compose
-# REFRESH=true (default): Use local search-components from peer directory
-# REFRESH=false: Use published package from npm registry
-REFRESH ?= true
-
-ifeq ($(REFRESH),true)
-COMPOSE_FILES = -f docker-compose.yml -f docker-compose.refresh.yml
-FRONTEND_SERVICES = search-components ask-api chat-app
-else
-COMPOSE_FILES = -f docker-compose.yml
-FRONTEND_SERVICES = ask-api chat-app
-endif
+# Local development
+# Use 'pnpm link' in chat-app for local search-components development
 
 frontend:
-	docker-compose $(COMPOSE_FILES) up --build $(FRONTEND_SERVICES)
+	@echo "Starting ask-api and chat-app..."
+	@echo "Ask API: http://localhost:8000"
+	@echo "Chat App: http://localhost:5173"
+	@echo ""
+	@echo "Press Ctrl+C to stop all services"
+	@echo ""
+	@trap 'echo "\nStopping services..."; docker-compose -f docker-compose.yml down; exit' INT TERM; \
+	docker-compose -f docker-compose.yml up --build ask-api & \
+	sleep 3; \
+	cd chat-app && VITE_ASK_API_URL=http://localhost:8000 pnpm dev; \
+	docker-compose -f docker-compose.yml down
 
 fullstack:
-	docker-compose $(COMPOSE_FILES) up --build
+	docker-compose -f docker-compose.yml up --build
 
 down:
-	docker-compose $(COMPOSE_FILES) down
+	docker-compose -f docker-compose.yml down
 
 logs:
-	docker-compose $(COMPOSE_FILES) logs -f
+	docker-compose -f docker-compose.yml logs -f
 
 install:
 	$(call discover-azure-resources)
