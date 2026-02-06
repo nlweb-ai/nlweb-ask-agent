@@ -155,17 +155,22 @@ def is_aajtak_recent_file(url):
     Check if a URL should be processed for aajtak.in.
     Returns True if the URL matches:
     - "latest" in URL (latest news feed)
-    - Today's date in URL
-    - Yesterday's date in URL
+    - Any date within the last 7 days (for backfilling)
     """
     from datetime import date, timedelta
 
-    today = date.today()
-    yesterday = today - timedelta(days=1)
+    if "latest" in url.lower():
+        return True
 
-    return ("latest" in url.lower() or
-            f"yyyy={today.year}&mm={today.month:02d}&dd={today.day:02d}" in url or
-            f"yyyy={yesterday.year}&mm={yesterday.month:02d}&dd={yesterday.day:02d}" in url)
+    LAST_X_DAYS = 2
+    today = date.today()
+    for days_ago in range(LAST_X_DAYS):
+        check_date = today - timedelta(days=days_ago)
+        date_pattern = f"yyyy={check_date.year}&mm={check_date.month:02d}&dd={check_date.day:02d}"
+        if date_pattern in url:
+            return True
+
+    return False
 
 
 def filter_aajtak_recent_files(file_url_tuples):

@@ -7,6 +7,7 @@ This file contains the AskHandler ABC and DefaultAskHandler implementation.
 WARNING: This code is under development and may undergo changes in future releases.
 Backwards compatibility is not guaranteed at this time.
 """
+import asyncio
 import importlib
 import logging
 from abc import ABC, abstractmethod
@@ -115,14 +116,52 @@ class DefaultAskHandler(AskHandler):
         """Execute the query body by retrieving and ranking items."""
         from nlweb_core.retriever import enrich_results_from_object_storage
         from nlweb_core.ranking import Ranking
+        from datetime import datetime, timedelta, timezone
 
         config = get_config()
         vectordb_client = config.get_retrieval_provider("default")
-        retrieved_items = await vectordb_client.search(
-            request.query.effective_query,
-            request.query.site,
-            request.query.num_results,
-        )
+
+        # Dual-query strategy: regular + fresh results
+        # Optimize to avoid scoring too many items:
+        # - Fresh: 40% of requested results (prioritized for recency)
+        # - Regular: 60% of requested results (broader relevance)
+        fresh_proportion = 0.4
+        fresh_count = int(request.query.num_results * fresh_proportion)
+        regular_count = request.query.num_results - fresh_count
+
+        # Check if we need fresh results (last 5 days) - only for aajtak.in
+        use_fresh = request.query.site == "aajtak.in"
+
+        if use_fresh:
+            five_days_ago = datetime.now(timezone.utc) - timedelta(days=5)
+            date_filter = f"datePublished ge {five_days_ago.isoformat()}"
+
+            # Execute regular + fresh queries in parallel
+            regular_items, fresh_items = await asyncio.gather(
+                vectordb_client.search(
+                    request.query.effective_query,
+                    request.query.site,
+                    regular_count,
+                ),
+                vectordb_client.search(
+                    request.query.effective_query,
+                    request.query.site,
+                    fresh_count,
+                    date_filter=date_filter,
+                ),
+            )
+            # Merge: deduplicate by URL, prioritize fresh items at top
+            retrieved_items = self._merge_results(fresh_items, regular_items)
+            logger.info(
+                f"Dual-query results: {len(fresh_items)} fresh + {len(regular_items)} regular → {len(retrieved_items)} merged (target: {fresh_count}+{regular_count})"
+            )
+        else:
+            retrieved_items = await vectordb_client.search(
+                request.query.effective_query,
+                request.query.site,
+                request.query.num_results,
+            )
+
         if config.object_storage_providers:
             object_lookup_client = config.get_object_lookup_provider("default")
             retrieved_items = await enrich_results_from_object_storage(
@@ -141,6 +180,37 @@ class DefaultAskHandler(AskHandler):
 
         await self._send_results(output_method, final_ranked_answers)
         return final_ranked_answers
+
+    def _merge_results(
+        self, fresh_items: list, regular_items: list
+    ) -> list:
+        """
+        Merge fresh and regular results, deduplicating by URL.
+        Fresh items are prioritized at the top.
+
+        Args:
+            fresh_items: Items from fresh query (with date filter)
+            regular_items: Items from regular query (no date filter)
+
+        Returns:
+            Merged list with fresh items first, then unique regular items
+        """
+        seen_urls = set()
+        merged = []
+
+        # Add fresh items first
+        for item in fresh_items:
+            if item.url not in seen_urls:
+                merged.append(item)
+                seen_urls.add(item.url)
+
+        # Add regular items that aren't duplicates
+        for item in regular_items:
+            if item.url not in seen_urls:
+                merged.append(item)
+                seen_urls.add(item.url)
+
+        return merged
 
     async def _decontextualize_query(
         self,
