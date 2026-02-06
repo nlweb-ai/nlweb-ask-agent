@@ -137,6 +137,10 @@ class Meta(BaseModel):
         None,
         description="Whether to remember this interaction in conversation history (optional)",
     )
+    start_num: Optional[int] = Field(
+        0,
+        description="The start offset for the returned results"
+    )
 
 
 class AskRequest(BaseModel):

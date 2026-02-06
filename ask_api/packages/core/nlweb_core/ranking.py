@@ -175,7 +175,8 @@ class Ranking:
         item_type: str,
         max_results: int,
         min_score: int,
-        site: str = "all",
+        start_num: int = 0,
+        site: str = "all"
     ) -> list[dict]:
         """
         Rank retrieved items by relevance to the query with freshness-aware scoring.
@@ -300,4 +301,7 @@ class Ranking:
         ranked = sorted(filtered, key=lambda x: x.score, reverse=True)
 
         # Convert to dicts for consumer compatibility
-        return [r.to_dict() for r in ranked[:max_results]]
+        last_index = start_num + max_results
+        print("Start number is", start_num)
+        # Handle pagination
+        return [r.to_dict() for r in ranked[start_num:last_index]]

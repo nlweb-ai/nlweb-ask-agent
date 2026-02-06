@@ -45,6 +45,7 @@ class PostQueryProcessing:
         query_text: str,
         modes: list[str],
         send_results: Callable[[list], Awaitable[None]],
+        start_num: int = 0
     ) -> None:
         """Execute post-query processing based on mode.
 
@@ -56,7 +57,7 @@ class PostQueryProcessing:
         """
         if "summarize" in modes:
             await self._summarize_results(
-                final_ranked_answers, query_text, send_results
+                final_ranked_answers, query_text, send_results, start_num
             )
 
     async def _summarize_results(
@@ -64,13 +65,14 @@ class PostQueryProcessing:
         results: list[dict],
         query_text: str,
         send_results: Callable[[list], Awaitable[None]],
+        start_num: int = 0
     ) -> None:
         """Generate and send a summary of the top results."""
         if not results:
             return
 
         summary_result = await self._summarizer.summarize(
-            query=query_text, results=results[:3]
+            query=query_text, results=results[:3], start_num=start_num
         )
 
         if summary_result:
