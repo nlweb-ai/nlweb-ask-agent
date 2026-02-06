@@ -122,6 +122,7 @@ class AzureSearchClient(VectorDBClientInterface):
         num_results: int = 50,
         index_name: Optional[str] = None,
         query_params: Optional[Dict[str, Any]] = None,
+        date_filter: Optional[str] = None,
         **kwargs,
     ) -> List[RetrievedItem]:
         """
@@ -133,6 +134,7 @@ class AzureSearchClient(VectorDBClientInterface):
             num_results: Maximum number of results to return
             index_name: Optional index name (defaults to configured index name)
             query_params: Additional query parameters
+            date_filter: Optional date filter (e.g., "datePublished ge 2026-02-01T00:00:00Z")
 
         Returns:
             List[RetrievedItem]: List of search results
@@ -147,7 +149,7 @@ class AzureSearchClient(VectorDBClientInterface):
         # Perform the search
         start_retrieve = time.time()
         results = await self._retrieve_by_site_and_vector(
-            site, embedding, num_results, index_name
+            site, embedding, num_results, index_name, query_text=query, date_filter=date_filter
         )
         retrieve_time = time.time() - start_retrieve
 
@@ -159,15 +161,19 @@ class AzureSearchClient(VectorDBClientInterface):
         vector_embedding: List[float],
         top_n: int = 10,
         index_name: Optional[str] = None,
+        query_text: Optional[str] = None,
+        date_filter: Optional[str] = None,
     ) -> List[RetrievedItem]:
         """
-        Internal method to retrieve top n records filtered by site and ranked by vector similarity
+        Internal method to retrieve top n records filtered by site and ranked by hybrid search (BM25 + vector)
 
         Args:
             sites: Site or list of sites to filter by
             vector_embedding: The embedding vector to search with
             top_n: Maximum number of results to return
             index_name: Optional index name (defaults to configured index name)
+            query_text: Optional query text for hybrid search (BM25 + vector)
+            date_filter: Optional date filter (e.g., "datePublished ge 2026-02-01T00:00:00Z")
 
         Returns:
             List[RetrievedItem]: List of search results
@@ -194,7 +200,16 @@ class AzureSearchClient(VectorDBClientInterface):
                     site_restrict += " or "
                 site_restrict += f"site eq '{site}'"
 
-        # Create the search options with vector search and filtering
+        # Combine site filter and date filter
+        combined_filter = None
+        if site_restrict and date_filter:
+            combined_filter = f"({site_restrict}) and ({date_filter})"
+        elif site_restrict:
+            combined_filter = site_restrict
+        elif date_filter:
+            combined_filter = date_filter
+
+        # Create the search options with hybrid search (BM25 + vector)
         search_options = {
             "vector_queries": [
                 {
@@ -208,13 +223,25 @@ class AzureSearchClient(VectorDBClientInterface):
             "select": "url,type,site,content",
         }
 
-        # Only add filter if we have a site restriction
-        if site_restrict:
-            search_options["filter"] = site_restrict
+        # Configure search mode for BM25
+        if query_text:
+            # Use "any" mode so BM25 doesn't filter too aggressively (OR logic)
+            # This is more lenient than "all" mode (AND logic)
+            search_options["search_mode"] = "any"
+            logger.debug(f"Hybrid search (BM25 + vector, mode=any) for query: {query_text[:50]}...")
+        else:
+            logger.debug("Pure vector search (no query text)")
+
+        # Add combined filter if we have any restrictions
+        if combined_filter:
+            search_options["filter"] = combined_filter
+            if date_filter:
+                logger.debug(f"Date filter applied: {date_filter}")
 
         try:
-            # Execute the search - native async call
-            results = await search_client.search(search_text=None, **search_options)
+            # Execute the search - hybrid mode (BM25 + vector) if query_text provided
+            # If no query_text, falls back to pure vector search
+            results = await search_client.search(search_text=query_text, **search_options)
 
             # Process results into RetrievedItem objects (async iteration)
             processed_results = []
