@@ -59,14 +59,13 @@ retrieval:
   index_name: crawler-vectors
 
 object_storage:
-  type: cosmos
-  enabled: true
-  endpoint_env: COSMOS_DB_ENDPOINT
-  database_name_env: COSMOS_DB_DATABASE_NAME
-  container_name_env: COSMOS_DB_CONTAINER_NAME
-  partition_key: /"@id"
-  import_path: nlweb_cosmos_object_db.cosmos_lookup
-  class_name: CosmosObjectLookup
+  default:
+    endpoint_env: COSMOS_DB_ENDPOINT
+    database_name_env: COSMOS_DB_DATABASE_NAME
+    container_name_env: COSMOS_DB_CONTAINER_NAME
+    partition_key: /"@id"
+    import_path: nlweb_cosmos_object_db.cosmos_lookup
+    class_name: CosmosObjectLookup
 
 site_config:
   default:

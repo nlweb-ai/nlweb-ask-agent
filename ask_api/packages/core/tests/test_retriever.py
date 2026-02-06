@@ -5,15 +5,14 @@ Tests for NLWeb retriever module.
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from nlweb_core.config import ObjectLookupConfig, RetrievalProviderConfig
+from nlweb_core.config import RetrievalProviderConfig
 from nlweb_core.item_retriever import RetrievedItem
 from nlweb_core.retriever import (
-    ObjectLookupInterface,
+    ObjectLookupProvider,
     VectorDBClientInterface,
     _has_valid_credentials,
     _resolve_endpoint_name,
     enrich_results_from_object_storage,
-    get_object_lookup_client,
     get_vectordb_client,
 )
 
@@ -23,7 +22,6 @@ def reset_retriever_caches():
     import nlweb_core.retriever as retriever
 
     retriever._client_cache.clear()
-    retriever._object_lookup_client = None
 
 
 class TestHasValidCredentials:
@@ -96,8 +94,8 @@ class TestEnrichResultsFromObjectStorage:
 
     @pytest.fixture
     def mock_object_lookup_client(self):
-        """Create a mock ObjectLookupInterface."""
-        mock = AsyncMock(spec=ObjectLookupInterface)
+        """Create a mock ObjectLookupProvider."""
+        mock = AsyncMock(spec=ObjectLookupProvider)
         return mock
 
     @pytest.fixture
@@ -178,97 +176,6 @@ class TestEnrichResultsFromObjectStorage:
 
         assert len(result) == 25
         assert mock_object_lookup_client.get_by_id.call_count == 25
-
-
-class TestGetObjectLookupClient:
-    """Tests for get_object_lookup_client function."""
-
-    @pytest.fixture(autouse=True)
-    def setup(self):
-        """Reset caches before each test."""
-        reset_retriever_caches()
-        yield
-        reset_retriever_caches()
-
-    async def test_returns_none_when_disabled(self):
-        """Test returns None when object_storage is disabled."""
-        with patch("nlweb_core.retriever.get_config") as mock_get_config:
-            mock_get_config.return_value.object_storage = ObjectLookupConfig(type="cosmos", enabled=False)
-
-            result = await get_object_lookup_client()
-            assert result is None
-
-    async def test_returns_none_when_object_storage_not_configured(self):
-        """Test returns None when object_storage config is None."""
-        with patch("nlweb_core.retriever.get_config") as mock_get_config:
-            mock_get_config.return_value.object_storage = None
-
-            result = await get_object_lookup_client()
-            assert result is None
-
-    async def test_raises_when_missing_import_path(self):
-        """Test raises ValueError when import_path is missing."""
-        with patch("nlweb_core.retriever.get_config") as mock_get_config:
-            mock_get_config.return_value.object_storage = ObjectLookupConfig(
-                type="cosmos",
-                enabled=True,
-                class_name="SomeClass",
-            )
-
-            with pytest.raises(ValueError) as exc_info:
-                await get_object_lookup_client()
-            assert "missing import_path or class_name" in str(exc_info.value)
-
-    async def test_raises_when_missing_class_name(self):
-        """Test raises ValueError when class_name is missing."""
-        with patch("nlweb_core.retriever.get_config") as mock_get_config:
-            mock_get_config.return_value.object_storage = ObjectLookupConfig(
-                type="cosmos",
-                enabled=True,
-                import_path="some.module",
-            )
-
-            with pytest.raises(ValueError) as exc_info:
-                await get_object_lookup_client()
-            assert "missing import_path or class_name" in str(exc_info.value)
-
-    async def test_caches_client_instance(self):
-        """Test that client is cached and reused."""
-        mock_client_class = MagicMock()
-        mock_client_instance = MagicMock(spec=ObjectLookupInterface)
-        mock_client_class.return_value = mock_client_instance
-
-        with patch("nlweb_core.retriever.get_config") as mock_get_config:
-            mock_get_config.return_value.object_storage = ObjectLookupConfig(
-                type="test",
-                enabled=True,
-                import_path="test_module",
-                class_name="TestClient",
-            )
-
-            mock_module = MagicMock()
-            mock_module.TestClient = mock_client_class
-
-            with patch("nlweb_core.retriever.importlib.import_module", return_value=mock_module):
-                client1 = await get_object_lookup_client()
-                client2 = await get_object_lookup_client()
-
-                assert client1 is client2
-                mock_client_class.assert_called_once()
-
-    async def test_raises_on_import_error(self):
-        """Test raises ValueError when import fails."""
-        with patch("nlweb_core.retriever.get_config") as mock_get_config:
-            mock_get_config.return_value.object_storage = ObjectLookupConfig(
-                type="test",
-                enabled=True,
-                import_path="nonexistent.module",
-                class_name="NonexistentClass",
-            )
-
-            with pytest.raises(ValueError) as exc_info:
-                await get_object_lookup_client()
-            assert "Failed to load object storage client" in str(exc_info.value)
 
 
 class TestGetVectordbClient:

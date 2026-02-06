@@ -284,19 +284,21 @@ async def init_app(app):
 
     config = get_config()
 
-    # Validate that Cosmos DB (object storage) is enabled - REQUIRED
-    if not config.object_storage or not config.object_storage.enabled:
+    # Validate that object storage is configured - REQUIRED
+    if not config.object_storage_providers:
         print("\n" + "=" * 60)
-        print("FATAL ERROR: Cosmos DB (object_storage) is not enabled")
+        print("FATAL ERROR: No object_storage providers configured")
         print("=" * 60)
         print("Object storage is now mandatory for NLWeb to function.")
         print("Vector DB no longer stores full content - only Cosmos DB does.")
         print("\nPlease configure object_storage in your config.yaml:")
         print("  object_storage:")
-        print("    enabled: true")
-        print("    endpoint: https://your-cosmos.documents.azure.com:443/")
-        print("    database_name_env: your-database")
-        print("    container_name_env: your-container")
+        print("    default:")
+        print("      endpoint_env: COSMOS_DB_ENDPOINT")
+        print("      database_name_env: COSMOS_DB_DATABASE_NAME")
+        print("      container_name_env: COSMOS_DB_CONTAINER_NAME")
+        print("      import_path: nlweb_cosmos_object_db.cosmos_lookup")
+        print("      class_name: CosmosObjectLookup")
         print("=" * 60 + "\n")
         sys.exit(1)
 
@@ -352,15 +354,6 @@ async def cleanup_app(app):
             print("Conversation storage closed")
         except Exception as e:
             print(f"Error closing conversation storage: {e}")
-
-    # Cleanup object lookup client (Cosmos DB)
-    try:
-        from nlweb_core.retriever import close_object_lookup_client
-
-        await close_object_lookup_client()
-        print("Object lookup client closed")
-    except Exception as e:
-        print(f"Error closing object lookup client: {e}")
 
     # Cleanup vector database clients (Azure Search, etc.)
     try:

@@ -21,10 +21,6 @@ _client_cache_locks = defaultdict(asyncio.Lock)  # Per-key locks instead of glob
 # Preloaded client modules
 _preloaded_modules = {}
 
-# Object lookup client cache
-_object_lookup_client: Optional["ObjectLookupInterface"] = None
-_object_lookup_lock = asyncio.Lock()
-
 
 class VectorDBClientInterface(ABC):
     """
@@ -56,11 +52,21 @@ class VectorDBClientInterface(ABC):
         pass
 
 
-class ObjectLookupInterface(ABC):
+class ObjectLookupProvider(ABC):
     """
     Abstract base class for looking up full objects by their ID.
     Implementations should fetch complete object data from storage (e.g., Cosmos DB).
     """
+
+    @abstractmethod
+    def __init__(self, **kwargs) -> None:
+        """
+        Initialize the provider with configuration.
+
+        Args:
+            **kwargs: Provider-specific configuration (endpoint, database_name, etc.)
+        """
+        pass
 
     @abstractmethod
     async def get_by_id(self, object_id: str) -> Optional[Dict[str, Any]]:
@@ -81,62 +87,6 @@ class ObjectLookupInterface(ABC):
         pass
 
 
-async def get_object_lookup_client() -> Optional[ObjectLookupInterface]:
-    """
-    Get or create the object lookup client based on configuration.
-    Uses dynamic loading via import_path and class_name.
-
-    Returns:
-        ObjectLookupInterface instance or None if not configured
-    """
-    global _object_lookup_client
-
-    config = get_config()
-
-    # Check if object storage is enabled
-    if not config.object_storage or not config.object_storage.enabled:
-        return None
-
-    # If client is already created, return immediately.
-    if _object_lookup_client is not None:
-        return _object_lookup_client
-
-    async with _object_lookup_lock:
-        if _object_lookup_client is None:
-            # Use dynamic import based on config
-            if (
-                not config.object_storage.import_path
-                or not config.object_storage.class_name
-            ):
-                raise ValueError(
-                    f"Object storage config missing import_path or class_name for type: {config.object_storage.type}"
-                )
-
-            try:
-                import_path = config.object_storage.import_path
-                class_name = config.object_storage.class_name
-                module = importlib.import_module(import_path)
-                client_class = getattr(module, class_name)
-                _object_lookup_client = client_class()
-            except ImportError as e:
-                raise ValueError(f"Failed to load object storage client: {e}")
-
-        return _object_lookup_client
-
-
-async def close_object_lookup_client():
-    """
-    Close the object lookup client and release resources.
-    Should be called during application shutdown.
-    """
-    global _object_lookup_client
-
-    async with _object_lookup_lock:
-        if _object_lookup_client is not None:
-            await _object_lookup_client.close()
-            _object_lookup_client = None
-
-
 async def close_vectordb_clients():
     """
     Close all cached vector database clients and release resources.
@@ -152,7 +102,7 @@ async def close_vectordb_clients():
 
 async def enrich_results_from_object_storage(
     results: List[RetrievedItem],
-    client: ObjectLookupInterface,
+    client: ObjectLookupProvider,
 ) -> List[RetrievedItem]:
     """
     Enrich vector DB results with full content from object storage.

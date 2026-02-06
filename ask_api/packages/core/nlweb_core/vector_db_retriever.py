@@ -8,10 +8,10 @@ WARNING: This code is under development and may undergo changes in future releas
 Backwards compatibility is not guaranteed at this time.
 """
 
+from nlweb_core.config import get_config
 from nlweb_core.item_retriever import ItemRetriever, RetrievedItem, RetrievalParams
 from nlweb_core.retriever import (
     get_vectordb_client,
-    get_object_lookup_client,
     enrich_results_from_object_storage,
 )
 
@@ -36,8 +36,9 @@ class VectorDBRetriever(ItemRetriever):
         )
 
         # Enrich with full content from object storage if configured
-        object_lookup_client = await get_object_lookup_client()
-        if object_lookup_client:
+        config = get_config()
+        if config.object_storage_providers:
+            object_lookup_client = config.get_object_lookup_provider("default")
             results = await enrich_results_from_object_storage(
                 results, object_lookup_client
             )

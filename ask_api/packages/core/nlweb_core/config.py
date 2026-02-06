@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from nlweb_core.llm import GenerativeLLMProvider
     from nlweb_core.scoring import ScoringLLMProvider
     from nlweb_core.site_config.base import SiteConfigLookup
+    from nlweb_core.retriever import ObjectLookupProvider
 
 logger = logging.getLogger(__name__)
 
@@ -118,15 +119,12 @@ class ConversationStorageConfig:
 
 
 @dataclass
-class ObjectLookupConfig:
-    type: str
-    enabled: bool = True
-    endpoint: str | None = None
-    database_name: str | None = None
-    container_name: str | None = None
-    partition_key: str | None = None
-    import_path: str | None = None
-    class_name: str | None = None
+class ObjectStorageConfig:
+    """Configuration for a single object storage provider."""
+
+    import_path: str
+    class_name: str
+    options: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -217,8 +215,10 @@ class AppConfig:
     )
     conversation_storage_default: str = "qdrant_local"
 
-    # Object Storage (Cosmos DB)
-    object_storage: ObjectLookupConfig | None = None
+    # Object Storage Providers
+    object_storage_providers: dict[str, ObjectStorageConfig] = field(
+        default_factory=dict
+    )
 
     # Site Config Providers
     site_config_providers: dict[str, SiteConfigStorageConfig] = field(
@@ -293,6 +293,12 @@ class AppConfig:
         if _site_config_provider_map is None:
             raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
         return _site_config_provider_map.get(name)
+
+    def get_object_lookup_provider(self, name: str) -> ObjectLookupProvider:
+        """Get a cached object lookup provider instance by name."""
+        if _object_storage_provider_map is None:
+            raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+        return _object_storage_provider_map.get(name)
 
     def get_ranking_config(self) -> RankingConfig:
         """Get ranking config, checking for per-request override first."""
@@ -492,34 +498,31 @@ def _load_conversation_storage(
     )
 
 
-def _load_object_storage(data: dict) -> ObjectLookupConfig:
-    """Load object storage configuration from config dict."""
+def _load_object_storage_config(data: dict) -> dict[str, ObjectStorageConfig]:
+    """Load object storage provider configuration from config dict."""
     if "object_storage" not in data:
-        return ObjectLookupConfig(type="cosmos", enabled=False)
+        return {}
 
     obj_cfg = data["object_storage"]
-    return ObjectLookupConfig(
-        type=obj_cfg.get("type", "cosmos"),
-        enabled=obj_cfg.get("enabled", True),
-        endpoint=(
-            _get_config_value(obj_cfg.get("endpoint_env"))
-            if "endpoint_env" in obj_cfg
-            else obj_cfg.get("endpoint")
-        ),
-        database_name=(
-            _get_config_value(obj_cfg.get("database_name_env"))
-            if "database_name_env" in obj_cfg
-            else obj_cfg.get("database_name")
-        ),
-        container_name=(
-            _get_config_value(obj_cfg.get("container_name_env"))
-            if "container_name_env" in obj_cfg
-            else obj_cfg.get("container_name")
-        ),
-        partition_key=obj_cfg.get("partition_key"),
-        import_path=_get_config_value(obj_cfg.get("import_path")),
-        class_name=_get_config_value(obj_cfg.get("class_name")),
-    )
+    if not isinstance(obj_cfg, dict):
+        raise ValueError("object_storage must be a mapping of provider names to configs")
+
+    providers: dict[str, ObjectStorageConfig] = {}
+    for provider_name, provider_cfg in obj_cfg.items():
+        if not isinstance(provider_cfg, dict):
+            raise ValueError(
+                f"object_storage provider '{provider_name}' must be a mapping"
+            )
+        import_path, class_name = _extract_import_class(
+            provider_cfg, "object_storage", provider_name
+        )
+        providers[provider_name] = ObjectStorageConfig(
+            import_path=import_path,
+            class_name=class_name,
+            options=_build_options(provider_cfg),
+        )
+
+    return providers
 
 
 def _extract_import_class(
@@ -814,7 +817,7 @@ def load_config() -> AppConfig:
         conversation_storage = _load_conversation_storage(
             data, config_directory, base_output_directory
         )
-        object_storage = _load_object_storage(data)
+        object_storage_providers = _load_object_storage_config(data)
         site_config_providers = _load_site_config_storage(data)
         scoring_model_providers = _load_scoring_model_config(data)
         ranking = _load_ranking_config(data)
@@ -854,7 +857,7 @@ def load_config() -> AppConfig:
             conversation_storage_behavior=StorageBehaviorConfig(),
             conversation_storage_endpoints={},
             conversation_storage_default="qdrant_local",
-            object_storage=object_storage,
+            object_storage_providers=object_storage_providers,
             site_config_providers=site_config_providers,
             scoring_model_providers=scoring_model_providers,
             _ranking=ranking,
@@ -878,7 +881,6 @@ def load_config() -> AppConfig:
         nlweb=NLWebConfig(sites=[]),
         server=ServerConfig(),
         conversation_storage=ConversationStorageConfig(type="qdrant", enabled=False),
-        object_storage=ObjectLookupConfig(type="cosmos", enabled=False),
         site_config_providers={},
         _ranking=RankingConfig(),
         conversation_storage_behavior=StorageBehaviorConfig(),
@@ -940,6 +942,7 @@ def override_ranking_config(ranking_config: RankingConfig):
 _generative_provider_map: ProviderMap | None = None
 _scoring_provider_map: ProviderMap | None = None
 _site_config_provider_map: ProviderMap | None = None
+_object_storage_provider_map: ProviderMap | None = None
 
 
 @contextmanager
@@ -969,9 +972,18 @@ def override_site_config_provider(old_name: str, new_name: str):
         yield
 
 
+@contextmanager
+def override_object_storage_provider(old_name: str, new_name: str):
+    """Temporarily remap an object storage provider name."""
+    if _object_storage_provider_map is None:
+        raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+    with _object_storage_provider_map.override(old_name, new_name):
+        yield
+
+
 def initialize_providers(config: AppConfig) -> None:
     """Eagerly create all provider instances from config. Call at server startup."""
-    global _generative_provider_map, _scoring_provider_map, _site_config_provider_map
+    global _generative_provider_map, _scoring_provider_map, _site_config_provider_map, _object_storage_provider_map
     _generative_provider_map = ProviderMap(
         config=config.generative_model_providers,
         error_prefix="Generative model provider",
@@ -984,6 +996,10 @@ def initialize_providers(config: AppConfig) -> None:
         config=config.site_config_providers,
         error_prefix="Site config provider",
     )
+    _object_storage_provider_map = ProviderMap(
+        config=config.object_storage_providers,
+        error_prefix="Object storage provider",
+    )
 
 
 async def close_all_providers() -> None:
@@ -994,3 +1010,5 @@ async def close_all_providers() -> None:
         await _scoring_provider_map.close()
     if _site_config_provider_map is not None:
         await _site_config_provider_map.close()
+    if _object_storage_provider_map is not None:
+        await _object_storage_provider_map.close()
