@@ -101,31 +101,6 @@ destroy:
 	az group delete --name $(RG_NAME) --yes --no-wait
 	@echo "Resource group deletion initiated. This may take several minutes."
 
-# Grant an application/managed identity access to all resources
-# Usage: make grant-app-access ENV_NAME=myenv APP_PRINCIPAL_ID=<guid>
-APP_PRINCIPAL_ID ?=
-grant-app-access:
-	@if [ -z "$(APP_PRINCIPAL_ID)" ]; then \
-		echo "Error: APP_PRINCIPAL_ID is required"; \
-		echo "Usage: make grant-app-access ENV_NAME=$(ENV_NAME) APP_PRINCIPAL_ID=<managed-identity-principal-id>"; \
-		exit 1; \
-	fi
-	@echo "Granting access to principal: $(APP_PRINCIPAL_ID)"
-	@echo "Resource group: $(RG_NAME)"
-	az deployment group create \
-		--name "grant-access-$$(date +%Y%m%d%H%M%S)" \
-		--resource-group $(RG_NAME) \
-		--template-file infra/modules/roles.bicep \
-		--parameters principalId=$(APP_PRINCIPAL_ID) \
-		--parameters principalType=ServicePrincipal \
-		--parameters cosmosAccountId=$$(az cosmosdb list -g $(RG_NAME) --query "[0].id" -o tsv) \
-		--parameters storageAccountId=$$(az storage account list -g $(RG_NAME) --query "[0].id" -o tsv) \
-		--parameters openAiAccountId=$$(az cognitiveservices account list -g $(RG_NAME) --query "[0].id" -o tsv) \
-		--parameters searchServiceId=$$(az search service list -g $(RG_NAME) --query "[0].id" -o tsv) \
-		--output table
-	@echo ""
-	@echo "Access granted successfully!"
-
 # Setup Kubernetes infrastructure (cert-manager, KEDA, ALB controller, Gateway)
 # Usage: make setup-k8s ENV_NAME=myenv
 setup-k8s:

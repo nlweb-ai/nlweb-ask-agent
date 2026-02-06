@@ -23,7 +23,7 @@ for dashboard_file in "$DASHBOARD_DIR"/*.json; do
     az grafana dashboard import \
         --name "$GRAFANA_NAME" \
         --resource-group "$RESOURCE_GROUP" \
-        --definition @"$dashboard_file" \
+        --definition "$dashboard_file" \
         --overwrite true \
         --output none
 
