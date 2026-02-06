@@ -10,6 +10,6 @@ data:
   prometheus-collector-settings: |-
     [default-scrape-settings]
       enabled = true
-    [pod-annotation-based-scraping]
-      podannotationnamespaceregex = ".*"
+  pod-annotation-based-scraping: |-
+    podannotationnamespaceregex = ".*"
 {{- end }}
