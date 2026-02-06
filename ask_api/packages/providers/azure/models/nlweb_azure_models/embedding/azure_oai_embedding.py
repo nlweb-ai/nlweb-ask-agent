@@ -2,191 +2,93 @@
 # Licensed under the MIT License
 
 """
-Azure OpenAI embedding implementation.
-
-WARNING: This code is under development and may undergo changes in future releases.
-Backwards compatibility is not guaranteed at this time.
+Azure OpenAI embedding provider implementation.
 """
 
-import json
-import asyncio
-from typing import List, Optional
+import logging
+from typing import List
 from openai import AsyncAzureOpenAI
-from nlweb_core.config import get_config
+from nlweb_core.embedding import EmbeddingProvider
 from nlweb_core.azure_credentials import get_openai_token_provider
 
 
-# Global client with async-safe initialization
-_client_lock = asyncio.Lock()
-azure_openai_client = None
+logger = logging.getLogger(__name__)
 
-def get_azure_openai_endpoint():
-    """Get the Azure OpenAI endpoint from configuration."""
-    provider_config = get_config().get_embedding_provider("azure_openai")
-    if provider_config and provider_config.endpoint:
-        endpoint = provider_config.endpoint
-        if endpoint:
-            endpoint = endpoint.strip('"')  # Remove quotes if present
-            return endpoint
-    return None
+MAX_SINGLE_CHARS = 20000
+MAX_BATCH_CHARS = 12000
 
-def get_azure_openai_api_key():
-    """Get the Azure OpenAI API key from configuration."""
-    provider_config = get_config().get_embedding_provider("azure_openai")
-    if provider_config and provider_config.api_key:
-        api_key = provider_config.api_key
-        if api_key:
-            api_key = api_key.strip('"')  # Remove quotes if present
-            return api_key
-    return None
 
-def get_auth_method():
-    """Get the authentication method from configuration."""
-    provider_config = get_config().get_embedding_provider("azure_openai")
-    if provider_config and provider_config.auth_method:
-        return provider_config.auth_method
-    # Default to api_key
-    return "api_key"
+class AzureOpenAIEmbeddingProvider(EmbeddingProvider):
+    """Embedding provider using Azure OpenAI."""
 
-def get_azure_openai_api_version():
-    """Get the Azure OpenAI API version from configuration."""
-    provider_config = get_config().get_embedding_provider("azure_openai")
-    if provider_config and provider_config.api_version:
-        api_version = provider_config.api_version
-        return api_version
-    # Default value if not found in config
-    default_version = "2024-10-21"
-    return default_version
+    def __init__(
+        self,
+        endpoint: str,
+        auth_method: str,
+        model: str,
+        api_version: str,
+        api_key: str | None = None,
+        **kwargs,
+    ):
+        self.endpoint = endpoint
+        self.api_key = api_key
+        self.auth_method = auth_method
+        self.model = model
+        self.api_version = api_version
+        self._client: AsyncAzureOpenAI | None = None
 
-async def get_azure_openai_client():
-    """Get or initialize the Azure OpenAI client."""
-    global azure_openai_client
-    async with _client_lock:  # Async-safe client initialization
-        if azure_openai_client is None:
-            endpoint = get_azure_openai_endpoint()
-            api_version = get_azure_openai_api_version()
-            auth_method = get_auth_method()
+    async def _ensure_client(self) -> None:
+        """Create client if not already initialized."""
+        if self._client is not None:
+            return
 
-            if not endpoint or not api_version:
-                error_msg = "Missing required Azure OpenAI configuration (endpoint or api_version)"
-                raise ValueError(error_msg)
-
-            try:
-                if auth_method == "azure_ad":
-                    token_provider = await get_openai_token_provider()
-
-                    azure_openai_client = AsyncAzureOpenAI(
-                        azure_endpoint=endpoint,
-                        azure_ad_token_provider=token_provider,
-                        api_version=api_version,
-                        timeout=30.0
-                    )
-                elif auth_method == "api_key":
-                    api_key = get_azure_openai_api_key()
-                    if not api_key:
-                        error_msg = "Missing required Azure OpenAI API key for api_key authentication"
-                        raise ValueError(error_msg)
-
-                    azure_openai_client = AsyncAzureOpenAI(
-                        azure_endpoint=endpoint,
-                        api_key=api_key,
-                        api_version=api_version,
-                        timeout=30.0
-                    )
-                else:
-                    error_msg = f"Unsupported authentication method: {auth_method}"
-                    raise ValueError(error_msg)
-
-            except Exception as e:
-                raise
-
-    return azure_openai_client
-
-async def get_azure_embedding(
-    text: str,
-    model: Optional[str] = None,
-    timeout: float = 30.0
-) -> List[float]:
-    """
-    Generate embeddings using Azure OpenAI.
-
-    Args:
-        text: The text to embed
-        model: The model deployment name to use (optional)
-        timeout: Maximum time to wait for the embedding response in seconds
-
-    Returns:
-        List of floats representing the embedding vector
-    """
-    client = await get_azure_openai_client()
-    
-    # If model is not provided, get from config
-    if model is None:
-        provider_config = get_config().get_embedding_provider("azure_openai")
-        if provider_config and provider_config.model:
-            model = provider_config.model
+        if self.auth_method == "azure_ad":
+            token_provider = await get_openai_token_provider()
+            self._client = AsyncAzureOpenAI(
+                azure_endpoint=self.endpoint,
+                azure_ad_token_provider=token_provider,
+                api_version=self.api_version,
+                timeout=30.0,
+            )
+        elif self.auth_method == "api_key":
+            self._client = AsyncAzureOpenAI(
+                azure_endpoint=self.endpoint,
+                api_key=self.api_key,
+                api_version=self.api_version,
+                timeout=30.0,
+            )
         else:
-            # Default to a common embedding model name
-            model = "text-embedding-3-small"
-    
+            raise ValueError(f"Unsupported authentication method: {self.auth_method}")
 
-    if (len(text) > 20000):
-        text = text[:20000]
+    async def get_embedding(self, text: str, timeout: float = 30.0) -> List[float]:
+        """Get embedding for text using Azure OpenAI."""
+        await self._ensure_client()
+        assert self._client is not None
 
-    try:
-        response = await client.embeddings.create(
-            input=text,
-            model=model
+        if len(text) > MAX_SINGLE_CHARS:
+            text = text[:MAX_SINGLE_CHARS]
+
+        response = await self._client.embeddings.create(
+            input=text, model=self.model
         )
-        
-        embedding = response.data[0].embedding
-        return embedding
-    except Exception as e:
-        raise
+        return response.data[0].embedding
 
-async def get_azure_batch_embeddings(
-    texts: List[str],
-    model: Optional[str] = None,
-    timeout: float = 60.0
-) -> List[List[float]]:
-    """
-    Generate embeddings for multiple texts using Azure OpenAI.
+    async def get_batch_embeddings(
+        self, texts: List[str], timeout: float = 60.0
+    ) -> List[List[float]]:
+        """Get embeddings for multiple texts using Azure OpenAI native batch API."""
+        await self._ensure_client()
+        assert self._client is not None
 
-    Args:
-        texts: List of texts to embed
-        model: The model deployment name to use (optional)
-        timeout: Maximum time to wait for the batch embedding response in seconds
+        trimmed = [t[:MAX_BATCH_CHARS] if len(t) > MAX_BATCH_CHARS else t for t in texts]
 
-    Returns:
-        List of embedding vectors, each a list of floats
-    """
-    client = await get_azure_openai_client()
-    
-    # If model is not provided, get from config
-    if model is None:
-        provider_config = get_config().get_embedding_provider("azure_openai")
-        if provider_config and provider_config.model:
-            model = provider_config.model
-        else:
-            # Default to a common embedding model name
-            model = "text-embedding-3-small"
-    
-
-    trimmed_texts = []
-    for elt in texts:
-        if (len(elt) > 12000):
-            trimmed_texts.append(elt[:12000])
-        else:
-            trimmed_texts.append(elt)
-    
-    try:
-        response = await client.embeddings.create(
-            input=trimmed_texts,
-            model=model
+        response = await self._client.embeddings.create(
+            input=trimmed, model=self.model
         )
-        
-        # Extract embeddings in the same order as input texts
-        embeddings = [data.embedding for data in response.data]
-        return embeddings
-    except Exception as e:
-        raise
+        return [data.embedding for data in response.data]
+
+    async def close(self) -> None:
+        """Close the Azure OpenAI client."""
+        if self._client is not None:
+            await self._client.close()
+            self._client = None

@@ -17,7 +17,7 @@ from azure.search.documents.aio import SearchClient
 # Type alias for credentials
 CredentialType = Union[DefaultAzureCredential, AzureKeyCredential]
 
-from nlweb_core.embedding import get_embedding
+from nlweb_core.config import get_config
 from nlweb_core.retriever import RetrievalProvider
 from nlweb_core.retrieved_item import RetrievedItem
 from nlweb_core.azure_credentials import get_azure_credential
@@ -129,7 +129,8 @@ class AzureSearchClient(RetrievalProvider):
 
         # Get embedding for the query
         start_embed = time.time()
-        embedding = await get_embedding(query, query_params=query_params)
+        embedding_provider = get_config().get_embedding_provider("default")
+        embedding = await embedding_provider.get_embedding(query)
         embed_time = time.time() - start_embed
 
         # Perform the search

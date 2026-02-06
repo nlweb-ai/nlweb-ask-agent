@@ -22,6 +22,7 @@ from typing import Any, TYPE_CHECKING
 from nlweb_core.provider_map import ProviderMap
 
 if TYPE_CHECKING:
+    from nlweb_core.embedding import EmbeddingProvider
     from nlweb_core.llm import GenerativeLLMProvider
     from nlweb_core.scoring import ScoringLLMProvider
     from nlweb_core.site_config.base import SiteConfigLookup
@@ -36,15 +37,12 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class EmbeddingProviderConfig:
-    api_key: str | None = None
-    endpoint: str | None = None
-    api_version: str | None = None
-    model: str | None = None
-    config: dict[str, Any] | None = None
-    auth_method: str | None = None
-    import_path: str | None = None
-    class_name: str | None = None
+class EmbeddingConfig:
+    """Configuration for a single embedding provider."""
+
+    import_path: str
+    class_name: str
+    options: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -188,7 +186,7 @@ class AppConfig:
     )
 
     # Embedding Configuration
-    embedding_providers: dict[str, EmbeddingProviderConfig] = field(
+    embedding_providers: dict[str, EmbeddingConfig] = field(
         default_factory=dict
     )
     preferred_embedding_provider: str | None = None
@@ -252,9 +250,9 @@ class AppConfig:
         """Returns True if exceptions should be raised instead of caught."""
         return self.is_testing_mode() or self.is_development_mode()
 
-    def get_embedding_provider(
+    def get_embedding_config(
         self, provider_name: str | None = None
-    ) -> EmbeddingProviderConfig | None:
+    ) -> EmbeddingConfig | None:
         """Get the specified embedding provider config or the preferred one if not specified."""
         if provider_name and provider_name in self.embedding_providers:
             return self.embedding_providers[provider_name]
@@ -266,6 +264,12 @@ class AppConfig:
         return None
 
     # Provider instance accessors (delegate to module-level ProviderMaps)
+
+    def get_embedding_provider(self, name: str) -> EmbeddingProvider:
+        """Get a cached embedding provider instance by name."""
+        if _embedding_provider_map is None:
+            raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+        return _embedding_provider_map.get(name)
 
     def get_generative_provider(self, name: str) -> GenerativeLLMProvider:
         """Get a cached generative LLM provider instance by name."""
@@ -385,28 +389,33 @@ def _get_config_value(value: Any, default: Any = None) -> Any:
 
 def _load_embedding_config(
     data: dict,
-) -> tuple[dict[str, EmbeddingProviderConfig], str | None]:
+) -> tuple[dict[str, EmbeddingConfig], str | None]:
     """Load embedding configuration from config dict."""
     if "embedding" not in data:
         return {}, None
 
     emb_cfg = data["embedding"]
-    provider_name = emb_cfg.get("provider", "default")
+    if not isinstance(emb_cfg, dict):
+        raise ValueError("embedding must be a mapping of provider names to configs")
 
-    providers = {
-        provider_name: EmbeddingProviderConfig(
-            api_key=_get_config_value(emb_cfg.get("api_key_env")),
-            endpoint=_get_config_value(emb_cfg.get("endpoint_env")),
-            api_version=_get_config_value(emb_cfg.get("api_version")),
-            model=_get_config_value(emb_cfg.get("model")),
-            config=_get_config_value(emb_cfg.get("config")),
-            auth_method=_get_config_value(emb_cfg.get("auth_method"), "api_key"),
-            import_path=_get_config_value(emb_cfg.get("import_path")),
-            class_name=_get_config_value(emb_cfg.get("class_name")),
+    providers: dict[str, EmbeddingConfig] = {}
+    preferred = None
+    for provider_name, provider_cfg in emb_cfg.items():
+        if not isinstance(provider_cfg, dict):
+            raise ValueError(
+                f"embedding provider '{provider_name}' must be a mapping"
+            )
+        import_path, class_name = _extract_import_class(
+            provider_cfg, "embedding", provider_name
         )
-    }
-
-    return providers, provider_name
+        providers[provider_name] = EmbeddingConfig(
+            import_path=import_path,
+            class_name=class_name,
+            options=_build_options(provider_cfg),
+        )
+        if preferred is None:
+            preferred = provider_name
+    return providers, preferred
 
 
 def _load_retrieval_provider_config(data: dict) -> dict[str, RetrievalConfig]:
@@ -931,11 +940,21 @@ def override_ranking_config(ranking_config: RankingConfig):
 # Provider Maps (module-level, initialized by initialize_providers() at startup)
 # =============================================================================
 
+_embedding_provider_map: ProviderMap | None = None
 _generative_provider_map: ProviderMap | None = None
 _scoring_provider_map: ProviderMap | None = None
 _site_config_provider_map: ProviderMap | None = None
 _object_storage_provider_map: ProviderMap | None = None
 _retrieval_provider_map: ProviderMap | None = None
+
+
+@contextmanager
+def override_embedding_provider(old_name: str, new_name: str):
+    """Temporarily remap an embedding provider name."""
+    if _embedding_provider_map is None:
+        raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+    with _embedding_provider_map.override(old_name, new_name):
+        yield
 
 
 @contextmanager
@@ -985,7 +1004,11 @@ def override_retrieval_provider(old_name: str, new_name: str):
 
 def initialize_providers(config: AppConfig) -> None:
     """Eagerly create all provider instances from config. Call at server startup."""
-    global _generative_provider_map, _scoring_provider_map, _site_config_provider_map, _object_storage_provider_map, _retrieval_provider_map
+    global _embedding_provider_map, _generative_provider_map, _scoring_provider_map, _site_config_provider_map, _object_storage_provider_map, _retrieval_provider_map
+    _embedding_provider_map = ProviderMap(
+        config=config.embedding_providers,
+        error_prefix="Embedding provider",
+    )
     _generative_provider_map = ProviderMap(
         config=config.generative_model_providers,
         error_prefix="Generative model provider",
@@ -1010,6 +1033,8 @@ def initialize_providers(config: AppConfig) -> None:
 
 async def close_all_providers() -> None:
     """Close all cached provider instances. Call at server shutdown."""
+    if _embedding_provider_map is not None:
+        await _embedding_provider_map.close()
     if _generative_provider_map is not None:
         await _generative_provider_map.close()
     if _scoring_provider_map is not None:
