@@ -1,7 +1,7 @@
-# Chat App Makefile
+# Frontend Makefile
 # For AKS deployment, uses environment-based resource discovery
 
-include ../../common.mk
+include ../common.mk
 
 .PHONY: help dev build deploy down port-forward logs
 
@@ -18,9 +18,11 @@ help:
 	@echo "  ENV_NAME=<name>       # Target environment (default: $(ENV_NAME))"
 
 dev:
-	pnpm dev
+	pnpm install
+	pnpm --filter @nlweb-ai/search-components build
+	VITE_ASK_API_URL=https://internal-testing.nlweb.ai pnpm --filter @nlweb-ai/chat-app dev
 
-# Build Docker image to ACR (context is repo root for workspace access)
+# Build Docker image to ACR (context is frontend/ for workspace access)
 build:
 	$(call discover-azure-resources)
 	$(call validate-azure-resources)
@@ -28,7 +30,7 @@ build:
 		--registry $(ACR_LOGIN_SERVER) \
 		--image chat-app:latest \
 		--file chat-app/Dockerfile \
-		..
+		.
 
 # Deploy to AKS using Helm (upgrades chat-app image only)
 deploy:
@@ -36,7 +38,7 @@ deploy:
 	$(call validate-azure-resources)
 	$(call aks-login)
 	$(eval DIGEST := $(shell az acr manifest list-metadata --registry $(ACR_NAME) --name chat-app --query "[?tags[?@=='latest']].digest | [0]" -o tsv))
-	helm upgrade chat-app ../../helm/chat-app \
+	helm upgrade chat-app ../helm/chat-app \
 		--set image.tag=$(DIGEST) \
 		--reuse-values
 	@echo ""

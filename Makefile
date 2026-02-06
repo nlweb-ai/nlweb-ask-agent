@@ -30,11 +30,12 @@ ask:
 	@echo ""
 	@echo "Press Ctrl+C to stop all services"
 	@echo ""
-	@trap 'echo "\nStopping services..."; docker-compose -f docker-compose.yml down; exit' INT TERM; \
-	docker-compose -f docker-compose.yml up --build ask-api & \
+	@cd frontend && pnpm install && pnpm --filter @nlweb-ai/search-components build
+	@trap 'echo "\nStopping services..."; docker-compose -f $(CURDIR)/docker-compose.yml down; exit' INT TERM; \
+	docker-compose -f $(CURDIR)/docker-compose.yml up --build ask-api & \
 	sleep 3; \
 	cd frontend && VITE_ASK_API_URL=http://localhost:8000 pnpm --filter @nlweb-ai/chat-app dev; \
-	docker-compose -f docker-compose.yml down
+	docker-compose -f $(CURDIR)/docker-compose.yml down
 
 fullstack:
 	docker-compose -f docker-compose.yml up --build
