@@ -119,14 +119,9 @@ function App() {
       endpoint: endpoint,
       site: site.url,
       maxResults: 9,
-      pages: PAGES
-    }
-    const nlweb = useNlWeb({
-      endpoint: endpoint,
-      site: site.url,
-      maxResults: 9,
       numRetrievalResults: 50,
-    });
+    }
+    const nlweb = useNlWeb(config);
     const localSessions = useSearchSessions();
     const [sessionId, setSessionId] = useState<string>(crypto.randomUUID());
     const {searches, addSearch, addResults} = useSearchSession(sessionId);
