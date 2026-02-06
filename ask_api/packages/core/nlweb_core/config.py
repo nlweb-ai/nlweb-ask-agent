@@ -942,6 +942,33 @@ _scoring_provider_map: ProviderMap | None = None
 _site_config_provider_map: ProviderMap | None = None
 
 
+@contextmanager
+def override_generative_provider(old_name: str, new_name: str):
+    """Temporarily remap a generative provider name."""
+    if _generative_provider_map is None:
+        raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+    with _generative_provider_map.override(old_name, new_name):
+        yield
+
+
+@contextmanager
+def override_scoring_provider(old_name: str, new_name: str):
+    """Temporarily remap a scoring provider name."""
+    if _scoring_provider_map is None:
+        raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+    with _scoring_provider_map.override(old_name, new_name):
+        yield
+
+
+@contextmanager
+def override_site_config_provider(old_name: str, new_name: str):
+    """Temporarily remap a site config provider name."""
+    if _site_config_provider_map is None:
+        raise RuntimeError("Providers not initialized. Call initialize_providers() first.")
+    with _site_config_provider_map.override(old_name, new_name):
+        yield
+
+
 def initialize_providers(config: AppConfig) -> None:
     """Eagerly create all provider instances from config. Call at server startup."""
     global _generative_provider_map, _scoring_provider_map, _site_config_provider_map

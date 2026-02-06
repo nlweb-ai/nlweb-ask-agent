@@ -9,6 +9,8 @@ providers from a config dict at construction time.
 """
 
 from collections.abc import Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Generic, TypeVar, Any, Protocol, cast, runtime_checkable
 import importlib
 import logging
@@ -71,6 +73,9 @@ class ProviderMap(Generic[T]):
         self._providers: dict[str, T] = {}
         self._closed = False
         self._error_prefix = error_prefix
+        self._name_overrides: ContextVar[dict[str, str]] = ContextVar(
+            f"{error_prefix}_name_overrides"
+        )
 
         for name, cfg in config.items():
             try:
@@ -87,7 +92,7 @@ class ProviderMap(Generic[T]):
 
     def get(self, name: str) -> T:
         """
-        Get a provider by name.
+        Get a provider by name, respecting any active name overrides.
 
         Args:
             name: The provider name to retrieve.
@@ -102,10 +107,33 @@ class ProviderMap(Generic[T]):
         if self._closed:
             raise RuntimeError(f"{self._error_prefix} has been shut down")
 
+        try:
+            overrides = self._name_overrides.get()
+            seen: set[str] = set()
+            while name in overrides and name not in seen:
+                seen.add(name)
+                name = overrides[name]
+        except LookupError:
+            pass
+
         if name not in self._providers:
             raise ValueError(f"{self._error_prefix} '{name}' is not configured")
 
         return self._providers[name]
+
+    @contextmanager
+    def override(self, old_name: str, new_name: str):
+        """Temporarily remap old_name -> new_name for provider lookups."""
+        try:
+            current = self._name_overrides.get()
+        except LookupError:
+            current = {}
+        updated = {**current, old_name: new_name}
+        token = self._name_overrides.set(updated)
+        try:
+            yield
+        finally:
+            self._name_overrides.reset(token)
 
     async def close(self) -> None:
         """Close all providers and mark as shut down."""
