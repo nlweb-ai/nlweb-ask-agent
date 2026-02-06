@@ -23,22 +23,20 @@ deploy:
 	$(call validate-azure-resources)
 	$(call aks-login)
 	$(eval DIGEST := $(shell az acr manifest list-metadata --registry $(ACR_NAME) --name ask-api --query "[?tags[?@=='latest']].digest | [0]" -o tsv))
-	helm upgrade nlweb ../helm/nlweb \
-		--set ask-api.image.tag=$(DIGEST) \
+	helm upgrade ask-api ../helm/ask-api \
+		--set image.tag=$(DIGEST) \
 		--reuse-values
 	@echo ""
 	@echo "Deployed to: https://$$(kubectl get gateway -n gateway nlweb-gateway -o jsonpath='{.status.addresses[0].value}' 2>/dev/null || echo '<gateway not found>')/"
 
-# Disable ask-api in AKS
+# Remove ask-api from AKS
 down:
 	$(call discover-azure-resources)
 	$(call aks-login)
-	helm upgrade nlweb ../helm/nlweb \
-		--set ask-api.enabled=false \
-		--reuse-values
+	helm uninstall ask-api
 
 port-forward:
-	kubectl port-forward -n ask-api svc/nlweb-ask-api-service 8000:8000
+	kubectl port-forward -n ask-api svc/ask-api-service 8000:8000
 
 logs:
 	kubectl logs -n ask-api -l app=ask-api -f
@@ -100,43 +98,36 @@ build-llm-scoring:
 		--file Dockerfile \
 		.
 
-# Deploy llm-scoring to AKS using Helm (creates/updates nlweb-llm-scoring release)
+# Deploy llm-scoring to AKS using Helm (creates/updates ask-api-llm-scoring release)
 deploy-llm-scoring:
 	$(call discover-azure-resources)
 	$(call validate-azure-resources)
 	$(call aks-login)
 	$(eval DIGEST := $(shell az acr manifest list-metadata --registry $(ACR_NAME) --name ask-api --query "[?tags[?@=='llm-scoring']].digest | [0]" -o tsv))
 	@echo "Getting values from production deployment..."
-	$(eval WORKLOAD_IDENTITY := $(shell helm get values nlweb -o json | jq -r '.["ask-api"].workloadIdentity.clientId'))
-	$(eval TENANT_ID := $(shell helm get values nlweb -o json | jq -r '.global.azure.tenantId'))
-	$(eval KEYVAULT_NAME := $(shell helm get values nlweb -o json | jq -r '.global.keyVault.name'))
-	$(eval KEYVAULT_TENANT := $(shell helm get values nlweb -o json | jq -r '.global.keyVault.tenantId'))
-	$(eval ACR_SERVER := $(shell helm get values nlweb -o json | jq -r '.global.containerRegistry.server'))
-	helm upgrade --install nlweb-llm-scoring ../helm/nlweb \
-		--set ask-api.enabled=true \
-		--set ask-api.createNamespace=false \
-		--set ask-api.createServiceAccount=false \
-		--set ask-api.image.tag=$(DIGEST) \
-		--set ask-api.routing.pathPrefix="/llm-scoring" \
-		--set ask-api.serviceAccount.name=ask-api-sa \
-		--set ask-api.workloadIdentity.clientId=$(WORKLOAD_IDENTITY) \
-		--set chat-app.enabled=false \
-		--set crawler.enabled=false \
-		--set global.azure.tenantId=$(TENANT_ID) \
+	$(eval WORKLOAD_IDENTITY := $(shell helm get values ask-api -o json | jq -r '.workloadIdentity.clientId'))
+	$(eval KEYVAULT_NAME := $(shell helm get values ask-api -o json | jq -r '.global.keyVault.name'))
+	$(eval KEYVAULT_TENANT := $(shell helm get values ask-api -o json | jq -r '.global.keyVault.tenantId'))
+	$(eval ACR_SERVER := $(shell helm get values ask-api -o json | jq -r '.global.containerRegistry.server'))
+	helm upgrade --install ask-api-llm-scoring ../helm/ask-api \
+		--set createNamespace=false \
+		--set createServiceAccount=false \
+		--set image.tag=$(DIGEST) \
+		--set routing.pathPrefix="/llm-scoring" \
+		--set serviceAccount.name=ask-api-sa \
+		--set workloadIdentity.clientId=$(WORKLOAD_IDENTITY) \
 		--set global.keyVault.name=$(KEYVAULT_NAME) \
 		--set global.keyVault.tenantId=$(KEYVAULT_TENANT) \
 		--set global.containerRegistry.server=$(ACR_SERVER)
 	@echo ""
 	@echo "Deployed llm-scoring to: https://$$(kubectl get gateway -n gateway nlweb-gateway -o jsonpath='{.status.addresses[0].value}' 2>/dev/null || echo '<gateway not found>')/llm-scoring"
 
-# Disable llm-scoring deployment in AKS
+# Remove llm-scoring deployment from AKS
 down-llm-scoring:
 	$(call discover-azure-resources)
 	$(call aks-login)
-	helm upgrade nlweb-llm-scoring ../helm/nlweb \
-		--set ask-api.enabled=false \
-		--reuse-values
+	helm uninstall ask-api-llm-scoring
 
 # View logs for llm-scoring deployment
 logs-llm-scoring:
-	kubectl logs -n ask-api -l app=ask-api,app.kubernetes.io/instance=nlweb-llm-scoring -f
+	kubectl logs -n ask-api -l app=ask-api,app.kubernetes.io/instance=ask-api-llm-scoring -f

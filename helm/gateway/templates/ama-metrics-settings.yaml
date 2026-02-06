@@ -1,4 +1,4 @@
-{{- if .Values.global.monitoring.enabled }}
+{{- if .Values.monitoring.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

@@ -16,7 +16,7 @@ help:
 	@echo "  make test              # Run local test suite (unit tests)"
 	@echo "  make build             # Build Docker image to ACR"
 	@echo "  make deploy            # Deploy to AKS using Helm"
-	@echo "  make down              # Disable crawler in AKS"
+	@echo "  make down              # Remove crawler from AKS"
 	@echo "  make port-forward      # Forward localhost:5001 to crawler-master-service"
 	@echo "  make logs-master       # Stream master pod logs"
 	@echo "  make logs-worker       # Stream worker pod logs"
@@ -76,22 +76,20 @@ deploy:
 	$(call validate-azure-resources)
 	$(call aks-login)
 	$(eval DIGEST := $(shell az acr manifest list-metadata --registry $(ACR_NAME) --name crawler --query "[?tags[?@=='latest']].digest | [0]" -o tsv))
-	helm upgrade nlweb ../helm/nlweb \
-		--set crawler.image.tag=$(DIGEST) \
+	helm upgrade crawler ../helm/crawler \
+		--set image.tag=$(DIGEST) \
 		--reuse-values
 	@echo ""
 	@echo "Deployed to: https://$$(kubectl get gateway -n gateway nlweb-gateway -o jsonpath='{.status.addresses[0].value}' 2>/dev/null || echo '<gateway not found>')/crawler/"
 
-# Disable crawler in AKS
+# Remove crawler from AKS
 down:
 	$(call discover-azure-resources)
 	$(call aks-login)
-	helm upgrade nlweb ../helm/nlweb \
-		--set crawler.enabled=false \
-		--reuse-values
+	helm uninstall crawler
 
 port-forward:
-	kubectl port-forward -n crawler svc/nlweb-crawler-master-service 5001:5001
+	kubectl port-forward -n crawler svc/crawler-master-service 5001:5001
 
 logs-master:
 	kubectl logs -n crawler -l app=crawler-master -f

@@ -310,7 +310,11 @@ nlweb-ask-agent/
 ├── deployment/           # Infrastructure as Code
 │   ├── bicep/           # Bicep templates
 │   └── Makefile         # Deployment commands
-├── helm/nlweb/          # Kubernetes Helm charts
+├── helm/                # Kubernetes Helm charts
+│   ├── gateway/         # Gateway infrastructure chart
+│   ├── ask-api/         # Ask API chart
+│   ├── chat-app/        # Chat App chart
+│   └── crawler/         # Crawler chart
 ├── common.mk            # Shared Makefile functions
 └── CLAUDE.md            # AI assistant guidance
 ```

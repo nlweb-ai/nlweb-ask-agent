@@ -17,6 +17,7 @@ gatewayName: "nlweb-gateway"
 # Namespaces that can route through this gateway
 allowedNamespaces:
   - ask-api
+  - chat-app
   - crawler
 
 # cert-manager configuration (ClusterIssuer is always installed)
@@ -24,3 +25,7 @@ certManager:
   email: ""
   issuerName: "letsencrypt-prod"
   acmeServer: "https://acme-v02.api.letsencrypt.org/directory"
+
+# Prometheus monitoring configuration
+monitoring:
+  enabled: true

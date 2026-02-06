@@ -1,5 +1,6 @@
 # Chat App subchart default values
 namespace: chat-app
+createNamespace: true
 
 # Container Image
 image:

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Deploy application (ask-api, crawler) to AKS
+# Deploy application (ask-api, chat-app, crawler) to AKS
 # Infrastructure (cert-manager, KEDA, ALB controller, Gateway) must be installed
 # first via setup_k8s.sh
 # Images must be built first via build_images.sh
@@ -36,7 +36,6 @@ echo ""
 echo "=== Logging into ACR ==="
 az acr login --name "$ACR_NAME"
 
-HELM_DIR="$REPO_ROOT/helm/nlweb"
 ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer -o tsv)
 echo "ACR Login Server: $ACR_LOGIN_SERVER"
 
@@ -52,66 +51,39 @@ if ! helm status nlweb-gateway -n gateway &>/dev/null; then
     echo "Continuing with application deployment..."
 fi
 
-# Generate Helm values from AZD environment
+# Deploy application charts
 echo ""
-echo "=== Generating Helm values ==="
-VALUES_FILE="/tmp/values-generated.yaml"
-
-# Get the Helm values JSON from AZD output
-HELM_VALUES_JSON=$(azd env get-values --output json 2>/dev/null | jq -r '.HELM_VALUES_JSON // empty')
-
-if [ -z "$HELM_VALUES_JSON" ]; then
-    echo "HELM_VALUES_JSON not found in environment. Generating from individual values..."
-
-    # Build values from individual environment variables
-    # Application chart only - Gateway is installed separately via setup_k8s.sh
-    cat > "$VALUES_FILE" << EOF
-global:
-  azure:
-    tenantId: "$AZURE_TENANT_ID"
-  keyVault:
-    name: "$AZURE_KEYVAULT_NAME"
-    tenantId: "$AZURE_TENANT_ID"
-  containerRegistry:
-    server: "$ACR_LOGIN_SERVER"
-ask-api:
-  enabled: true
-  serviceAccount:
-    name: "ask-api-sa"
-  image:
-    tag: "${ASK_API_IMAGE_TAG:-latest}"
-  workloadIdentity:
-    clientId: "$ASK_API_IDENTITY_CLIENT_ID"
-crawler:
-  enabled: true
-  serviceAccount:
-    name: "crawler-sa"
-  image:
-    tag: "${CRAWLER_IMAGE_TAG:-latest}"
-  workloadIdentity:
-    clientId: "$CRAWLER_IDENTITY_CLIENT_ID"
-    kedaIdentityId: "$KEDA_IDENTITY_CLIENT_ID"
-  autoscaling:
-    storageAccountName: "$STORAGE_ACCOUNT_NAME"
-EOF
-else
-    echo "$HELM_VALUES_JSON" > "$VALUES_FILE"
-fi
-
-echo "Generated values file:"
-cat "$VALUES_FILE"
-
-# Update Helm dependencies and install from local chart
-echo ""
-echo "=== Updating Helm dependencies ==="
-helm dependency update "$HELM_DIR"
-
-echo ""
-echo "=== Installing Helm chart ==="
-helm upgrade --install nlweb "$HELM_DIR" \
-    -f "$VALUES_FILE" \
+echo "=== Deploying ask-api ==="
+helm upgrade --install ask-api "$REPO_ROOT/helm/ask-api" \
+    --set global.keyVault.name="$AZURE_KEYVAULT_NAME" \
+    --set global.keyVault.tenantId="$AZURE_TENANT_ID" \
+    --set global.containerRegistry.server="$ACR_LOGIN_SERVER" \
+    --set serviceAccount.name="ask-api-sa" \
+    --set image.tag="${ASK_API_IMAGE_TAG:-latest}" \
+    --set workloadIdentity.clientId="$ASK_API_IDENTITY_CLIENT_ID" \
     --wait \
-    --timeout 25m
+    --timeout 10m
+
+echo ""
+echo "=== Deploying chat-app ==="
+helm upgrade --install chat-app "$REPO_ROOT/helm/chat-app" \
+    --set global.containerRegistry.server="$ACR_LOGIN_SERVER" \
+    --wait \
+    --timeout 5m
+
+echo ""
+echo "=== Deploying crawler ==="
+helm upgrade --install crawler "$REPO_ROOT/helm/crawler" \
+    --set global.keyVault.name="$AZURE_KEYVAULT_NAME" \
+    --set global.keyVault.tenantId="$AZURE_TENANT_ID" \
+    --set global.containerRegistry.server="$ACR_LOGIN_SERVER" \
+    --set serviceAccount.name="crawler-sa" \
+    --set image.tag="${CRAWLER_IMAGE_TAG:-latest}" \
+    --set workloadIdentity.clientId="$CRAWLER_IDENTITY_CLIENT_ID" \
+    --set workloadIdentity.kedaIdentityId="$KEDA_IDENTITY_CLIENT_ID" \
+    --set autoscaling.storageAccountName="$STORAGE_ACCOUNT_NAME" \
+    --wait \
+    --timeout 10m
 
 echo ""
 echo "=== Helm deployment completed ==="
@@ -121,7 +93,7 @@ echo ""
 echo "=== Deployment Status ==="
 helm list -A
 echo ""
-kubectl get pods -A | grep -E "ask-api|crawler|chat-app" || true
+kubectl get pods -A | grep -E "ask-api|chat-app|crawler" || true
 
 echo ""
 echo "=== Application Deployment Complete ==="

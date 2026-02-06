@@ -58,7 +58,7 @@ async def metrics_handler(request):
     """Expose Prometheus metrics in text format."""
     from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-    return web.Response(body=generate_latest(), content_type=CONTENT_TYPE_LATEST)
+    return web.Response(body=generate_latest(), headers={"Content-Type": CONTENT_TYPE_LATEST})
 
 
 async def config_handler(request):
