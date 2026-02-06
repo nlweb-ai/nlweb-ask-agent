@@ -4,7 +4,9 @@
 """
 Aajtak-specific AskHandler with Hindi/Hinglish transliteration support.
 """
+import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
 from nlweb_core.handler import AskHandler, OutputMethod
 from nlweb_core.query_analysis.query_analysis import (
     DefaultQueryAnalysisHandler,
@@ -12,7 +14,7 @@ from nlweb_core.query_analysis.query_analysis import (
 )
 from nlweb_core.protocol.models import AskRequest
 from nlweb_core.request_context import set_request_id
-from nlweb_core.config import get_config
+from nlweb_core.config import get_config, override_scoring_provider
 from nlweb_core.site_config import get_elicitation_handler
 
 logger = logging.getLogger(__name__)
@@ -81,34 +83,84 @@ class AajtakAskHandler(AskHandler):
         output_method: OutputMethod,
         site_config: dict[str, str],
     ) -> list[dict]:
-        """Execute the query body by retrieving and ranking items."""
+        """Execute the query body with dual-query strategy for fresh + regular results."""
         from nlweb_core.retriever import enrich_results_from_object_storage
         from nlweb_core.ranking import Ranking
 
         config = get_config()
         vectordb_client = config.get_retrieval_provider("default")
-        retrieved_items = await vectordb_client.search(
-            request.query.effective_query,
-            request.query.site,
-            request.query.num_results,
+
+        # Dual-query strategy: regular + fresh results
+        # Optimize to avoid scoring too many items:
+        # - Fresh: 40% of requested results (prioritized for recency)
+        # - Regular: 60% of requested results (broader relevance)
+        fresh_proportion = 0.4
+        fresh_count = int(request.query.num_results * fresh_proportion)
+        regular_count = request.query.num_results - fresh_count
+
+        five_days_ago = datetime.now(timezone.utc) - timedelta(days=5)
+        date_filter = f"datePublished ge {five_days_ago.isoformat()}"
+
+        # Execute regular + fresh queries in parallel
+        regular_items, fresh_items = await asyncio.gather(
+            vectordb_client.search(
+                request.query.effective_query,
+                request.query.site,
+                regular_count,
+            ),
+            vectordb_client.search(
+                request.query.effective_query,
+                request.query.site,
+                fresh_count,
+                date_filter=date_filter,
+            ),
         )
+        # Merge: deduplicate by URL, prioritize fresh items at top
+        retrieved_items = self._merge_results(fresh_items, regular_items)
+        logger.info(
+            f"Dual-query results: {len(fresh_items)} fresh + {len(regular_items)} regular → {len(retrieved_items)} merged (target: {fresh_count}+{regular_count})"
+        )
+
         if config.object_storage_providers:
             object_lookup_client = config.get_object_lookup_provider("default")
             retrieved_items = await enrich_results_from_object_storage(
                 retrieved_items, object_lookup_client
             )
 
-        final_ranked_answers = await Ranking().rank(
-            items=retrieved_items,
-            query_text=request.query.effective_query,
-            item_type=site_config["item_type"],
-            max_results=request.query.num_results,
-            min_score=request.query.min_score,
-            site=request.query.site,
-        )
+        with override_scoring_provider("default", "4.1-mini"):
+            final_ranked_answers = await Ranking().rank(
+                items=retrieved_items,
+                query_text=request.query.effective_query,
+                item_type=site_config["item_type"],
+                max_results=request.query.num_results,
+                min_score=request.query.min_score,
+                site=request.query.site,
+            )
 
         await self._send_results(output_method, final_ranked_answers)
         return final_ranked_answers
+
+    def _merge_results(self, fresh_items: list, regular_items: list) -> list:
+        """
+        Merge fresh and regular results, deduplicating by URL.
+        Fresh items are prioritized at the top.
+        """
+        seen_urls = set()
+        merged = []
+
+        # Add fresh items first
+        for item in fresh_items:
+            if item.url not in seen_urls:
+                merged.append(item)
+                seen_urls.add(item.url)
+
+        # Add regular items that aren't duplicates
+        for item in regular_items:
+            if item.url not in seen_urls:
+                merged.append(item)
+                seen_urls.add(item.url)
+
+        return merged
 
     async def _decontextualize_query(
         self,
