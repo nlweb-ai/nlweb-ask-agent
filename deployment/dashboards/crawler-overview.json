@@ -12,10 +12,12 @@
       {
         "title": "Queue Depth by Status",
         "type": "timeseries",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
         "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
         "targets": [
           {
-            "expr": "crawler_queue_depth{job=~\".*crawler-master.*\"}",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+            "expr": "crawler_queue_depth{kubernetes_namespace=\"crawler\", kubernetes_pod_name=~\"crawler-master.*\"}",
             "legendFormat": "{{ status }}"
           }
         ]
@@ -23,10 +25,12 @@
       {
         "title": "Files Queued Rate",
         "type": "timeseries",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
         "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
         "targets": [
           {
-            "expr": "sum(rate(crawler_files_queued_total[5m]))",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+            "expr": "sum(rate(crawler_files_queued_total{kubernetes_namespace=\"crawler\"}[5m]))",
             "legendFormat": "Files/sec"
           }
         ],
@@ -39,10 +43,12 @@
       {
         "title": "Scheduler Run Duration P95",
         "type": "timeseries",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
         "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
         "targets": [
           {
-            "expr": "histogram_quantile(0.95, sum(rate(crawler_scheduler_run_duration_seconds_bucket[5m])) by (le))",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+            "expr": "histogram_quantile(0.95, sum(rate(crawler_scheduler_run_duration_seconds_bucket{kubernetes_namespace=\"crawler\"}[5m])) by (le))",
             "legendFormat": "P95"
           }
         ],
@@ -55,10 +61,12 @@
       {
         "title": "Scheduler Runs Total",
         "type": "stat",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
         "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
         "targets": [
           {
-            "expr": "crawler_scheduler_runs_total",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+            "expr": "crawler_scheduler_runs_total{kubernetes_namespace=\"crawler\"}",
             "legendFormat": "Total runs"
           }
         ],
@@ -71,10 +79,12 @@
       {
         "title": "Worker Job Throughput",
         "type": "timeseries",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
         "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
         "targets": [
           {
-            "expr": "sum(rate(crawler_jobs_processed_total[5m])) by (job_type, result)",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+            "expr": "sum(rate(crawler_jobs_processed_total{kubernetes_namespace=\"crawler\"}[5m])) by (job_type, result)",
             "legendFormat": "{{ job_type }} - {{ result }}"
           }
         ],
@@ -87,10 +97,12 @@
       {
         "title": "Job Duration P95 by Type",
         "type": "timeseries",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
         "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
         "targets": [
           {
-            "expr": "histogram_quantile(0.95, sum(rate(crawler_job_duration_seconds_bucket[5m])) by (le, job_type))",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+            "expr": "histogram_quantile(0.95, sum(rate(crawler_job_duration_seconds_bucket{kubernetes_namespace=\"crawler\"}[5m])) by (le, job_type))",
             "legendFormat": "{{ job_type }} P95"
           }
         ],
@@ -103,10 +115,12 @@
       {
         "title": "External Call Latency P95 by Service",
         "type": "timeseries",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
         "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
         "targets": [
           {
-            "expr": "histogram_quantile(0.95, sum(rate(crawler_external_call_duration_seconds_bucket[5m])) by (le, service))",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+            "expr": "histogram_quantile(0.95, sum(rate(crawler_external_call_duration_seconds_bucket{kubernetes_namespace=\"crawler\"}[5m])) by (le, service))",
             "legendFormat": "{{ service }} P95"
           }
         ],
@@ -119,10 +133,12 @@
       {
         "title": "Items Per Job Distribution",
         "type": "histogram",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
         "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
         "targets": [
           {
-            "expr": "sum(rate(crawler_items_per_job_bucket[5m])) by (le)",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+            "expr": "sum(rate(crawler_items_per_job_bucket{kubernetes_namespace=\"crawler\"}[5m])) by (le)",
             "legendFormat": "{{ le }}",
             "format": "heatmap"
           }
@@ -131,10 +147,12 @@
       {
         "title": "Worker Status (Idle/Processing)",
         "type": "timeseries",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
         "gridPos": { "h": 8, "w": 24, "x": 0, "y": 32 },
         "targets": [
           {
-            "expr": "crawler_worker_idle",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+            "expr": "crawler_worker_idle{kubernetes_namespace=\"crawler\"}",
             "legendFormat": "{{ pod }}"
           }
         ],
@@ -148,6 +166,19 @@
         }
       }
     ],
+    "templating": {
+      "list": [
+        {
+          "name": "DS_PROMETHEUS",
+          "type": "datasource",
+          "query": "prometheus",
+          "current": {
+            "text": "Managed_Prometheus_mon-nmmchkjjxoonu",
+            "value": "mon-nmmchkjjxoonu"
+          }
+        }
+      ]
+    },
     "schemaVersion": 39
   }
 }

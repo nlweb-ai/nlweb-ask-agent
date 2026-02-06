@@ -12,10 +12,12 @@
       {
         "title": "Request Rate by Endpoint",
         "type": "timeseries",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
         "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
         "targets": [
           {
-            "expr": "sum(rate(http_requests_total{job=~\".*ask-api.*\"}[5m])) by (endpoint)",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+            "expr": "sum(rate(http_requests_total{kubernetes_namespace=\"ask-api\"}[5m])) by (endpoint)",
             "legendFormat": "{{ endpoint }}"
           }
         ],
@@ -28,10 +30,12 @@
       {
         "title": "Error Rate (5xx)",
         "type": "timeseries",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
         "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
         "targets": [
           {
-            "expr": "sum(rate(http_requests_total{job=~\".*ask-api.*\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=~\".*ask-api.*\"}[5m]))",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+            "expr": "sum(rate(http_requests_total{kubernetes_namespace=\"ask-api\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{kubernetes_namespace=\"ask-api\"}[5m]))",
             "legendFormat": "Error Rate"
           }
         ],
@@ -46,18 +50,22 @@
       {
         "title": "Request Latency P50 / P95 / P99",
         "type": "timeseries",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
         "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
         "targets": [
           {
-            "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{job=~\".*ask-api.*\"}[5m])) by (le))",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+            "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{kubernetes_namespace=\"ask-api\"}[5m])) by (le))",
             "legendFormat": "P50"
           },
           {
-            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=~\".*ask-api.*\"}[5m])) by (le))",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{kubernetes_namespace=\"ask-api\"}[5m])) by (le))",
             "legendFormat": "P95"
           },
           {
-            "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=~\".*ask-api.*\"}[5m])) by (le))",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+            "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{kubernetes_namespace=\"ask-api\"}[5m])) by (le))",
             "legendFormat": "P99"
           }
         ],
@@ -70,10 +78,12 @@
       {
         "title": "In-Flight Requests",
         "type": "timeseries",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
         "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
         "targets": [
           {
-            "expr": "sum(http_requests_in_flight{job=~\".*ask-api.*\"}) by (endpoint)",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+            "expr": "sum(http_requests_in_flight{kubernetes_namespace=\"ask-api\"}) by (endpoint)",
             "legendFormat": "{{ endpoint }}"
           }
         ]
@@ -81,10 +91,12 @@
       {
         "title": "Results Per Query",
         "type": "histogram",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
         "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
         "targets": [
           {
-            "expr": "sum(rate(ask_results_returned_bucket{job=~\".*ask-api.*\"}[5m])) by (le)",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+            "expr": "sum(rate(ask_results_returned_bucket{kubernetes_namespace=\"ask-api\"}[5m])) by (le)",
             "legendFormat": "{{ le }}",
             "format": "heatmap"
           }
@@ -93,10 +105,12 @@
       {
         "title": "Query Length Distribution",
         "type": "histogram",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
         "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
         "targets": [
           {
-            "expr": "sum(rate(ask_query_length_chars_bucket{job=~\".*ask-api.*\"}[5m])) by (le)",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+            "expr": "sum(rate(ask_query_length_chars_bucket{kubernetes_namespace=\"ask-api\"}[5m])) by (le)",
             "legendFormat": "{{ le }}",
             "format": "heatmap"
           }
@@ -105,14 +119,17 @@
       {
         "title": "Retrieval vs Scoring Latency P95",
         "type": "timeseries",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
         "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
         "targets": [
           {
-            "expr": "histogram_quantile(0.95, sum(rate(ask_retrieval_duration_seconds_bucket{job=~\".*ask-api.*\"}[5m])) by (le))",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+            "expr": "histogram_quantile(0.95, sum(rate(ask_retrieval_duration_seconds_bucket{kubernetes_namespace=\"ask-api\"}[5m])) by (le))",
             "legendFormat": "Retrieval P95"
           },
           {
-            "expr": "histogram_quantile(0.95, sum(rate(ask_scoring_duration_seconds_bucket{job=~\".*ask-api.*\"}[5m])) by (le))",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+            "expr": "histogram_quantile(0.95, sum(rate(ask_scoring_duration_seconds_bucket{kubernetes_namespace=\"ask-api\"}[5m])) by (le))",
             "legendFormat": "Scoring P95"
           }
         ],
@@ -125,10 +142,12 @@
       {
         "title": "LLM Call Latency by Operation P95",
         "type": "timeseries",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
         "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
         "targets": [
           {
-            "expr": "histogram_quantile(0.95, sum(rate(ask_llm_call_duration_seconds_bucket{job=~\".*ask-api.*\"}[5m])) by (le, operation))",
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+            "expr": "histogram_quantile(0.95, sum(rate(ask_llm_call_duration_seconds_bucket{kubernetes_namespace=\"ask-api\"}[5m])) by (le, operation))",
             "legendFormat": "{{ operation }} P95"
           }
         ],
@@ -139,6 +158,19 @@
         }
       }
     ],
+    "templating": {
+      "list": [
+        {
+          "name": "DS_PROMETHEUS",
+          "type": "datasource",
+          "query": "prometheus",
+          "current": {
+            "text": "Managed_Prometheus_mon-nmmchkjjxoonu",
+            "value": "mon-nmmchkjjxoonu"
+          }
+        }
+      ]
+    },
     "schemaVersion": 39
   }
 }
