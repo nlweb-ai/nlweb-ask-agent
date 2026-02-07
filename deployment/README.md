@@ -6,7 +6,7 @@ Bicep templates for Azure infrastructure required by ask_api and crawler.
 
 | Resource | Purpose |
 |----------|---------|
-| Azure OpenAI | LLM + embeddings |
+| Azure AI Foundry | LLM + embeddings |
 | Azure AI Search | Vector search |
 | Azure Cosmos DB | Object storage |
 | Azure SQL Server | Relational data |
