@@ -2,6 +2,10 @@
 # For AKS deployment, uses environment-based resource discovery
 include ../common.mk
 
+# Load .env if present (sets VITE_ASK_API_URL for dev server)
+-include .env
+export VITE_ASK_API_URL
+
 .DEFAULT_GOAL := help
 
 .PHONY: help dev test lint format typecheck check build deploy down logs init_environment
@@ -14,7 +18,7 @@ help:
 	@echo "Frontend"
 	@echo ""
 	@echo "Development:"
-	@echo "  make dev              Run locally with Docker Compose"
+	@echo "  make dev              Run Vite dev server (reads VITE_ASK_API_URL from .env)"
 	@echo "  make test             Run test suite"
 	@echo "  make lint             Run linter"
 	@echo "  make format           Format code"
@@ -28,7 +32,7 @@ help:
 	@echo "  make logs             Tail AKS pod logs"
 	@echo ""
 	@echo "Setup:"
-	@echo "  make init_environment Generate .env from Azure Key Vault"
+	@echo "  make init_environment Generate .env with API URL from active K8s cluster"
 	@echo ""
 	@echo "Options:"
 	@echo "  ENV_NAME=<name>       Azure environment (default: $(ENV_NAME))"
@@ -38,7 +42,9 @@ help:
 # ==============================================================================
 
 dev:
-	docker compose -f ../docker-compose.yml up --build chat-app
+	pnpm install
+	pnpm --filter @nlweb-ai/search-components build
+	pnpm --filter @nlweb-ai/chat-app dev
 
 # ==============================================================================
 # Code Quality
@@ -94,4 +100,16 @@ logs:
 # ==============================================================================
 
 init_environment:
-	@echo "No .env required for frontend."
+	$(call discover-azure-resources)
+	$(call aks-login)
+	@HOSTNAME=$$(kubectl get certificate nlweb-tls-cert -n gateway -o jsonpath='{.spec.dnsNames[0]}' 2>/dev/null); \
+	if [ -z "$$HOSTNAME" ]; then \
+		echo "No TLS certificate found. Falling back to gateway address..."; \
+		HOSTNAME=$$(kubectl get gateway nlweb-gateway -n gateway -o jsonpath='{.status.addresses[0].value}' 2>/dev/null); \
+	fi; \
+	if [ -z "$$HOSTNAME" ]; then \
+		echo "Error: Could not discover hostname from cluster."; \
+		exit 1; \
+	fi; \
+	echo "VITE_ASK_API_URL=https://$$HOSTNAME" > .env; \
+	echo ".env file created: VITE_ASK_API_URL=https://$$HOSTNAME"

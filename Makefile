@@ -27,6 +27,7 @@ help:
 init_environment:
 	cd ask_api && $(MAKE) init_environment
 	cd crawler && $(MAKE) init_environment
+	cd frontend && $(MAKE) init_environment
 
 ask:
 	@echo "Starting ask-api and chat-app..."

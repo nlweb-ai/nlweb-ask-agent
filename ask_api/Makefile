@@ -15,7 +15,7 @@ help:
 	@echo "Ask API"
 	@echo ""
 	@echo "Development:"
-	@echo "  make dev              Run locally with Docker Compose"
+	@echo "  make dev              Run server locally (port 8000)"
 	@echo "  make test             Run test suite"
 	@echo "  make lint             Run linter"
 	@echo "  make format           Format code"
@@ -45,7 +45,7 @@ help:
 # ==============================================================================
 
 dev:
-	docker compose -f ../docker-compose.yml up --build ask-api
+	uv run python run_server.py
 
 # ==============================================================================
 # Code Quality
