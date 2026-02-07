@@ -112,6 +112,7 @@ setup-k8s:
 	@echo "  Resource Group: $(RG_NAME)"
 	@echo "  AKS: $(AKS_NAME)"
 	@echo ""
+	ENV_NAME=$(ENV_NAME) \
 	AZURE_RESOURCE_GROUP=$(RG_NAME) \
 	AKS_NAME=$(AKS_NAME) \
 	ALB_SUBNET_ID=$(ALB_SUBNET) \
@@ -151,7 +152,7 @@ check-certificate:
 	@echo ""
 	@echo "=== TLS Secret Status ==="
 	@kubectl get secret nlweb-tls-secret -n gateway 2>/dev/null && \
-		(echo ""; echo "=== Next Step ==="; echo "TLS secret is ready! Enable TLS on the Gateway:"; echo "  make enable-tls ENV_NAME=<env>") || \
+		(echo ""; echo "=== Next Step ==="; echo "TLS secret is ready! Enable TLS on the Gateway:"; echo "  make enable-tls ENV_NAME=$(ENV_NAME)") || \
 		echo "TLS secret not yet available. Wait for certificate to be issued."
 
 enable-tls:
