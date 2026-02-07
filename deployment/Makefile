@@ -52,6 +52,13 @@ help:
 
 login:
 	az login
+	@echo ""
+	@echo "=== Next Step ==="
+	@echo "Export PI_LABS_ENDPOINT and PI_LABS_KEY, then deploy infrastructure:"
+	@echo "  export PI_LABS_ENDPOINT=https://..."
+	@echo "  export PI_LABS_KEY=..."
+	@echo "  make deploy ENV_NAME=<your-env-name>"
+	@echo ""
 
 validate:
 	@echo "Validating Bicep templates..."
@@ -87,10 +94,9 @@ deploy: validate
 	@echo ""
 	@echo "=== Azure Infrastructure Deployed ==="
 	@echo ""
-	@echo "Next steps:"
+	@echo "=== Next Step ==="
+	@echo "Setup Kubernetes infrastructure:"
 	@echo "  make setup-k8s ENV_NAME=$(ENV_NAME)"
-	@echo "  make build-all ENV_NAME=$(ENV_NAME)     (from repo root)"
-	@echo "  make deploy-all ENV_NAME=$(ENV_NAME)    (from repo root)"
 	@echo ""
 
 destroy:
@@ -161,6 +167,11 @@ enable-tls:
 		(echo "Error: TLS secret 'nlweb-tls-secret' not found. Run 'make request-certificate' first and wait for it to be ready." && exit 1)
 	@echo "TLS secret found. Upgrading Gateway..."
 	$(MAKE) setup-k8s
+	@echo ""
+	@echo "=== Next Step ==="
+	@echo "Deploy Grafana dashboards:"
+	@echo "  make deploy-dashboards ENV_NAME=$(ENV_NAME)"
+	@echo ""
 
 # ==============================================================================
 # Data
@@ -196,3 +207,9 @@ deploy-dashboards:
 	fi && \
 	echo "  Grafana: $$GRAFANA_NAME" && \
 	GRAFANA_NAME=$$GRAFANA_NAME AZURE_RESOURCE_GROUP=$(RG_NAME) ./scripts/deploy_dashboards.sh
+	@echo ""
+	@echo "=== Next Step ==="
+	@echo "Build and deploy the application (from the repo root):"
+	@echo "  make build-all ENV_NAME=$(ENV_NAME)"
+	@echo "  make deploy-all ENV_NAME=$(ENV_NAME)"
+	@echo ""
