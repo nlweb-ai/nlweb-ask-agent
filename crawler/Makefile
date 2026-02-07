@@ -1,51 +1,51 @@
-SHELL := /bin/bash
-
 # Crawler Makefile
 # For AKS deployment, uses environment-based resource discovery
-
 include ../common.mk
 
-.PHONY: help dev-master dev-worker env-check test lint format typecheck check build deploy down port-forward logs-master logs-worker init_environment
+.DEFAULT_GOAL := help
 
-DEFAULT_GOAL := help
+.PHONY: help dev test lint format typecheck check build deploy down logs init_environment
+
+# ==============================================================================
+# Help
+# ==============================================================================
 
 help:
-	@echo "Makefile commands:"
-	@echo "  make dev-master        # Run master (API + scheduler)"
-	@echo "  make dev-worker        # Run a worker process"
-	@echo "  make test              # Run local test suite (unit tests)"
-	@echo "  make build             # Build Docker image to ACR"
-	@echo "  make deploy            # Deploy to AKS using Helm"
-	@echo "  make down              # Remove crawler from AKS"
-	@echo "  make port-forward      # Forward localhost:5001 to crawler-master-service"
-	@echo "  make logs-master       # Stream master pod logs"
-	@echo "  make logs-worker       # Stream worker pod logs"
-	@echo "  make init_environment  # Pull secrets from Azure Key Vault to .env"
-	@echo "  make env-check         # Ensure .env exists"
+	@echo "Crawler"
 	@echo ""
-	@echo "Environment options:"
-	@echo "  ENV_NAME=<name>        # Target environment (default: $(ENV_NAME))"
+	@echo "Development:"
+	@echo "  make dev              Run locally with Docker Compose"
+	@echo "  make test             Run test suite"
+	@echo "  make lint             Run linter"
+	@echo "  make format           Format code"
+	@echo "  make typecheck        Run type checker"
+	@echo "  make check            Run all checks (lint, format, typecheck, test)"
+	@echo ""
+	@echo "Deployment:"
+	@echo "  make build            Build Docker image to ACR"
+	@echo "  make deploy           Deploy to AKS"
+	@echo "  make down             Uninstall from AKS"
+	@echo "  make logs             Tail AKS pod logs"
+	@echo ""
+	@echo "Setup:"
+	@echo "  make init_environment Generate .env from Azure Key Vault"
+	@echo ""
+	@echo "Options:"
+	@echo "  ENV_NAME=<name>       Azure environment (default: $(ENV_NAME))"
 
-dev-master: env-check
-	@echo "Starting master..."
-	@uv run testing/start_api_server.py
+# ==============================================================================
+# Development
+# ==============================================================================
 
-dev-worker: env-check
-	@echo "Starting worker..."
-	@uv run testing/start_worker.py
+dev:
+	docker compose -f ../docker-compose.yml up --build crawler-master crawler-worker
 
-env-check:
-	@if [ -f .env ]; then \
-		echo ".env found"; \
-	else \
-		echo "WARNING: .env not found - run make init_environment"; exit 1; \
-	fi
+# ==============================================================================
+# Code Quality
+# ==============================================================================
 
 test:
-	@echo "Running local test suite..."
-	@echo ""
-	@echo "Running unit tests..."
-	@uv run pytest code/tests/ -vv
+	uv run pytest code/tests/ -vv
 
 lint:
 	uv run ruff check .
@@ -57,20 +57,21 @@ format:
 typecheck:
 	uv run pyright
 
-check: lint typecheck test
+check: lint format typecheck test
 
-# Build single unified image
+# ==============================================================================
+# Deployment
+# ==============================================================================
+
 build:
 	$(call discover-azure-resources)
 	$(call validate-azure-resources)
-	@echo "Building Docker image..."
 	az acr build \
 		--registry $(ACR_LOGIN_SERVER) \
 		--image crawler:latest \
 		--file Dockerfile \
 		.
 
-# Deploy to AKS using Helm (upgrades crawler image only)
 deploy:
 	$(call discover-azure-resources)
 	$(call validate-azure-resources)
@@ -82,22 +83,18 @@ deploy:
 	@echo ""
 	@echo "Deployed to: https://$$(kubectl get gateway -n gateway nlweb-gateway -o jsonpath='{.status.addresses[0].value}' 2>/dev/null || echo '<gateway not found>')/crawler/"
 
-# Remove crawler from AKS
 down:
 	$(call discover-azure-resources)
 	$(call aks-login)
 	helm uninstall crawler
 
-port-forward:
-	kubectl port-forward -n crawler svc/crawler-master-service 5001:5001
+logs:
+	kubectl logs -n crawler -l app.kubernetes.io/instance=crawler -f
 
-logs-master:
-	kubectl logs -n crawler -l app=crawler-master -f
+# ==============================================================================
+# Setup
+# ==============================================================================
 
-logs-worker:
-	kubectl logs -n crawler -l app=crawler-worker -f
-
-# Pull secrets from Azure Key Vault to .env for local development
 init_environment:
 	$(call discover-azure-resources)
 	@echo "Pulling secrets from Azure Key Vault ($(KEYVAULT_NAME))..."

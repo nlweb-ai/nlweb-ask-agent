@@ -1,11 +1,13 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from "react";
 
 export interface AutoScrollRefs<T extends HTMLElement> {
   containerRef: React.RefObject<T>;
   anchorRef: React.RefObject<HTMLDivElement>;
 }
 
-export const useAutoScroll = <T extends HTMLElement>(dependency: any[]): AutoScrollRefs<T> => {
+export const useAutoScroll = <T extends HTMLElement>(
+  dependency: any[],
+): AutoScrollRefs<T> => {
   const containerRef = useRef<T>(null);
   const anchorRef = useRef<HTMLDivElement>(null);
   const shouldScrollRef = useRef(true);
@@ -14,12 +16,11 @@ export const useAutoScroll = <T extends HTMLElement>(dependency: any[]): AutoScr
   const scrollToAnchor = useCallback(() => {
     if (anchorRef.current) {
       anchorRef.current.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
+        behavior: "smooth",
+        block: "center",
       });
     }
   }, []);
-
 
   // Effect to manage auto-scrolling when dependency changes (e.g., new message)
   useEffect(() => {

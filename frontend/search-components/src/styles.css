@@ -1,4 +1,4 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 @import "tw-shimmer";
 
 /*
@@ -20,5 +20,5 @@
 }
 
 .editor-paragraph {
-  margin-bottom:  0px!important;
+  margin-bottom: 0px !important;
 }

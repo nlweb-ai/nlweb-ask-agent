@@ -1,21 +1,34 @@
-
-import {QueryResultSet} from '../lib/useHistory'
-import {BugAntIcon} from '@heroicons/react/24/solid'
-import {useState} from 'react';
-import {Dialog, DialogPanel, Button, Tab, TabGroup, TabList, TabPanel, TabPanels} from '@headlessui/react';
-import {clsx} from 'clsx';
-import { NLWebSearchParams, NLWebSearchState, UseNlWebConfig, V054Request, convertParamsToRequest } from '../lib/useNlWeb';
-
+import { QueryResultSet } from "../lib/useHistory";
+import { BugAntIcon } from "@heroicons/react/24/solid";
+import { useState } from "react";
+import {
+  Dialog,
+  DialogPanel,
+  Button,
+  Tab,
+  TabGroup,
+  TabList,
+  TabPanel,
+  TabPanels,
+} from "@headlessui/react";
+import { clsx } from "clsx";
+import {
+  NLWebSearchParams,
+  NLWebSearchState,
+  UseNlWebConfig,
+  V054Request,
+  convertParamsToRequest,
+} from "../lib/useNlWeb";
 
 interface NlWebTurn {
   request: V054Request;
-  response: object[]
+  response: object[];
 }
 
 function translateResultsToNlWebRequests(
   streamingState: NLWebSearchState,
   results: QueryResultSet[],
-  config: UseNlWebConfig
+  config: UseNlWebConfig,
 ): NlWebTurn[] {
   const turns: NlWebTurn[] = [];
 
@@ -26,16 +39,22 @@ function translateResultsToNlWebRequests(
     // Build the search params
     const params: NLWebSearchParams = {
       query: result.query,
-      conversationHistory: i > 0 ? results.slice(0, i).map(r => r.query) : undefined,
+      conversationHistory:
+        i > 0 ? results.slice(0, i).map((r) => r.query) : undefined,
     };
 
     // Convert to V054Request using the utility function
-    const request = convertParamsToRequest(params, config.site, config.numRetrievalResults,  config.maxResults);
+    const request = convertParamsToRequest(
+      params,
+      config.site,
+      config.numRetrievalResults,
+      config.maxResults,
+    );
 
     // Create the turn with the request and raw logs as response
     turns.push({
       request: request,
-      response: result.response.rawLogs || []
+      response: result.response.rawLogs || [],
     });
   }
 
@@ -44,24 +63,29 @@ function translateResultsToNlWebRequests(
     // Build the search params for the loading query
     const streamingParams: NLWebSearchParams = {
       query: streamingState.query,
-      conversationHistory: results.length > 0 ? results.map(r => r.query) : undefined,
+      conversationHistory:
+        results.length > 0 ? results.map((r) => r.query) : undefined,
     };
 
     // Convert to V054Request
-    const streamingRequest = convertParamsToRequest(streamingParams, config.site, config.numRetrievalResults, config.maxResults);
+    const streamingRequest = convertParamsToRequest(
+      streamingParams,
+      config.site,
+      config.numRetrievalResults,
+      config.maxResults,
+    );
 
     // Create the turn with the request and streaming raw logs as response
     turns.push({
       request: streamingRequest,
-      response: streamingState.rawLogs || []
+      response: streamingState.rawLogs || [],
     });
   }
 
   return turns;
 }
 
-
-function CodeBlock({code} : {code: string}) {
+function CodeBlock({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -70,7 +94,7 @@ function CodeBlock({code} : {code: string}) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy:', err);
+      console.error("Failed to copy:", err);
     }
   };
 
@@ -80,13 +104,11 @@ function CodeBlock({code} : {code: string}) {
         onClick={handleCopy}
         className="absolute top-0 right-0 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50 hover:border-gray-400 transition-colors"
       >
-        {copied ? 'Copied!' : 'Copy'}
+        {copied ? "Copied!" : "Copy"}
       </Button>
-      <pre className="overflow-auto text-gray-500 text-sm pr-20">
-        {code}
-      </pre>
+      <pre className="overflow-auto text-gray-500 text-sm pr-20">{code}</pre>
     </div>
-  )
+  );
 }
 
 function MessagesDialog({
@@ -111,15 +133,15 @@ function MessagesDialog({
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <DialogPanel className="flex flex-col bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[80vh] overflow-hidden flex flex-col">
           {/* Content with Tabs */}
-          <TabGroup className={'flex flex-col flex-1 overflow-hidden'}>
+          <TabGroup className={"flex flex-col flex-1 overflow-hidden"}>
             <TabList className="flex border-b bg-gray-50">
               <Tab
-                className={({selected}) =>
+                className={({ selected }) =>
                   clsx(
-                    'px-6 py-3 text-sm font-medium outline-none transition-colors',
+                    "px-6 py-3 text-sm font-medium outline-none transition-colors",
                     selected
-                      ? 'border-b-2 border-gray-900 text-gray-900'
-                      : 'text-gray-500 hover:text-gray-700'
+                      ? "border-b-2 border-gray-900 text-gray-900"
+                      : "text-gray-500 hover:text-gray-700",
                   )
                 }
               >
@@ -129,7 +151,17 @@ function MessagesDialog({
 
             <TabPanels className="flex-1 overflow-y-auto">
               <TabPanel className="p-6">
-                <CodeBlock code={JSON.stringify(translateResultsToNlWebRequests(streamingState, searches, config), null, 2)}/>
+                <CodeBlock
+                  code={JSON.stringify(
+                    translateResultsToNlWebRequests(
+                      streamingState,
+                      searches,
+                      config,
+                    ),
+                    null,
+                    2,
+                  )}
+                />
               </TabPanel>
             </TabPanels>
           </TabGroup>
@@ -139,15 +171,23 @@ function MessagesDialog({
   );
 }
 
-export function DebugTool({searches, streamingState, config} : {searches: QueryResultSet[]; streamingState: NLWebSearchState; config: UseNlWebConfig}) {
+export function DebugTool({
+  searches,
+  streamingState,
+  config,
+}: {
+  searches: QueryResultSet[];
+  streamingState: NLWebSearchState;
+  config: UseNlWebConfig;
+}) {
   const [messagesOpen, setMessagesOpen] = useState(false);
   return (
     <>
       <Button
         onClick={() => setMessagesOpen(true)}
-        className='flex bg-white items-center gap-2 ml-auto text-gray-600 hover:bg-gray-100 p-3 py-2 rounded-md text-sm'
+        className="flex bg-white items-center gap-2 ml-auto text-gray-600 hover:bg-gray-100 p-3 py-2 rounded-md text-sm"
       >
-        <BugAntIcon className='size-4 text-gray-500'/>
+        <BugAntIcon className="size-4 text-gray-500" />
         JSON
       </Button>
       <MessagesDialog
@@ -158,5 +198,5 @@ export function DebugTool({searches, streamingState, config} : {searches: QueryR
         config={config}
       />
     </>
-  )
+  );
 }

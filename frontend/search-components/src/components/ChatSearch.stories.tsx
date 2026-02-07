@@ -1,21 +1,24 @@
-import type { Meta, StoryObj } from '@storybook/react';
-import { ChatSearch } from './ChatSearch';
-import { HistorySidebar } from './HistorySidebar'
-import { DebugTool } from './DebugTools'
-import {SiteDropdown, type Site} from "./SiteDropdown"
-import {useState} from 'react';
-import {SearchSession,
-useSearchSessions, useSearchSession, QueryResultSet} from '../lib/useHistory';
-import {useNlWeb} from '../lib/useNlWeb';
+import type { Meta, StoryObj } from "@storybook/react";
+import { ChatSearch } from "./ChatSearch";
+import { HistorySidebar } from "./HistorySidebar";
+import { DebugTool } from "./DebugTools";
+import { SiteDropdown, type Site } from "./SiteDropdown";
+import { useState } from "react";
+import {
+  SearchSession,
+  useSearchSessions,
+  useSearchSession,
+  QueryResultSet,
+} from "../lib/useHistory";
+import { useNlWeb } from "../lib/useNlWeb";
 
-const SITES:Site[] = [
-  {url: 'yoast-site-recipes.azurewebsites.net', featured: true},
-  {url: 'yoast-site-rss.azurewebsites.net', featured: true},
-  {url: 'imdb.com', featured: true},
-  {url: 'aajtak.in'}
-]
+const SITES: Site[] = [
+  { url: "yoast-site-recipes.azurewebsites.net", featured: true },
+  { url: "yoast-site-rss.azurewebsites.net", featured: true },
+  { url: "imdb.com", featured: true },
+  { url: "aajtak.in" },
+];
 const PROD_ENDPOINT = "https://internal-testing.nlweb.ai/ask";
-
 
 /**
  * ChatSearch provides an interactive conversational search experience with AI-powered summaries.
@@ -28,14 +31,14 @@ const PROD_ENDPOINT = "https://internal-testing.nlweb.ai/ask";
  * - Streaming results as they load
  */
 const meta: Meta<typeof ChatSearch> = {
-  title: 'Components/ChatSearch',
+  title: "Components/ChatSearch",
   component: ChatSearch,
 
   parameters: {
-    layout: 'fullscreen',
+    layout: "fullscreen",
   },
-  tags: ['autodocs'],
-}
+  tags: ["autodocs"],
+};
 
 export default meta;
 type Story = StoryObj<typeof ChatSearch>;
@@ -57,8 +60,8 @@ export const Default: Story = {
       endpoint: PROD_ENDPOINT,
       site: site.url,
       maxResults: 9,
-      numRetrievalResults: 50
-    }
+      numRetrievalResults: 50,
+    };
     const nlweb = useNlWeb(config);
     return (
       <div className="p-8 max-w-2xl mx-auto">
@@ -67,26 +70,40 @@ export const Default: Story = {
           searches={searches}
           startSession={() => setSearches([])}
           endSession={() => setSearches([])}
-          addSearch={r => setSearches(curr => [...curr, r])}
+          addSearch={(r) => setSearches((curr) => [...curr, r])}
           addResults={async (id, r) => {
-            setSearches(curr => curr.map((c, i) => `${i}` == id ? ({...c, response: {...c.response, results: [...c.response.results, ...r]}}) : c))
+            setSearches((curr) =>
+              curr.map((c, i) =>
+                `${i}` == id
+                  ? {
+                      ...c,
+                      response: {
+                        ...c.response,
+                        results: [...c.response.results, ...r],
+                      },
+                    }
+                  : c,
+              ),
+            );
           }}
           config={config}
           nlweb={nlweb}
         />
-        <SiteDropdown 
-          sites={SITES} 
-          selected={site} 
-          onSelect={url => setSite(SITES.find(s => s.url == url) || ({
-            url: url || ''
-          }))}
+        <SiteDropdown
+          sites={SITES}
+          selected={site}
+          onSelect={(url) =>
+            setSite(
+              SITES.find((s) => s.url == url) || {
+                url: url || "",
+              },
+            )
+          }
         />
       </div>
-    )
-  }
+    );
+  },
 };
-
-
 
 /**
  * ChatSearch with debug tools
@@ -99,33 +116,48 @@ export const Default: Story = {
  */
 export const WithDebugTools: Story = {
   render: (args) => {
-    const [searches, setSearches] = useState<QueryResultSet[]>([])
+    const [searches, setSearches] = useState<QueryResultSet[]>([]);
     const [site, setSite] = useState<Site>(SITES[0]);
     const config = {
       endpoint: PROD_ENDPOINT,
       site: site.url,
       maxResults: 9,
-      numRetrievalResults: 50
-    }
+      numRetrievalResults: 50,
+    };
     const nlweb = useNlWeb(config);
     return (
       <div className="p-8 max-w-2xl mx-auto">
         <h1 className="text-2xl font-bold mb-4">Recipe Search + Debugger</h1>
-        <div className='text-sm mb-3 text-gray-500'>
-          Use the debugger to see raw backend responses, and data that is dropped.
+        <div className="text-sm mb-3 text-gray-500">
+          Use the debugger to see raw backend responses, and data that is
+          dropped.
         </div>
         <ChatSearch
           startSession={() => setSearches([])}
           endSession={() => setSearches([])}
           searches={searches}
-          addSearch={r => setSearches(curr => [...curr, {...r, id: `${searches.length}`}])}
+          addSearch={(r) =>
+            setSearches((curr) => [...curr, { ...r, id: `${searches.length}` }])
+          }
           addResults={async (id, r) => {
-            setSearches(curr => curr.map((c, i) => `${i}` == id ? ({...c, response: {...c.response, results: [...c.response.results, ...r]}}) : c))
+            setSearches((curr) =>
+              curr.map((c, i) =>
+                `${i}` == id
+                  ? {
+                      ...c,
+                      response: {
+                        ...c.response,
+                        results: [...c.response.results, ...r],
+                      },
+                    }
+                  : c,
+              ),
+            );
           }}
           config={config}
           nlweb={nlweb}
         >
-          <div className='fixed left-4 top-12 z-50'>
+          <div className="fixed left-4 top-12 z-50">
             <DebugTool
               streamingState={nlweb}
               searches={searches}
@@ -133,19 +165,21 @@ export const WithDebugTools: Story = {
             />
           </div>
         </ChatSearch>
-        <SiteDropdown 
-          sites={SITES} 
-          selected={site} 
-          onSelect={url => setSite(SITES.find(s => s.url == url) || ({
-            url: url || ''
-          }))}
+        <SiteDropdown
+          sites={SITES}
+          selected={site}
+          onSelect={(url) =>
+            setSite(
+              SITES.find((s) => s.url == url) || {
+                url: url || "",
+              },
+            )
+          }
         />
       </div>
-    )
-  }
+    );
+  },
 };
-
-
 
 /**
  * Search History Powered Chat Search
@@ -164,19 +198,23 @@ export const WithSearchHistory: Story = {
       endpoint: PROD_ENDPOINT,
       site: site.url,
       maxResults: 9,
-      numRetrievalResults: 50
-    }
+      numRetrievalResults: 50,
+    };
     const nlweb = useNlWeb(nlwebConfig);
     const localSessions = useSearchSessions();
     const [sessionId, setSessionId] = useState<string>(crypto.randomUUID());
-    const {searches, addSearch, addResults} = useSearchSession(sessionId);
+    const { searches, addSearch, addResults } = useSearchSession(sessionId);
     async function startSearch(query: string) {
       nlweb.clearResults();
-      const newId = localSessions.sessions.some(s => s.sessionId === sessionId) ? crypto.randomUUID() : sessionId ;
+      const newId = localSessions.sessions.some(
+        (s) => s.sessionId === sessionId,
+      )
+        ? crypto.randomUUID()
+        : sessionId;
       await localSessions.startSession(newId, query, {
         site: site.url,
-        endpoint: PROD_ENDPOINT
-      })
+        endpoint: PROD_ENDPOINT,
+      });
       setSessionId(newId);
       return newId;
     }
@@ -189,9 +227,11 @@ export const WithSearchHistory: Story = {
       nlweb.clearResults();
       nlweb.cancelSearch();
       setSessionId(session.sessionId);
-      setSite(SITES.find(s => s.url == session.backend.site) || {
-        url: session.backend.site
-      });
+      setSite(
+        SITES.find((s) => s.url == session.backend.site) || {
+          url: session.backend.site,
+        },
+      );
     }
     return (
       <div className="h-screen flex items-stretch">
@@ -201,9 +241,8 @@ export const WithSearchHistory: Story = {
           onDelete={localSessions.deleteSession}
           onCreate={endSearch}
         />
-        <div className='p-8 flex-1'>
-          <div className='max-w-3xl mx-auto'>
-
+        <div className="p-8 flex-1">
+          <div className="max-w-3xl mx-auto">
             <ChatSearch
               sessionId={sessionId}
               startSession={startSearch}
@@ -213,27 +252,30 @@ export const WithSearchHistory: Story = {
               addResults={addResults}
               config={nlwebConfig}
               nlweb={nlweb}
-              sidebar={<HistorySidebar
-                selected={sessionId}
-                sessions={localSessions.sessions}
-                onSelect={selectSession}
-                onDelete={localSessions.deleteSession}
-                onCreate={endSearch}
-              />}
-            >
-        
-            </ChatSearch>
-            <SiteDropdown 
-              sites={SITES} 
-              selected={site} 
-              onSelect={url => setSite(SITES.find(s => s.url == url) || ({
-                url: url || ''
-              }))}
+              sidebar={
+                <HistorySidebar
+                  selected={sessionId}
+                  sessions={localSessions.sessions}
+                  onSelect={selectSession}
+                  onDelete={localSessions.deleteSession}
+                  onCreate={endSearch}
+                />
+              }
+            ></ChatSearch>
+            <SiteDropdown
+              sites={SITES}
+              selected={site}
+              onSelect={(url) =>
+                setSite(
+                  SITES.find((s) => s.url == url) || {
+                    url: url || "",
+                  },
+                )
+              }
             />
           </div>
         </div>
       </div>
-    )
-  }
+    );
+  },
 } satisfies Story;
-

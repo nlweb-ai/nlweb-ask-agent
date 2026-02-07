@@ -1,28 +1,67 @@
 # Frontend Makefile
 # For AKS deployment, uses environment-based resource discovery
-
 include ../common.mk
 
-.PHONY: help dev build deploy down port-forward logs
+.DEFAULT_GOAL := help
+
+.PHONY: help dev test lint format typecheck check build deploy down logs init_environment
+
+# ==============================================================================
+# Help
+# ==============================================================================
 
 help:
-	@echo "Makefile commands:"
-	@echo "  make dev              # Run local development server"
-	@echo "  make build            # Build Docker image to ACR"
-	@echo "  make deploy           # Deploy to AKS using Helm"
-	@echo "  make down             # Remove chat-app from AKS"
-	@echo "  make port-forward     # Forward localhost:3000 to chat-app-service"
-	@echo "  make logs             # Stream pod logs"
+	@echo "Frontend"
 	@echo ""
-	@echo "Environment options:"
-	@echo "  ENV_NAME=<name>       # Target environment (default: $(ENV_NAME))"
+	@echo "Development:"
+	@echo "  make dev              Run locally with Docker Compose"
+	@echo "  make test             Run test suite"
+	@echo "  make lint             Run linter"
+	@echo "  make format           Format code"
+	@echo "  make typecheck        Run type checker"
+	@echo "  make check            Run all checks (lint, format, typecheck, test)"
+	@echo ""
+	@echo "Deployment:"
+	@echo "  make build            Build Docker image to ACR"
+	@echo "  make deploy           Deploy to AKS"
+	@echo "  make down             Uninstall from AKS"
+	@echo "  make logs             Tail AKS pod logs"
+	@echo ""
+	@echo "Setup:"
+	@echo "  make init_environment Generate .env from Azure Key Vault"
+	@echo ""
+	@echo "Options:"
+	@echo "  ENV_NAME=<name>       Azure environment (default: $(ENV_NAME))"
+
+# ==============================================================================
+# Development
+# ==============================================================================
 
 dev:
-	pnpm install
-	pnpm --filter @nlweb-ai/search-components build
-	VITE_ASK_API_URL=https://internal-testing.nlweb.ai pnpm --filter @nlweb-ai/chat-app dev
+	docker compose -f ../docker-compose.yml up --build chat-app
 
-# Build Docker image to ACR (context is frontend/ for workspace access)
+# ==============================================================================
+# Code Quality
+# ==============================================================================
+
+test:
+	@echo "No tests configured."
+
+lint:
+	pnpm -r lint
+
+format:
+	pnpm -r format
+
+typecheck:
+	pnpm -r typecheck
+
+check: lint format typecheck test
+
+# ==============================================================================
+# Deployment
+# ==============================================================================
+
 build:
 	$(call discover-azure-resources)
 	$(call validate-azure-resources)
@@ -31,7 +70,6 @@ build:
 		--image chat-app:latest \
 		.
 
-# Deploy to AKS using Helm (upgrades chat-app image only)
 deploy:
 	$(call discover-azure-resources)
 	$(call validate-azure-resources)
@@ -43,14 +81,17 @@ deploy:
 	@echo ""
 	@echo "Deployed to: https://$$(kubectl get gateway -n gateway nlweb-gateway -o jsonpath='{.status.addresses[0].value}' 2>/dev/null || echo '<gateway not found>')/"
 
-# Remove chat-app from AKS
 down:
 	$(call discover-azure-resources)
 	$(call aks-login)
 	helm uninstall chat-app
 
-port-forward:
-	kubectl port-forward -n chat-app svc/chat-app-service 3000:3000
-
 logs:
 	kubectl logs -n chat-app -l app=chat-app -f
+
+# ==============================================================================
+# Setup
+# ==============================================================================
+
+init_environment:
+	@echo "No .env required for frontend."

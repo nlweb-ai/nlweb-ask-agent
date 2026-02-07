@@ -13,22 +13,24 @@ export function abridgedCount(n: number): string {
   if (n < 1000) {
     return n.toString();
   }
-  
+
   if (n < 1_000_000) {
     const divided = n / 1000;
-    const formatted = divided % 1 === 0 ? divided.toString() : divided.toFixed(1);
-    return formatted + 'K';
+    const formatted =
+      divided % 1 === 0 ? divided.toString() : divided.toFixed(1);
+    return formatted + "K";
   }
-  
+
   if (n < 1_000_000_000) {
     const divided = n / 1_000_000;
-    const formatted = divided % 1 === 0 ? divided.toString() : divided.toFixed(1);
-    return formatted + 'M';
+    const formatted =
+      divided % 1 === 0 ? divided.toString() : divided.toFixed(1);
+    return formatted + "M";
   }
-  
+
   const divided = n / 1_000_000_000;
   const formatted = divided % 1 === 0 ? divided.toString() : divided.toFixed(1);
-  return formatted + 'B';
+  return formatted + "B";
 }
 
 /**
@@ -39,7 +41,7 @@ export function magnitude(n: number): number {
   return Math.floor(Math.log10(Math.abs(n)));
 }
 
-/** 
+/**
  * Picks only truthy values from an array.
  */
 export function filterTruthy<T>(arr: (T | null | undefined | false)[]): T[] {
@@ -53,14 +55,14 @@ export function intersperse<T>(arr: T[], sep: T): T[] {
 
 export function shortQuantity(value: string | number): string {
   const parsed = tryParseNumber(value);
-  return typeof parsed === 'number' && !isNaN(parsed) ?
-    abridgedCount(parsed) :
-    String(value);
+  return typeof parsed === "number" && !isNaN(parsed)
+    ? abridgedCount(parsed)
+    : String(value);
 }
 
 function tryParseNumber(value: string | number): string | number {
   try {
-    return typeof value === 'string' ? parseFloat(value) : value;
+    return typeof value === "string" ? parseFloat(value) : value;
   } catch {
     // Should not happen given type of `value`, but just in case.
     return value;
