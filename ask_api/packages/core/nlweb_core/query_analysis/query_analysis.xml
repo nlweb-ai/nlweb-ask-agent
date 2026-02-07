@@ -38,6 +38,43 @@
       </promptString>
     </QueryAnalysis>
 
+    <QueryAnalysis ref="NoContextTransliteratorWithRecency" enabled="true" responseModel="DecontextualizationWithRecencyResponse">
+      <method>defaultQueryAnalysisHandler</method>
+      <promptString>
+        The user is querying the site {request.site}.
+
+        IMPORTANT: Convert the query to English. Translate Hindi/Devanagari queries to English.
+        - If the query is in Devanagari (Hindi script), translate it to English
+        - If the query is in Hinglish (romanized Hindi), translate it to English
+        - If the query is already in English, keep it as is
+        - Keep proper nouns (names of people, places, trains, missions, campaigns) in their standard romanized form - do NOT translate them
+
+        Examples:
+        - "ट्रम्प ने मोदी की तारीफ की" → "Trump praised Modi"
+        - "निर्मला सीतारमण" → "Nirmala Sitharaman"
+        - "वंदे भारत ट्रेन" → "Vande Bharat train"
+        - "स्वच्छ भारत मिशन" → "Swachh Bharat mission"
+        - "mumbai mein barish" → "rain in Mumbai"
+        - "nirmala sitharaman budget" → "Nirmala Sitharaman budget" (keep as is)
+        - "swachh bharat" → "Swachh Bharat" (keep as is - mission name)
+
+        The user's query is: {request.rawQuery}.
+
+        ADDITIONAL TASK - Classify if the query is seeking RECENT/ONGOING information:
+        This is a NEWS SITE. Determine if the user wants recent news about a topic vs asking about a specific past event.
+
+        Set is_seeking_recent_info = TRUE if:
+        - Query is about a general entity/topic/person (e.g., "Modi", "Trump", "weather in Delhi", "stock market")
+        - User wants latest updates, current news, or ongoing developments
+        - Query is open-ended without specific event details
+
+        Set is_seeking_recent_info = FALSE if:
+        - Query is about a SPECIFIC completed event with details (e.g., "Trump wins 2024 presidential election", "Modi's 2023 US visit", "India's victory in 2023 World Cup")
+        - Query contains specific dates, years, or completed event descriptions
+        - User is asking about historical facts or past incidents
+      </promptString>
+    </QueryAnalysis>
+
     <QueryAnalysis ref="PrevQueryDecontextualizer" enabled="true" responseModel="DecontextualizationResponse">
       <method>defaultQueryAnalysisHandler</method>
       <promptString>
@@ -127,6 +164,52 @@
       </promptString>
     </QueryAnalysis>
 
+    <QueryAnalysis ref="PrevQueryDecontextualizerHindiWithRecency" enabled="true" responseModel="DecontextualizationWithRecencyResponse">
+      <method>defaultQueryAnalysisHandler</method>
+      <promptString>
+        The user is querying a Hindi news site that uses Hindi content.
+
+        IMPORTANT: Output the decontextualized query in English. Translate Hindi/Devanagari to English.
+        - If the query is in Devanagari (Hindi script), translate it to English
+        - If the query is in Hinglish (romanized Hindi), translate it to English
+        - Keep proper nouns (names of people, places, trains, missions, campaigns) in their standard romanized form - do NOT translate them
+
+        Examples:
+        - "ट्रम्प ने मोदी की तारीफ की" → "Trump praised Modi"
+        - "निर्मला सीतारमण" → "Nirmala Sitharaman"
+        - "वंदे भारत ट्रेन" → "Vande Bharat train"
+        - "स्वच्छ भारत मिशन" → "Swachh Bharat mission"
+        - "mumbai mein barish" → "rain in Mumbai"
+        - "nirmala sitharaman budget" → "Nirmala Sitharaman budget" (keep as is)
+        - "swachh bharat" → "Swachh Bharat" (keep as is - mission name)
+
+        Rewrite the query, incorporating the context of the previous queries and answers.
+        Keep the decontextualized query short and do not reference the site.
+
+        If the query very clearly does not reference earlier queries,
+        don't change the query. Err on the side of incorporating the context of the
+        previous queries. If you are not sure whether this is a brand new query,
+        or follow up, it is likely a follow up. Try your best to incorporate the
+        context from the previous queries.
+
+        The user's query is: {request.rawQuery}.
+        Previous queries were: {request.previousQueries}.
+
+        ADDITIONAL TASK - Classify if the decontextualized query is seeking RECENT/ONGOING information:
+        This is a NEWS SITE. Determine if the user wants recent news about a topic vs asking about a specific past event.
+
+        Set is_seeking_recent_info = TRUE if:
+        - Query is about a general entity/topic/person (e.g., "Modi", "Trump", "weather in Delhi", "stock market")
+        - User wants latest updates, current news, or ongoing developments
+        - Query is open-ended without specific event details
+
+        Set is_seeking_recent_info = FALSE if:
+        - Query is about a SPECIFIC completed event with details (e.g., "Trump wins 2024 presidential election", "Modi's 2023 US visit", "India's victory in 2023 World Cup")
+        - Query contains specific dates, years, or completed event descriptions
+        - User is asking about historical facts or past incidents
+      </promptString>
+    </QueryAnalysis>
+
     <QueryAnalysis ref="FullContextDecontextualizerHindi" enabled="true" responseModel="DecontextualizationResponse">
       <method>defaultQueryAnalysisHandler</method>
       <promptString>
@@ -157,6 +240,52 @@
         The user's query is: {request.rawQuery}.
         Previous queries were: {request.previousQueries}
         Previous context is: {request.context}.
+      </promptString>
+    </QueryAnalysis>
+
+    <QueryAnalysis ref="FullContextDecontextualizerHindiWithRecency" enabled="true" responseModel="DecontextualizationWithRecencyResponse">
+      <method>defaultQueryAnalysisHandler</method>
+      <promptString>
+        The user is querying a Hindi news site that uses Hindi content.
+
+        IMPORTANT: Output the decontextualized query in English. Translate Hindi/Devanagari to English.
+        - If the query is in Devanagari (Hindi script), translate it to English
+        - If the query is in Hinglish (romanized Hindi), translate it to English
+        - Keep proper nouns (names of people, places, trains, missions, campaigns) in their standard romanized form - do NOT translate them
+
+        Examples:
+        - "ट्रम्प ने मोदी की तारीफ की" → "Trump praised Modi"
+        - "निर्मला सीतारमण" → "Nirmala Sitharaman"
+        - "वंदे भारत ट्रेन" → "Vande Bharat train"
+        - "स्वच्छ भारत मिशन" → "Swachh Bharat mission"
+        - "mumbai mein barish" → "rain in Mumbai"
+        - "nirmala sitharaman budget" → "Nirmala Sitharaman budget" (keep as is)
+        - "swachh bharat" → "Swachh Bharat" (keep as is - mission name)
+
+        Rewrite the query, incorporating the context and previous queries.
+        Keep the decontextualized query short and do not reference the site.
+
+        If the query very clearly does not reference earlier queries,
+        don't change the query. Err on the side of incorporating the context. If you are not sure whether this is a brand new query,
+        or follow up, it is likely a follow up. Try your best to incorporate the
+        context from the previous queries.
+
+        The user's query is: {request.rawQuery}.
+        Previous queries were: {request.previousQueries}
+        Previous context is: {request.context}.
+
+        ADDITIONAL TASK - Classify if the decontextualized query is seeking RECENT/ONGOING information:
+        This is a NEWS SITE. Determine if the user wants recent news about a topic vs asking about a specific past event.
+
+        Set is_seeking_recent_info = TRUE if:
+        - Query is about a general entity/topic/person (e.g., "Modi", "Trump", "weather in Delhi", "stock market")
+        - User wants latest updates, current news, or ongoing developments
+        - Query is open-ended without specific event details
+
+        Set is_seeking_recent_info = FALSE if:
+        - Query is about a SPECIFIC completed event with details (e.g., "Trump wins 2024 presidential election", "Modi's 2023 US visit", "India's victory in 2023 World Cup")
+        - Query contains specific dates, years, or completed event descriptions
+        - User is asking about historical facts or past incidents
       </promptString>
     </QueryAnalysis>
 

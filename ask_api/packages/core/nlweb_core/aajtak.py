@@ -26,6 +26,7 @@ class AajtakAskHandler(AskHandler):
     """Handler for aajtak.in with Hindi/Hinglish transliteration support."""
 
     request_id: str
+    is_seeking_recent_info: bool = False
 
     def __init__(self, **kwargs) -> None:
         """Initialize the handler with a unique request ID."""
@@ -85,7 +86,16 @@ class AajtakAskHandler(AskHandler):
         output_method: OutputMethod,
         site_config: dict[str, str],
     ) -> list[dict]:
-        """Execute the query body with dual-query strategy for fresh + regular results."""
+        """
+        Execute the query body with dual-query strategy.
+
+        Process (SAME for both query types):
+        1. Retrieve fresh (≤5 days) + regular results in parallel
+        2. Merge and deduplicate
+        3. Enrich with object storage
+        4. Rank all together with LLM scorer and apply threshold
+        5. If seeking recent info: reorder into fresh-first bins (maintaining score order within bins)
+        """
         from nlweb_core.ranking import Ranking
         from nlweb_core.retriever import enrich_results_from_object_storage
 
@@ -117,6 +127,7 @@ class AajtakAskHandler(AskHandler):
                 date_filter=date_filter,
             ),
         )
+
         # Merge: deduplicate by URL, prioritize fresh items at top
         retrieved_items = self._merge_results(fresh_items, regular_items)
         logger.info(
@@ -129,14 +140,26 @@ class AajtakAskHandler(AskHandler):
                 retrieved_items, object_lookup_client
             )
 
+        # Rank all results together with LLM scorer and apply threshold
         with override_scoring_provider("default", "4.1-mini"):
             final_ranked_answers = await Ranking().rank(
                 items=retrieved_items,
                 query_text=request.query.effective_query,
                 item_type=site_config["item_type"],
-                max_results=request.query.num_results,
+                max_results=request.query.max_results,
                 min_score=request.query.min_score,
                 site=request.query.site,
+            )
+
+        # If seeking recent info, reorder into fresh-first bins (fresh ≤5 days, old >5 days)
+        if self.is_seeking_recent_info:
+            logger.info(
+                f"Query classified as seeking recent info - reordering results with fresh items first"
+            )
+            final_ranked_answers = self._reorder_by_recency(final_ranked_answers, five_days_ago)
+        else:
+            logger.info(
+                f"Query classified as about specific event - returning results sorted by relevance only"
             )
 
         await self._send_results(output_method, final_ranked_answers)
@@ -164,14 +187,66 @@ class AajtakAskHandler(AskHandler):
 
         return merged
 
+    def _reorder_by_recency(self, results: list[dict], cutoff_date: datetime) -> list[dict]:
+        """
+        Reorder results into two bins: fresh (≤5 days) first, then old (>5 days).
+        Within each bin, maintain score-based ordering from ranking.
+
+        Args:
+            results: Scored and filtered results sorted by relevance
+            cutoff_date: Datetime cutoff for "fresh" (5 days ago)
+
+        Returns:
+            Reordered results with fresh items first, old items second
+        """
+        from email.utils import parsedate_to_datetime
+
+        fresh_bin = []
+        old_bin = []
+
+        for result in results:
+            date_published_str = result.get("datePublished")
+            if date_published_str:
+                try:
+                    # Try RFC 2822 format first (e.g., "Wed, 04 Feb 2026 23:14:46 +0530")
+                    date_published = parsedate_to_datetime(date_published_str)
+                except (ValueError, TypeError):
+                    try:
+                        # Fallback to ISO format (e.g., "2026-02-04T23:14:46+05:30")
+                        date_published = datetime.fromisoformat(date_published_str.replace('Z', '+00:00'))
+                    except (ValueError, AttributeError) as e:
+                        logger.warning(f"Failed to parse datePublished '{date_published_str}': {e}")
+                        # If parsing fails, put in old bin
+                        old_bin.append(result)
+                        continue
+
+                # Ensure timezone-aware comparison
+                if date_published.tzinfo is None:
+                    date_published = date_published.replace(tzinfo=timezone.utc)
+
+                if date_published >= cutoff_date:
+                    fresh_bin.append(result)
+                else:
+                    old_bin.append(result)
+            else:
+                # No date, put in old bin
+                old_bin.append(result)
+
+        logger.info(
+            f"Recency reordering: {len(fresh_bin)} fresh (≤5 days) + {len(old_bin)} old (>5 days) = {len(results)} total"
+        )
+
+        return fresh_bin + old_bin
+
     async def _decontextualize_query(
         self,
         request: AskRequest,
         site_config: dict[str, str],
     ) -> str | None:
         """
-        Decontextualize query for Hindi sites with Hinglish transliteration.
-        Uses Hindi-specific prompts that handle romanized Hindi (Hinglish) conversion.
+        Decontextualize query for Hindi sites with Hinglish transliteration and recency classification.
+        Uses Hindi-specific prompts that handle romanized Hindi (Hinglish) conversion and classify
+        whether the query is seeking recent information.
 
         Args:
             request: The ask request containing query and context.
@@ -179,38 +254,50 @@ class AajtakAskHandler(AskHandler):
 
         Returns:
             The decontextualized query string (transliterated if needed), or None if no context.
+
+        Side Effects:
+            Sets self.is_seeking_recent_info based on the LLM classification.
         """
         context = request.context
         prev_queries = (context.prev or []) if context else []
         context_text = context.text if context else None
 
         if not prev_queries and context_text is None:
-            # No context - just transliterate
+            # No context - transliterate with recency classification
             result = await DefaultQueryAnalysisHandler(
                 request,
-                prompt_ref="NoContextTransliterator",
+                prompt_ref="NoContextTransliteratorWithRecency",
                 root_node=query_analysis_tree,
                 site_config=site_config,
             ).do()
-            return result.get("transliterated_query") if result else None
+            if result:
+                self.is_seeking_recent_info = result.get("is_seeking_recent_info", False)
+                return result.get("decontextualized_query")
+            return None
         elif prev_queries and context_text is None:
-            # Decontextualize with prev queries + transliteration
+            # Decontextualize with prev queries + transliteration + recency classification
             result = await DefaultQueryAnalysisHandler(
                 request,
-                prompt_ref="PrevQueryDecontextualizerHindi",
+                prompt_ref="PrevQueryDecontextualizerHindiWithRecency",
                 root_node=query_analysis_tree,
                 site_config=site_config,
             ).do()
-            return result.get("decontextualized_query") if result else None
+            if result:
+                self.is_seeking_recent_info = result.get("is_seeking_recent_info", False)
+                return result.get("decontextualized_query")
+            return None
         else:
-            # Decontextualize with full context + transliteration
+            # Decontextualize with full context + transliteration + recency classification
             result = await DefaultQueryAnalysisHandler(
                 request,
-                prompt_ref="FullContextDecontextualizerHindi",
+                prompt_ref="FullContextDecontextualizerHindiWithRecency",
                 root_node=query_analysis_tree,
                 site_config=site_config,
             ).do()
-            return result.get("decontextualized_query") if result else None
+            if result:
+                self.is_seeking_recent_info = result.get("is_seeking_recent_info", False)
+                return result.get("decontextualized_query")
+            return None
 
     async def _check_elicitation(self, request: AskRequest) -> dict | None:
         """

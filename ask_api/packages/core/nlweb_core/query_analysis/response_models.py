@@ -46,6 +46,21 @@ class DecontextualizationResponse(BaseModel):
     )
 
 
+class DecontextualizationWithRecencyResponse(BaseModel):
+    """Response for query decontextualization with recency classification for news sites."""
+
+    requires_decontextualization: bool = Field(
+        ..., description="True if the query needs decontextualization"
+    )
+    decontextualized_query: str = Field(
+        ..., description="The rewritten query with context incorporated"
+    )
+    is_seeking_recent_info: bool = Field(
+        ...,
+        description="True if the query is seeking recent/ongoing information about a general topic (e.g., 'Modi', 'Trump', 'weather'). False if asking about a specific completed event (e.g., 'Trump wins 2024 election', 'Modi's 2023 US visit')."
+    )
+
+
 class MemoryRequestResponse(BaseModel):
     """Response for detecting memory/remember requests."""
 
@@ -95,6 +110,7 @@ RESPONSE_MODEL_REGISTRY: Dict[str, Type[BaseModel]] = {
     "IrrelevantQueryResponse": IrrelevantQueryResponse,
     "TransliterationResponse": TransliterationResponse,
     "DecontextualizationResponse": DecontextualizationResponse,
+    "DecontextualizationWithRecencyResponse": DecontextualizationWithRecencyResponse,
     "MemoryRequestResponse": MemoryRequestResponse,
     "QueryRewriteResponse": QueryRewriteResponse,
     "ItemTypesResponse": ItemTypesResponse,
