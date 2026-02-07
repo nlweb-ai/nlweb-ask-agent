@@ -36,7 +36,7 @@ echo "=== Building chat-app image ==="
 az acr build \
     --registry "$ACR_NAME" \
     --image chat-app:latest \
-    --file "$REPO_ROOT/frontend/chat-app/Dockerfile" \
+    --file "$REPO_ROOT/frontend/Dockerfile" \
     "$REPO_ROOT/frontend"
 
 echo ""

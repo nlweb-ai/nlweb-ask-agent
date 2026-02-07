@@ -29,7 +29,6 @@ build:
 	az acr build \
 		--registry $(ACR_LOGIN_SERVER) \
 		--image chat-app:latest \
-		--file chat-app/Dockerfile \
 		.
 
 # Deploy to AKS using Helm (upgrades chat-app image only)
