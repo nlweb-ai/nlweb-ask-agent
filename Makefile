@@ -4,7 +4,7 @@ include common.mk
 
 .DEFAULT_GOAL := help
 
-.PHONY: help init_environment ask fullstack down logs check
+.PHONY: help init_environment ask fullstack check build-all deploy-all
 
 help:
 	@echo "NLWeb Ask Agent"
@@ -15,9 +15,11 @@ help:
 	@echo "Development:"
 	@echo "  make ask              Start ask-api (Docker) + chat-app (native)"
 	@echo "  make fullstack        Start all services in Docker"
-	@echo "  make down             Stop Docker services"
-	@echo "  make logs             Tail logs from Docker services"
 	@echo "  make check            Run all checks across all modules"
+	@echo ""
+	@echo "Deployment:"
+	@echo "  make build-all        Build all Docker images to ACR"
+	@echo "  make deploy-all       Deploy all services to AKS"
 	@echo ""
 	@echo "Options:"
 	@echo "  ENV_NAME=<name>       Azure environment (default: $(ENV_NAME))"
@@ -43,13 +45,17 @@ ask:
 fullstack:
 	docker-compose -f docker-compose.yml up --build
 
-down:
-	docker-compose -f docker-compose.yml down
-
-logs:
-	docker-compose -f docker-compose.yml logs -f
-
 check:
 	cd ask_api && $(MAKE) check
 	cd frontend && $(MAKE) check
 	cd crawler && $(MAKE) check
+
+build-all:
+	cd ask_api && $(MAKE) build
+	cd frontend && $(MAKE) build
+	cd crawler && $(MAKE) build
+
+deploy-all:
+	cd ask_api && $(MAKE) deploy
+	cd frontend && $(MAKE) deploy
+	cd crawler && $(MAKE) deploy
