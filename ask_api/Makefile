@@ -2,44 +2,54 @@
 # For AKS deployment, uses environment-based resource discovery
 include ../common.mk
 
-.PHONY: dev build deploy down port-forward logs test lint format typecheck check init_environment build-llm-scoring deploy-llm-scoring down-llm-scoring logs-llm-scoring
+.DEFAULT_GOAL := help
+
+.PHONY: help dev test lint format typecheck check build deploy down logs init_environment \
+        build-llm-scoring deploy-llm-scoring down-llm-scoring logs-llm-scoring
+
+# ==============================================================================
+# Help
+# ==============================================================================
+
+help:
+	@echo "Ask API"
+	@echo ""
+	@echo "Development:"
+	@echo "  make dev              Run server locally (port 8000)"
+	@echo "  make test             Run test suite"
+	@echo "  make lint             Run linter"
+	@echo "  make format           Format code"
+	@echo "  make typecheck        Run type checker"
+	@echo "  make check            Run all checks (lint, format, typecheck, test)"
+	@echo ""
+	@echo "Deployment:"
+	@echo "  make build            Build Docker image to ACR"
+	@echo "  make deploy           Deploy to AKS"
+	@echo "  make down             Uninstall from AKS"
+	@echo "  make logs             Tail AKS pod logs"
+	@echo ""
+	@echo "Setup:"
+	@echo "  make init_environment Generate .env from Azure Key Vault"
+	@echo ""
+	@echo "Variants:"
+	@echo "  make build-llm-scoring   Build LLM scoring image to ACR"
+	@echo "  make deploy-llm-scoring  Deploy LLM scoring variant to AKS"
+	@echo "  make down-llm-scoring    Remove LLM scoring from AKS"
+	@echo "  make logs-llm-scoring    Tail LLM scoring pod logs"
+	@echo ""
+	@echo "Options:"
+	@echo "  ENV_NAME=<name>       Azure environment (default: $(ENV_NAME))"
+
+# ==============================================================================
+# Development
+# ==============================================================================
 
 dev:
-	uv run run_server.py
+	uv run python run_server.py
 
-# Build Docker image to ACR
-build:
-	$(call discover-azure-resources)
-	$(call validate-azure-resources)
-	az acr build \
-		--registry $(ACR_LOGIN_SERVER) \
-		--image ask-api:latest \
-		--file Dockerfile \
-		.
-
-# Deploy to AKS using Helm (upgrades ask-api image only)
-deploy:
-	$(call discover-azure-resources)
-	$(call validate-azure-resources)
-	$(call aks-login)
-	$(eval DIGEST := $(shell az acr manifest list-metadata --registry $(ACR_NAME) --name ask-api --query "[?tags[?@=='latest']].digest | [0]" -o tsv))
-	helm upgrade ask-api ../helm/ask-api \
-		--set image.tag=$(DIGEST) \
-		--reuse-values
-	@echo ""
-	@echo "Deployed to: https://$$(kubectl get gateway -n gateway nlweb-gateway -o jsonpath='{.status.addresses[0].value}' 2>/dev/null || echo '<gateway not found>')/"
-
-# Remove ask-api from AKS
-down:
-	$(call discover-azure-resources)
-	$(call aks-login)
-	helm uninstall ask-api
-
-port-forward:
-	kubectl port-forward -n ask-api svc/ask-api-service 8000:8000
-
-logs:
-	kubectl logs -n ask-api -l app=ask-api -f
+# ==============================================================================
+# Code Quality
+# ==============================================================================
 
 test:
 	uv run pytest
@@ -54,9 +64,44 @@ format:
 typecheck:
 	uv run pyright
 
-check: lint typecheck test
+check: lint format typecheck test
 
-# Pull secrets from Azure Key Vault to .env for local development
+# ==============================================================================
+# Deployment
+# ==============================================================================
+
+build:
+	$(call discover-azure-resources)
+	$(call validate-azure-resources)
+	az acr build \
+		--registry $(ACR_LOGIN_SERVER) \
+		--image ask-api:latest \
+		--file Dockerfile \
+		.
+
+deploy:
+	$(call discover-azure-resources)
+	$(call validate-azure-resources)
+	$(call aks-login)
+	$(eval DIGEST := $(shell az acr manifest list-metadata --registry $(ACR_NAME) --name ask-api --query "[?tags[?@=='latest']].digest | [0]" -o tsv))
+	helm upgrade ask-api ../helm/ask-api \
+		--set image.tag=$(DIGEST) \
+		--reuse-values
+	@echo ""
+	@echo "Deployed to: https://$$(kubectl get gateway -n gateway nlweb-gateway -o jsonpath='{.status.addresses[0].value}' 2>/dev/null || echo '<gateway not found>')/"
+
+down:
+	$(call discover-azure-resources)
+	$(call aks-login)
+	helm uninstall ask-api
+
+logs:
+	kubectl logs -n ask-api -l app=ask-api -f
+
+# ==============================================================================
+# Setup
+# ==============================================================================
+
 init_environment:
 	$(call discover-azure-resources)
 	@echo "Pulling secrets from Azure Key Vault ($(KEYVAULT_NAME))..."
@@ -83,11 +128,10 @@ init_environment:
 	@echo "" >> .env
 	@echo ".env file created."
 
-# ============================================================================
-# LLM Scoring Deployment (separate deployment with Azure OpenAI scoring)
-# ============================================================================
+# ==============================================================================
+# LLM Scoring Variant
+# ==============================================================================
 
-# Build Docker image for llm-scoring deployment
 build-llm-scoring:
 	$(call discover-azure-resources)
 	$(call validate-azure-resources)
@@ -98,7 +142,6 @@ build-llm-scoring:
 		--file Dockerfile \
 		.
 
-# Deploy llm-scoring to AKS using Helm (creates/updates ask-api-llm-scoring release)
 deploy-llm-scoring:
 	$(call discover-azure-resources)
 	$(call validate-azure-resources)
@@ -122,12 +165,10 @@ deploy-llm-scoring:
 	@echo ""
 	@echo "Deployed llm-scoring to: https://$$(kubectl get gateway -n gateway nlweb-gateway -o jsonpath='{.status.addresses[0].value}' 2>/dev/null || echo '<gateway not found>')/llm-scoring"
 
-# Remove llm-scoring deployment from AKS
 down-llm-scoring:
 	$(call discover-azure-resources)
 	$(call aks-login)
 	helm uninstall ask-api-llm-scoring
 
-# View logs for llm-scoring deployment
 logs-llm-scoring:
 	kubectl logs -n ask-api -l app=ask-api,app.kubernetes.io/instance=ask-api-llm-scoring -f

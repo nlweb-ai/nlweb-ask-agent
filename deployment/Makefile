@@ -1,57 +1,64 @@
-# NLWeb Infrastructure Deployment
-# Deploys baseline Azure infrastructure for ask_api and crawler
-
+# Deployment Makefile
+# Deploys and manages Azure infrastructure and Kubernetes resources
 include ../common.mk
 
-.PHONY: help login deploy destroy validate show-outputs grant-app-access setup-k8s build-images install-nlweb request-certificate check-certificate enable-tls load-synthetic deploy-dashboards
+.DEFAULT_GOAL := help
 
-# Deployment-specific options
+.PHONY: help login validate deploy destroy setup-k8s \
+        request-certificate check-certificate enable-tls load-synthetic deploy-dashboards
+
 LOCATION ?= centralus
-COSMOS_LOCATION ?=
-SQL_LOCATION ?=
 CERT_MANAGER_EMAIL ?= admin@nlweb.ai
 
+# ==============================================================================
+# Help
+# ==============================================================================
+
 help:
-	@echo "NLWeb Infrastructure Deployment"
+	@echo "Deployment"
 	@echo ""
-	@echo "Usage:"
-	@echo "  make login             - Login to Azure CLI"
-	@echo "  make validate          - Validate Bicep templates without deploying"
-	@echo "  make deploy            - Deploy Azure infrastructure (Bicep)"
-	@echo "  make setup-k8s         - Setup K8s infrastructure (cert-manager, KEDA, ALB, Gateway)"
-	@echo "  make build-images      - Build Docker images via ACR Tasks"
-	@echo "  make install-nlweb     - Deploy application (does not build images)"
-	@echo "  make request-certificate - Request TLS certificate from Let's Encrypt"
-	@echo "  make check-certificate - Check certificate and secret status"
-	@echo "  make enable-tls        - Enable TLS on the Gateway (does not touch application)"
-	@echo "  make grant-app-access  - Grant an app/managed identity access to resources"
-	@echo "  make load-synthetic    - Load synthetic schema data into crawler"
-	@echo "  make destroy           - Delete all deployed resources"
-	@echo "  make show-env          - Show discovered Azure resources"
+	@echo "Infrastructure:"
+	@echo "  make login              Login to Azure CLI"
+	@echo "  make validate           Validate Bicep templates"
+	@echo "  make deploy             Deploy Azure infrastructure (Bicep)"
+	@echo "  make destroy            Delete all deployed resources"
+	@echo ""
+	@echo "Kubernetes:"
+	@echo "  make setup-k8s          Setup K8s (cert-manager, KEDA, ALB, Gateway)"
+	@echo ""
+	@echo "TLS:"
+	@echo "  make request-certificate  Request TLS certificate from Let's Encrypt"
+	@echo "  make check-certificate    Check certificate and secret status"
+	@echo "  make enable-tls           Enable TLS on the Gateway"
+	@echo ""
+	@echo "Data:"
+	@echo "  make load-synthetic     Load synthetic schema data into crawler"
+	@echo "  make deploy-dashboards  Deploy Grafana dashboards"
+	@echo ""
+	@echo "Debug:"
+	@echo "  make show-env           Show discovered Azure resources"
 	@echo ""
 	@echo "Required environment variables:"
-	@echo "  PI_LABS_ENDPOINT         - PI Labs AzureML endpoint URL"
-	@echo "  PI_LABS_KEY              - PI Labs API key"
+	@echo "  PI_LABS_ENDPOINT        PI Labs AzureML endpoint URL"
+	@echo "  PI_LABS_KEY             PI Labs API key"
 	@echo ""
 	@echo "Options:"
-	@echo "  ENV_NAME=<name>          - Environment name (default: $(ENV_NAME))"
-	@echo "  LOCATION=<region>        - Azure region (default: $(LOCATION))"
-	@echo "  COSMOS_LOCATION=<region> - Cosmos DB region (defaults to LOCATION)"
-	@echo "  SQL_LOCATION=<region>    - SQL Server region (defaults to LOCATION)"
-	@echo "  CERT_MANAGER_EMAIL=<email> - Let's Encrypt email for setup-k8s"
-	@echo ""
-	@echo "Examples:"
-	@echo "  export PI_LABS_ENDPOINT=https://... PI_LABS_KEY=..."
-	@echo "  make deploy ENV_NAME=prod LOCATION=swedencentral"
-	@echo "  make setup-k8s ENV_NAME=prod"
-	@echo "  make build-images ENV_NAME=prod"
-	@echo "  make install-nlweb ENV_NAME=prod"
-	@echo "  make request-certificate HOSTNAME=app.example.com"
-	@echo "  make enable-tls ENV_NAME=prod"
-	@echo "  make destroy ENV_NAME=prod"
+	@echo "  ENV_NAME=<name>         Azure environment (default: $(ENV_NAME))"
+	@echo "  LOCATION=<region>       Azure region (default: $(LOCATION))"
+
+# ==============================================================================
+# Infrastructure
+# ==============================================================================
 
 login:
 	az login
+	@echo ""
+	@echo "=== Next Step ==="
+	@echo "Export PI_LABS_ENDPOINT and PI_LABS_KEY, then deploy infrastructure:"
+	@echo "  export PI_LABS_ENDPOINT=https://..."
+	@echo "  export PI_LABS_KEY=..."
+	@echo "  make deploy ENV_NAME=<your-env-name>"
+	@echo ""
 
 validate:
 	@echo "Validating Bicep templates..."
@@ -71,8 +78,6 @@ deploy: validate
 	@echo "Deploying infrastructure..."
 	@echo "  Environment: $(ENV_NAME)"
 	@echo "  Location: $(LOCATION)"
-	@if [ -n "$(COSMOS_LOCATION)" ]; then echo "  Cosmos Location: $(COSMOS_LOCATION)"; fi
-	@if [ -n "$(SQL_LOCATION)" ]; then echo "  SQL Location: $(SQL_LOCATION)"; fi
 	@if [ -n "$(APP_PRINCIPAL_ID)" ]; then echo "  App Principal: $(APP_PRINCIPAL_ID)"; fi
 	@echo ""
 	az deployment sub create \
@@ -82,8 +87,6 @@ deploy: validate
 		--parameters environmentName=$(ENV_NAME) \
 		--parameters location=$(LOCATION) \
 		--parameters principalId=$$(az ad signed-in-user show --query id -o tsv 2>/dev/null || echo "") \
-		$(if $(COSMOS_LOCATION),--parameters cosmosLocation=$(COSMOS_LOCATION),) \
-		$(if $(SQL_LOCATION),--parameters sqlLocation=$(SQL_LOCATION),) \
 		$(if $(APP_PRINCIPAL_ID),--parameters appPrincipalId=$(APP_PRINCIPAL_ID),) \
 		--parameters piLabsEndpoint="$$PI_LABS_ENDPOINT" \
 		--parameters piLabsKey="$$PI_LABS_KEY" \
@@ -91,7 +94,8 @@ deploy: validate
 	@echo ""
 	@echo "=== Azure Infrastructure Deployed ==="
 	@echo ""
-	@echo "Next step: Setup Kubernetes infrastructure (cert-manager, KEDA, ALB, Gateway)"
+	@echo "=== Next Step ==="
+	@echo "Setup Kubernetes infrastructure:"
 	@echo "  make setup-k8s ENV_NAME=$(ENV_NAME)"
 	@echo ""
 
@@ -101,8 +105,10 @@ destroy:
 	az group delete --name $(RG_NAME) --yes --no-wait
 	@echo "Resource group deletion initiated. This may take several minutes."
 
-# Setup Kubernetes infrastructure (cert-manager, KEDA, ALB controller, Gateway)
-# Usage: make setup-k8s ENV_NAME=myenv
+# ==============================================================================
+# Kubernetes
+# ==============================================================================
+
 setup-k8s:
 	@echo "Setting up Kubernetes infrastructure..."
 	@echo "  Environment: $(ENV_NAME)"
@@ -112,6 +118,7 @@ setup-k8s:
 	@echo "  Resource Group: $(RG_NAME)"
 	@echo "  AKS: $(AKS_NAME)"
 	@echo ""
+	ENV_NAME=$(ENV_NAME) \
 	AZURE_RESOURCE_GROUP=$(RG_NAME) \
 	AKS_NAME=$(AKS_NAME) \
 	ALB_SUBNET_ID=$(ALB_SUBNET) \
@@ -121,46 +128,10 @@ setup-k8s:
 	AZURE_CERT_MANAGER_EMAIL=$(CERT_MANAGER_EMAIL) \
 	./scripts/setup_k8s.sh
 
-# Build images via ACR Tasks
-# Usage: make build-images ENV_NAME=myenv
-build-images:
-	@echo "Building images via ACR Tasks..."
-	@echo "  Environment: $(ENV_NAME)"
-	@echo ""
-	$(call discover-azure-resources)
-	$(call validate-azure-resources)
-	@echo "  ACR: $(ACR_NAME)"
-	@echo ""
-	ACR_NAME=$(ACR_NAME) ./scripts/build_images.sh
+# ==============================================================================
+# TLS
+# ==============================================================================
 
-# Install application Helm chart on AKS (does not build images)
-# Gateway must be installed first via setup-k8s
-# Usage: make install-nlweb ENV_NAME=myenv
-install-nlweb:
-	@echo "Deploying application to AKS..."
-	@echo "  Environment: $(ENV_NAME)"
-	@echo ""
-	$(call discover-azure-resources)
-	$(call validate-azure-resources)
-	@echo "  Resource Group: $(RG_NAME)"
-	@echo "  ACR: $(ACR_NAME)"
-	@echo "  AKS: $(AKS_NAME)"
-	@echo ""
-	AZURE_RESOURCE_GROUP=$(RG_NAME) \
-	ACR_NAME=$(ACR_NAME) \
-	AKS_NAME=$(AKS_NAME) \
-	ACR_LOGIN_SERVER=$(ACR_LOGIN_SERVER) \
-	AZURE_KEYVAULT_NAME=$(KEYVAULT_NAME) \
-	STORAGE_ACCOUNT_NAME=$(STORAGE_NAME) \
-	ASK_API_IDENTITY_CLIENT_ID=$(ASK_API_ID) \
-	CRAWLER_IDENTITY_CLIENT_ID=$(CRAWLER_ID) \
-	KEDA_IDENTITY_CLIENT_ID=$(KEDA_ID) \
-	AZURE_TENANT_ID=$(TENANT_ID) \
-	./scripts/deploy_aks.sh
-
-# Request a TLS certificate from Let's Encrypt
-# Prereqs: Gateway deployed in HTTP mode, DNS configured to point to ALB
-# Usage: make request-certificate HOSTNAME=app.example.com
 HOSTNAME ?=
 request-certificate:
 	@if [ -z "$(HOSTNAME)" ]; then \
@@ -178,7 +149,6 @@ request-certificate:
 	@echo ""
 	@echo "Certificate requested. Check status with: make check-certificate"
 
-# Check certificate and secret status
 check-certificate:
 	@echo "=== Certificate Status ==="
 	kubectl get certificate -n gateway
@@ -188,22 +158,25 @@ check-certificate:
 	@echo ""
 	@echo "=== TLS Secret Status ==="
 	@kubectl get secret nlweb-tls-secret -n gateway 2>/dev/null && \
-		(echo ""; echo "=== Next Step ==="; echo "TLS secret is ready! Enable TLS on the Gateway:"; echo "  make enable-tls ENV_NAME=<env>") || \
+		(echo ""; echo "=== Next Step ==="; echo "TLS secret is ready! Enable TLS on the Gateway:"; echo "  make enable-tls ENV_NAME=$(ENV_NAME)") || \
 		echo "TLS secret not yet available. Wait for certificate to be issued."
 
-# Enable TLS on the Gateway - delegates to setup-k8s (which auto-detects TLS secret)
-# This does NOT touch the application (ask-api, crawler)
-# Usage: make enable-tls ENV_NAME=myenv
 enable-tls:
 	@echo "Enabling TLS on Gateway..."
 	@kubectl get secret nlweb-tls-secret -n gateway >/dev/null 2>&1 || \
 		(echo "Error: TLS secret 'nlweb-tls-secret' not found. Run 'make request-certificate' first and wait for it to be ready." && exit 1)
 	@echo "TLS secret found. Upgrading Gateway..."
 	$(MAKE) setup-k8s
+	@echo ""
+	@echo "=== Next Step ==="
+	@echo "Deploy Grafana dashboards:"
+	@echo "  make deploy-dashboards ENV_NAME=$(ENV_NAME)"
+	@echo ""
 
-# Load synthetic schema data into crawler
-# Downloads index.json from synthetic data storage and adds each site/sitemap pair
-# Usage: make load-synthetic HOSTNAME=<host> SPLIT_NAME=<split>
+# ==============================================================================
+# Data
+# ==============================================================================
+
 SPLIT_NAME ?=
 load-synthetic:
 	@if [ -z "$(HOSTNAME)" ]; then \
@@ -222,8 +195,6 @@ load-synthetic:
 	@echo ""
 	HOSTNAME=$(HOSTNAME) SPLIT_NAME=$(SPLIT_NAME) ./scripts/load_synthetic.sh
 
-# Deploy Grafana dashboards to Azure Managed Grafana
-# Usage: make deploy-dashboards ENV_NAME=myenv
 deploy-dashboards:
 	@echo "Deploying Grafana dashboards..."
 	@echo "  Environment: $(ENV_NAME)"
@@ -236,3 +207,9 @@ deploy-dashboards:
 	fi && \
 	echo "  Grafana: $$GRAFANA_NAME" && \
 	GRAFANA_NAME=$$GRAFANA_NAME AZURE_RESOURCE_GROUP=$(RG_NAME) ./scripts/deploy_dashboards.sh
+	@echo ""
+	@echo "=== Next Step ==="
+	@echo "Build and deploy the application (from the repo root):"
+	@echo "  make build-all ENV_NAME=$(ENV_NAME)"
+	@echo "  make deploy-all ENV_NAME=$(ENV_NAME)"
+	@echo ""

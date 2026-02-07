@@ -63,3 +63,10 @@ for dashboard_file in "$DASHBOARD_DIR"/*.json; do
 done
 
 echo "All dashboards deployed successfully."
+
+# Print Grafana URL
+GRAFANA_URL=$(az grafana show --name "$GRAFANA_NAME" --resource-group "$RESOURCE_GROUP" --query "properties.endpoint" -o tsv 2>/dev/null)
+if [[ -n "$GRAFANA_URL" ]]; then
+    echo ""
+    echo "Grafana: $GRAFANA_URL"
+fi

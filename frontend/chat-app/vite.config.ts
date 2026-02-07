@@ -2,8 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-// API target: use VITE_ASK_API_URL env var or fallback to localhost
-const apiTarget = process.env.VITE_ASK_API_URL || 'http://localhost:8000'
+const apiTarget = process.env.VITE_ASK_API_URL
 
 // https://vite.dev/config/
 export default defineConfig({

@@ -1,0 +1,28 @@
+FROM node:22-alpine
+
+WORKDIR /workspace
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Copy workspace config + package manifests (for layer caching)
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY chat-app/package.json chat-app/
+COPY search-components/package.json search-components/
+
+# Install dependencies
+RUN pnpm install
+
+# Copy search-components source and build it
+COPY search-components/ search-components/
+RUN pnpm --filter @nlweb-ai/search-components build
+
+# Copy chat-app source (will be overridden by volume mounts for HMR)
+COPY chat-app/ chat-app/
+
+# Expose Vite dev server port
+EXPOSE 5173
+
+# Run Vite in dev mode from chat-app, accessible from Docker network
+WORKDIR /workspace/chat-app
+CMD ["pnpm", "dev", "--host", "0.0.0.0"]
